@@ -38,6 +38,8 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+# Example output directories (per-example, per-commit results).
+results/
 .tox/
 .nox/
 .coverage

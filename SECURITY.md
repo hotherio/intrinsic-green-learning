@@ -19,7 +19,7 @@ If you're on an unsupported version, the fix is to upgrade.
 
 Please report privately via one of:
 
-- **GitHub Security Advisories**: open a [private vulnerability report](https://github.com/hotherio/CHANGE-ME/security/advisories/new) directly on this repo. Preferred — it gives us a private space to coordinate the fix and the CVE.
+- **GitHub Security Advisories**: open a [private vulnerability report](https://github.com/hotherio/intrinsic-green-learning/security/advisories/new) directly on this repo. Preferred — it gives us a private space to coordinate the fix and the CVE.
 - **Email**: `security@hother.io`. Please include:
   - A description of the issue
   - Steps to reproduce (a minimal test case if possible)

@@ -1,18 +1,32 @@
 cff-version: 1.2.0
-title: hother-change-me
+title: intrinsic-green-learning
 message: "If you use this library in academic or published work, please cite it as below."
 type: software
 authors:
-  - given-names: CHANGE
-    family-names: ME
-    email: maintainer@hother.io
+  - given-names: Alexandre
+    family-names: Quemy
+    email: alexandre@hother.io
     affiliation: Hother
-repository-code: "https://github.com/hotherio/CHANGE-ME"
-url: "https://hotherio.github.io/CHANGE-ME/latest/"
+repository-code: "https://github.com/hotherio/intrinsic-green-learning"
+url: "https://hotherio.github.io/intrinsic-green-learning/latest/"
 license: MIT
 keywords:
   - python
-  - CHANGE-ME
+  - pytorch
+  - machine-learning
+  - intrinsic-dimensionality
+  - greens-function
+  - matryoshka
+  - manifold-learning
+  - spd
+  - riemannian
 abstract: >-
-  Template for python projects. Replace this abstract with a one-paragraph
-  description of what the library does and why someone would use it.
+  Intrinsic Green Learning (IGL) is a Python library implementing
+  task-conditioned intrinsic-dimensionality discovery. A learned encoder maps
+  ambient inputs to a low-dimensional latent space; a multi-scale Green's-
+  function kernel computes a structured design matrix; Variable Projection with
+  random Matryoshka truncation jointly fits the encoder and discovers the
+  effective dimension for the given task. The library ships a scikit-learn-
+  compatible API, bare PyTorch building blocks for custom training loops, and
+  a Riemannian/SPD extension for covariance-valued data (EEG and clinical
+  signals).

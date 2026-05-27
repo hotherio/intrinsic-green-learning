@@ -1,6 +1,6 @@
-site_name: CHANGE-ME
-repo_url: https://github.com/hotherio/CHANGE-ME
-repo_name: hotherio/CHANGE-ME
+site_name: Intrinsic Green Learning
+repo_url: https://github.com/hotherio/intrinsic-green-learning
+repo_name: hotherio/intrinsic-green-learning
 edit_uri: ""
 dev_addr: 0.0.0.0:1234
 site_dir: "static/docs"

@@ -1,0 +1,15 @@
+# Centralized configuration for GitHub Actions workflows
+# This file defines common variables used across workflows
+
+# Python configuration
+python:
+  default-version: "3.13"
+  supported-versions: ["3.11", "3.12", "3.13"]
+
+# Tool versions
+tools:
+  uv-version: "v5"
+
+# Build configuration
+build:
+  cache-dependency-glob: "uv.lock"

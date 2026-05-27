@@ -1,0 +1,189 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read  # default; release job below overrides with its needs
+
+# Serialize releases — don't cancel an in-flight one if a new commit lands
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write       # PyPI Trusted Publishing
+      contents: write       # Create tags and releases
+      issues: write         # Comment on issues
+      pull-requests: write  # Comment on PRs
+      attestations: write   # Build provenance attestations
+    # Skip workflow on release commits to prevent self-triggering loop
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          # Explicit token permissions — restrict to what PSR actually needs
+          permission-contents: write          # push release commit + tag
+          permission-issues: write            # close issues on release
+          permission-pull-requests: write     # comment on PRs
+
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5
+        with:
+          python-version: '3.13'
+
+      - name: Install python-semantic-release
+        run: pip install python-semantic-release
+
+      - name: Import GPG key
+        id: import-gpg
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6
+        with:
+          gpg_private_key: ${{ secrets.HOTHER_BOT_GPG_KEY }}
+          passphrase: ${{ secrets.HOTHER_BOT_GPG_PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_tag_gpgsign: true
+
+      - name: Configure Git
+        run: |
+          git config user.email "github-bot@hother.io"
+          git config user.name "Hother Bot"
+          git config core.autocrlf false
+
+      - name: Run Semantic Release (no VCS release)
+        id: release
+        run: |
+          semantic-release version --no-vcs-release
+          if [ $? -eq 0 ]; then
+            # Defensive check: verify dist/ has artifacts before claiming success
+            if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+              echo "released=true" >> $GITHUB_OUTPUT
+              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+              echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+              VERSION=${LATEST_TAG#v}
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+            else
+              echo "released=false" >> $GITHUB_OUTPUT
+              echo "Warning: semantic-release succeeded but no dist/ artifacts found"
+            fi
+          else
+            echo "released=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Generate release notes for current version
+        id: release-notes
+        if: steps.release.outputs.released == 'true'
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      # GitHub-only: OIDC Trusted Publishing (no secrets, auto-attests).
+      - name: Publish to PyPI (Trusted Publishing, GitHub)
+        if: steps.release.outputs.released == 'true' && github.server_url == 'https://github.com'
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+
+      # Forgejo fallback: PyPI doesn't trust Forgejo OIDC yet (immutable-ID
+      # claims missing). Use a long-lived API token instead. No attestations
+      # on this path — see FORGEJO.md for the tradeoff.
+      - name: Publish to PyPI (API token, Forgejo)
+        if: steps.release.outputs.released == 'true' && github.server_url != 'https://github.com'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
+        run: uv publish --token "$UV_PUBLISH_TOKEN"
+
+      - name: Generate asset checksums
+        if: steps.release.outputs.released == 'true'
+        run: |
+          cd dist
+          sha256sum *.whl *.tar.gz > SHA256SUMS
+
+      - name: Sign checksums with GPG
+        if: steps.release.outputs.released == 'true'
+        run: |
+          cd dist
+          gpg --detach-sign --armor SHA256SUMS
+
+      - name: Create immutable release with signed assets
+        if: steps.release.outputs.released == 'true'
+        run: |
+          gh release create ${{ steps.release.outputs.tag }} \
+            --title "${{ steps.release.outputs.tag }}" \
+            --notes "${{ steps.release-notes.outputs.content }}" \
+            --latest \
+            dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.asc
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      # GitHub-only: build-provenance attestation via the GitHub API. On
+      # Forgejo this step is skipped (no equivalent attestation API yet).
+      - name: Attest build provenance (GitHub only)
+        if: steps.release.outputs.released == 'true' && github.server_url == 'https://github.com'
+        run: |
+          for file in dist/*.whl dist/*.tar.gz; do
+            gh attestation verify "$file" --owner ${{ github.repository_owner }} 2>/dev/null || \
+            gh attestation attest "$file" --owner ${{ github.repository_owner }} || true
+          done
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+  dispatch:
+    name: Dispatch to Package Registry
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.released == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Get package description
+        id: description
+        run: |
+          python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['description'])" > desc.txt
+          echo "value=$(cat desc.txt)" >> $GITHUB_OUTPUT
+
+      - name: Dispatch to package registry
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PKG_NAME: ${{ vars.PKG_NAME }}
+          PKG_REGISTRY: ${{ vars.PKG_REGISTRY }}
+          VERSION_TAG: ${{ needs.release.outputs.tag }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_FULL: ${{ github.repository }}
+          DESCRIPTION: ${{ steps.description.outputs.value }}
+        run: |
+          curl -H "Accept: application/vnd.github.everest-preview+json" \
+          -H "Authorization: token $GH_TOKEN" \
+          --request POST \
+          --data "{\"event_type\": \"new_release\", \"client_payload\": { \"package_name\": \"$PKG_NAME\", \"version\": \"$VERSION_TAG\", \"author\": \"$REPO_OWNER\", \"short_desc\": \"$DESCRIPTION\", \"long_desc\": \"$DESCRIPTION\", \"homepage\": \"https://github.com/$REPO_FULL/\", \"link\": \"https://github.com/$REPO_FULL/releases/tag/$VERSION_TAG\" }}" \
+          "https://api.github.com/repos/$PKG_REGISTRY/dispatches"

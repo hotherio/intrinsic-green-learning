@@ -1,0 +1,91 @@
+name: Publish Documentation
+
+on:
+  push:
+    paths:
+    - .github/workflows/docs.yaml
+    - docs/**
+    - mkdocs.yml
+    - requirements-docs.txt
+    branches:
+    - main
+  release:
+    types:
+    - released
+    - prereleased
+
+permissions:
+  contents: read  # publish-docs job overrides to `write` for mike push
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # docs publish is per-version; don't lose a release deploy
+
+jobs:
+  prepare:
+    name: Get Current version
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        token: ${{ secrets.GH_TOKEN }}
+
+    - name: Find Latest Tag
+      id: latest_tag
+      uses: oprypin/find-latest-tag@dd2729fe78b0bb55523ae2b2a310c6773a652bd1 # v1.1.2
+      with:
+        repository: ${{ github.repository }}
+        regex: '^v\d+\.\d+\.\d+$'
+
+    - name: Extract major and minor version
+      id: version
+      run: |
+        echo "value=`echo ${{ steps.latest_tag.outputs.tag }} | sed -r 's|([0-9]+.[0-9]+).*|\1|g'`" >> $GITHUB_OUTPUT
+
+    - name: Computed Doc Version
+      run: echo ${{ steps.version.outputs.value }}
+
+  publish-docs:
+    name: Publish Docs
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # mike pushes a commit to gh-pages
+
+    needs:
+    - prepare
+
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GH_TOKEN }}
+
+    - name: "Import GPG key"
+      id: import-gpg
+      uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6
+      with:
+        gpg_private_key: ${{ secrets.HOTHER_BOT_GPG_KEY }}
+        passphrase: ${{ secrets.HOTHER_BOT_GPG_PASSPHRASE }}
+        git_user_signingkey: true
+        git_commit_gpgsign: true
+
+    - name: Configurating Git
+      run: |
+        git config user.email "${{ steps.import-gpg.outputs.email }}"
+        git config user.name "${{ steps.import-gpg.outputs.name }}"
+        git config core.autocrlf false
+        git config commit.gpgsign true
+
+    - name: Setup Python and uv
+      uses: ./.github/actions/setup-python-uv
+      with:
+        dependency-groups: doc
+
+    - name: Publish
+      run: |
+        uv run mike deploy --push --update-aliases "${{ needs.prepare.outputs.version }}" latest
+        uv run mike deploy --push --update-aliases "${{ needs.prepare.outputs.version }}" docs

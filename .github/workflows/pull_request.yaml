@@ -1,0 +1,126 @@
+name: Pull Request Validation
+
+on:
+  push:
+    branches:
+    - renovate/**
+  pull_request:
+    branches:
+    - main
+    - develop
+  pull_request_target:  # For PR title validation
+    types:
+    - opened
+    - edited
+    - synchronize
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-pr-title:
+    name: Check PR Title
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@e32d7e603df1aa1ba07e981f2a23455dee596825 # v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          subjectPattern: ^[A-Z].+[^.]$   # must start uppercase, no period
+          validateSingleCommit: true       # also check lone commit if PR has only one
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Free-threaded 3.14t runs as part of the matrix but is allowed to
+        # fail (see `include` below) — gives early signal on GIL-free
+        # compatibility without gating PRs.
+        python-version: ["3.13", "3.14"]
+        experimental: [false]
+        include:
+          - python-version: "3.14t"
+            experimental: true
+      fail-fast: false
+
+    continue-on-error: ${{ matrix.experimental }}
+
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Setup Python and uv
+      uses: ./.github/actions/setup-python-uv
+      with:
+        python-version: ${{ matrix.python-version }}
+        dependency-groups: all
+
+    - name: Install lefthook
+      run: |
+        source .venv/bin/activate
+        lefthook install
+
+    - name: Lint
+      run: |
+        source .venv/bin/activate
+        lefthook run pre-commit --all-files
+
+    - name: Tests
+      run: uv run -m pytest || exit 0
+
+  typecheck-ty:
+    # Parallel non-blocking signal from Astral's ty checker (beta, ~90% spec
+    # conformance as of early 2026). basedpyright is authoritative; ty results
+    # surface issues early without gating PRs. Promote to blocking once ty 1.0
+    # ships and pydantic/attrs support is complete.
+    name: Type Check (ty, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - run: uvx ty check src/
+
+  validate-docs:
+    name: Validate Docs
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Setup Python and uv
+      uses: ./.github/actions/setup-python-uv
+      with:
+        dependency-groups: doc
+
+    - name: Build docs
+      run: |
+        source .venv/bin/activate
+        uvx hatch version dev
+        mkdocs build

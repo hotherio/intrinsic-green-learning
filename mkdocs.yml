@@ -1,0 +1,131 @@
+site_name: CHANGE-ME
+repo_url: https://github.com/hotherio/CHANGE-ME
+repo_name: hotherio/CHANGE-ME
+edit_uri: ""
+dev_addr: 0.0.0.0:1234
+site_dir: "static/docs"
+nav:
+  - 'index.md'
+  - About: 'about.md'
+  - Security: 'security.md'
+  - Guidelines:
+    - guidelines/index.md
+    - Typing: guidelines/typing.md
+    - Testing: guidelines/testing.md
+    - Errors: guidelines/errors.md
+    - API design: guidelines/api-design.md
+    - Docstrings: guidelines/docstrings.md
+    - Releases: guidelines/releases.md
+    - Dependencies: guidelines/dependencies.md
+    - Async: guidelines/async.md
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: pink
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      primary: red
+      accent: deep orange
+      scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+  features:
+    - content.code.annotate
+    - content.tabs.link
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - header.autohide
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - toc.follow
+    - toc.integrate
+  icon:
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+markdown_extensions:
+  - def_list
+  - meta
+  - footnotes
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.betterem
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: "!!python/name:pymdownx.superfences.fence_code_format"
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js
+  - javascripts/tablesort.js
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+extra:
+  version:
+    provider: mike
+  generator: false
+watch:
+  - src
+plugins:
+  - search:
+        lang: en
+  - autorefs
+  - mkdocstrings:
+      #custom_templates: templates
+      default_handler: python
+      handlers:
+        python:
+          selection:
+            filters: ["!^_", "!^__"]
+          import:
+          - https://docs.python.org/3/objects.inv
+          - http://pandas.pydata.org/pandas-docs/stable/objects.inv
+          setup_commands:
+            - import sys
+            - sys.path.append('../src')
+          merge_init_into_class: yes
+          show_submodules: no

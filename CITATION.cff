@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: hother-change-me
+message: "If you use this library in academic or published work, please cite it as below."
+type: software
+authors:
+  - given-names: CHANGE
+    family-names: ME
+    email: maintainer@hother.io
+    affiliation: Hother
+repository-code: "https://github.com/hotherio/CHANGE-ME"
+url: "https://hotherio.github.io/CHANGE-ME/latest/"
+license: MIT
+keywords:
+  - python
+  - CHANGE-ME
+abstract: >-
+  Template for python projects. Replace this abstract with a one-paragraph
+  description of what the library does and why someone would use it.

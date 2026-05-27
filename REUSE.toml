@@ -1,0 +1,35 @@
+# REUSE configuration (https://reuse.software/spec-3.3/)
+# Declares SPDX license/copyright for files via patterns so we don't need
+# per-file headers on every source file. `pipx run reuse lint` validates.
+
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "Hother <maintainer@hother.io>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+# Lockfiles, generated artifacts, and config files that REUSE would otherwise
+# flag as "missing license" — they inherit the package license but don't carry
+# headers themselves.
+path = [
+    "uv.lock",
+    ".secrets.baseline",
+    "CHANGELOG.md",
+    ".python-version",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".env.example",
+    "**/.gitkeep",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Hother <maintainer@hother.io>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+# Static assets in docs (icons, fonts, etc.) — when present.
+path = "docs/stylesheets/**"
+SPDX-FileCopyrightText = "Hother <maintainer@hother.io>"
+SPDX-License-Identifier = "MIT"

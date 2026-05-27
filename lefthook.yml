@@ -1,0 +1,150 @@
+# Lefthook configuration for Python project
+# Fast and powerful Git hooks manager
+
+pre-commit:
+  parallel: true
+  commands:
+    # Python linting and formatting with Ruff. `stage_fixed: true` re-stages
+    # files modified by ruff so the auto-fixes land in the commit (KB §lefthook).
+    ruff-check:
+      run: ruff check --fix --unsafe-fixes {staged_files}
+      glob: "*.py"
+      stage_fixed: true
+
+    ruff-format:
+      run: ruff format {staged_files}
+      glob: "*.py"
+      stage_fixed: true
+
+    # Type checking
+    basedpyright:
+      run: uv run basedpyright src
+      glob: "*.py"
+
+    # Non-Python file checks. Both skip symlinks (-L test) — sed -i can't
+    # operate on a symlink on macOS, and editing through a symlink risks
+    # double-applying when both the symlink path and the target are staged.
+    trailing-whitespace:
+      run: |
+        for file in {staged_files}; do
+          if [[ "$file" != *.py ]] && [ ! -L "$file" ]; then
+            sed -i.bak 's/[[:space:]]*$//' "$file" && rm -f "$file.bak"
+          fi
+        done
+      glob: "*"
+      exclude: "*.py|*.egg-info/*"
+
+    end-of-file:
+      run: |
+        for file in {staged_files}; do
+          if [[ "$file" != *.py ]] && [ ! -L "$file" ] && [[ -f "$file" ]] && [[ -s "$file" ]]; then
+            if [ -n "$(tail -c 1 "$file")" ]; then
+              echo >> "$file"
+            fi
+          fi
+        done
+      glob: "*"
+      exclude: "*.py|*.egg-info/*"
+
+    # File format validation
+    check-json:
+      run: python -m json.tool {staged_files} > /dev/null
+      glob: "*.json"
+      exclude: ".devcontainer/devcontainer.json"  # JSON-with-comments per devcontainer spec
+
+    check-yaml:
+      run: |
+        for file in {staged_files}; do
+          python -c "import yaml; yaml.safe_load(open('$file'))"
+        done
+      glob: "*.{yml,yaml}"
+      exclude: "mkdocs.yml"  # uses MkDocs Material's Python tags; validated by `mkdocs build` in docs CI
+
+    check-toml:
+      run: |
+        for file in {staged_files}; do
+          python -c "import tomllib; tomllib.load(open('$file', 'rb'))"
+        done
+      glob: "*.toml"
+
+    # Secret scanning with detect-secrets
+    detect-secrets:
+      run: |
+        if [ ! -f .secrets.baseline ]; then
+          echo "Creating initial secrets baseline..."
+          detect-secrets scan > .secrets.baseline
+        fi
+        # Check staged files for secrets
+        git diff --staged --name-only -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+      glob: "*"
+      exclude: "*.lock|*.egg-info/*|.secrets.baseline"
+
+pre-push:
+  parallel: true
+  commands:
+    # Verify dependency lock
+    uv-lock:
+      run: uv lock --check
+
+    # Run the full test suite before pushing (KB §Enforcement & Setup).
+    # `-p no:cacheprovider` keeps push fast in fresh clones / CI re-clones.
+    test:
+      run: uv run pytest -p no:cacheprovider
+      skip:
+        - merge
+        - rebase
+
+    # Build the package to catch packaging-level regressions before they
+    # reach CI (sdist exclusions, license-files, py.typed, etc.).
+    build:
+      run: uv build
+      skip:
+        - merge
+        - rebase
+
+    # Check last commit message follows conventional commits
+    conventional-commits:
+      run: |
+        commit_regex='^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\(.+\))?: .+'
+        if ! git log -1 --pretty=%B | grep -qE "$commit_regex"; then
+          echo "❌ Last commit doesn't follow conventional commits format"
+          echo "Expected format: <type>(<scope>): <subject>"
+          echo "Example: feat(auth): add login functionality"
+          exit 1
+        fi
+
+
+commit-msg:
+  commands:
+    # Validate commit message format
+    check-commit-msg:
+      run: |
+        commit_regex='^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\(.+\))?: .+'
+        if ! grep -qE "$commit_regex" {1}; then
+          echo "❌ Commit message must follow conventional commits format!"
+          echo ""
+          echo "Format: <type>: <subject>  OR  <type>(<scope>): <subject>"
+          echo ""
+          echo "Types:"
+          echo "  feat:     New feature"
+          echo "  fix:      Bug fix"
+          echo "  docs:     Documentation changes"
+          echo "  style:    Code style changes (formatting, etc)"
+          echo "  refactor: Code refactoring"
+          echo "  test:     Test changes"
+          echo "  chore:    Maintenance tasks"
+          echo "  build:    Build system changes"
+          echo "  ci:       CI/CD changes"
+          echo "  perf:     Performance improvements"
+          echo "  revert:   Revert previous commit"
+          echo ""
+          echo "Examples:"
+          echo "  feat: add user authentication"
+          echo "  fix(auth): resolve login timeout issue"
+          exit 1
+        fi
+
+# Skip hooks during rebase/merge
+skip_output:
+  - meta
+  - execution

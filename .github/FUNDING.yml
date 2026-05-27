@@ -1,0 +1,18 @@
+# GitHub Sponsorship buttons for this repo. Uncomment and fill the
+# platforms you actually use. The placeholders below are gh-org-level
+# Hother defaults; downstream forks should update or remove this file.
+
+# github: [hotherio]                    # GitHub Sponsors username
+# patreon: hother                        # Patreon username
+# open_collective: hother                # Open Collective name
+# ko_fi: hother                          # Ko-fi username
+# tidelift: pypi/hother-change-me        # tidelift platform-name/package-name
+# community_bridge: hother               # Community Bridge project
+# liberapay: hother                      # Liberapay username
+# issuehunt: hother                      # IssueHunt username
+# otechie: hother                        # Otechie username
+# lfx_crowdfunding: hother               # LFX Crowdfunding project name
+# polar: hother                          # Polar username
+# buy_me_a_coffee: hother                # Buy Me a Coffee username
+# thanks_dev: hother                     # thanks.dev username
+# custom: ["https://hother.io/sponsor"]  # up to 4 custom funding URLs

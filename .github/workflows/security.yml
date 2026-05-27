@@ -1,0 +1,78 @@
+name: Security
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly Monday 06:00 UTC — catches new CVEs against unchanged deps
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    name: pip-audit (uv.lock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Export requirements from uv.lock
+        run: uv export --frozen --no-emit-project --output-file requirements.txt
+
+      - name: Run pip-audit
+        run: uvx pip-audit --requirement requirements.txt --strict --disable-pip
+
+  zizmor:
+    # Non-blocking. Block 6 cleared SHA-pinning, concurrency, and per-job
+    # permissions, dropping findings from 70 to ~7. The remaining ones
+    # are accepted architecture tradeoffs:
+    #   - `dangerous-triggers` on pull_request_target: required for PR
+    #     title validation (action runs on PR metadata only, not on
+    #     checked-out PR code).
+    #   - `artipacked` on checkouts that push commits/tags (semantic-
+    #     release, docs publishing): these legitimately need credentials.
+    # SARIF still uploads to Code Scanning so reviewers can see findings.
+    name: zizmor (workflow audit, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write  # upload SARIF to code scanning
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Run zizmor
+        # GH_TOKEN allows zizmor to fetch action metadata (rate-limit avoidance)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uvx zizmor --format sarif .github/workflows/ > zizmor.sarif || true
+
+      - name: Upload zizmor SARIF
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3
+        if: always()
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor

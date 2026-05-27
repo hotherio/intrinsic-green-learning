@@ -1,0 +1,21 @@
+checks:
+  - check: message
+    regex: '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\([\w\-\.]+\))?(!)?: ([\w ])+([\s\S]*)|(Merge).*|(fixup!.*)'
+    error: "The commit message should be structured as follows:\n\n
+    <type>[optional scope]: <description>\n
+    [optional body]\n
+    [optional footer(s)]\n\n
+    More details please refer to https://www.conventionalcommits.org"
+    suggest: please check whether your commit message matches the above regex
+  - check: branch
+    regex: ^(bugfix|feature|release|hotfix|task|feat|fix|chore).*|(master)|(main)|(HEAD)|(PR-.+)
+    error: "Branches must begin with these types: bugfix/ /fix feature/ release/ hotfix/ task/ /feat /chore"
+    suggest: run command `git checkout -b type/branch_name`
+  - check: author_name
+    regex: ^[A-Za-z ,.\'-]+$|.*(\[bot])
+    error: The committer name seems invalid
+    suggest: run command `git config user.name "Your Name"`
+  - check: author_email
+    regex: ^\S+@\S+\.\S+$
+    error: The committer email seems invalid
+    suggest: run command `git config user.email yourname@example.com`

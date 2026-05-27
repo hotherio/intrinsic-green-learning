@@ -1,0 +1,27 @@
+name: Stale Issues and PRs
+
+on:
+  schedule:
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9
+        with:
+          days-before-stale: 30
+          days-before-close: 1
+          stale-issue-label: "stale :zzz:"
+          stale-issue-message: "This issue is stale. Remove stale label or it will be closed tomorrow."
+          stale-pr-label: "stale :zzz:"
+          stale-pr-message: "This PR is stale. Remove stale label or it will be closed tomorrow."
+          exempt-issue-labels: "in progress :construction:"
+          exempt-pr-labels: "in progress :construction:"

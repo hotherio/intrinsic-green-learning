@@ -1,0 +1,19 @@
+---
+description: Hother Python library guidelines (entry point)
+alwaysApply: true
+---
+
+# Hother conventions
+
+Always consult the relevant guideline in `docs/guidelines/` before changing code:
+
+- **Typing** — `docs/guidelines/typing.md` (basedpyright strict, pre-PEP-695 TypeVar, Protocols without runtime_checkable, Pydantic for domain models / dataclass for config)
+- **Testing** — `docs/guidelines/testing.md` (pytest -n auto, xfail_strict, function-scoped fixtures, hypothesis for property tests, 100% coverage target)
+- **Errors** — `docs/guidelines/errors.md` (custom base exception class per library, `raise ... from`, never bare except, structured attributes)
+- **API design** — `docs/guidelines/api-design.md` (mandatory comprehensive `__all__`, leading underscore for private, keyword-only args via `*`, deprecation = 1 minor version)
+- **Docstrings** — `docs/guidelines/docstrings.md` (Google style; required on public class/function; Markdown fenced code in examples)
+- **Releases** — `docs/guidelines/releases.md` (conventional commits, PSR-managed version, GPG signed, BREAKING CHANGE in body)
+- **Dependencies** — `docs/guidelines/dependencies.md` (`>=` lower bound, no speculative `<X` cap, `uv.lock` authoritative, pip-audit blocks on CVE)
+- **Async** — `docs/guidelines/async.md` (async-first if I/O; pick asyncio OR anyio per library; never swallow CancelledError; use TaskGroup)
+
+When the user's request would violate a guideline, either bring it up explicitly or follow the guideline. Don't silently deviate. Don't invent new patterns when sibling repos (`cancelable`, `streamblocks`) already solve the problem.

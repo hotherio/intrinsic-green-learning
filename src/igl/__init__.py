@@ -8,12 +8,47 @@ promises.
 
 from importlib.metadata import PackageNotFoundError, version
 
+from igl.config import (
+    EncoderConfig,
+    IGLConfig,
+    KernelConfig,
+    MatryoshkaConfig,
+)
+from igl.core.encoder import LinearEncoder, MLPEncoder
+from igl.core.kernel import GreenKernel
+from igl.core.loss import CrossEntropyLoss, MSELoss
+from igl.core.normalization import normalize_phi
+from igl.core.solver import direct_solve_weights
+from igl.core.trainer import MatryoshkaTrainer, TrainingHistory
 from igl.exceptions import (
     IGLConfigError,
     IGLConvergenceError,
     IGLDependencyError,
     IGLError,
     IGLNotFittedError,
+)
+from igl.kernels._registry import (
+    Operator,
+    get_operator,
+    list_operators,
+    register_operator,
+)
+from igl.matryoshka.dimension_curve import (
+    d_eff_from_curve,
+    detect_elbow,
+    eval_dimension_curve,
+)
+from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
+from igl.nn.module import IGLModule
+from igl.types import (
+    DimensionCurve,
+    EncoderProtocol,
+    LossStrategy,
+    MatryoshkaSampler,
+    NormalizeMode,
+    OperatorFn,
+    OperatorName,
+    SamplingMode,
 )
 
 try:
@@ -25,6 +60,43 @@ except PackageNotFoundError:  # pragma: no cover  # only triggers in non-install
 __all__ = [
     # Version
     "__version__",
+    # Configs (frozen dataclasses)
+    "EncoderConfig",
+    "IGLConfig",
+    "KernelConfig",
+    "MatryoshkaConfig",
+    # Core building blocks
+    "GreenKernel",
+    "IGLModule",
+    "LinearEncoder",
+    "MLPEncoder",
+    "normalize_phi",
+    # Training
+    "CrossEntropyLoss",
+    "MSELoss",
+    "MatryoshkaTrainer",
+    "TrainingHistory",
+    "direct_solve_weights",
+    # Matryoshka / dimension discovery
+    "PowerLawSampler",
+    "UniformSampler",
+    "d_eff_from_curve",
+    "detect_elbow",
+    "eval_dimension_curve",
+    # Kernel registry
+    "Operator",
+    "get_operator",
+    "list_operators",
+    "register_operator",
+    # Types / Protocols
+    "DimensionCurve",
+    "EncoderProtocol",
+    "LossStrategy",
+    "MatryoshkaSampler",
+    "NormalizeMode",
+    "OperatorFn",
+    "OperatorName",
+    "SamplingMode",
     # Exceptions
     "IGLConfigError",
     "IGLConvergenceError",

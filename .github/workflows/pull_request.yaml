@@ -46,7 +46,9 @@ jobs:
             chore
             revert
           requireScope: false
-          subjectPattern: ^[A-Z].+[^.]$   # must start uppercase, no period
+          # Subject pattern intentionally unconstrained — Renovate emits
+          # lowercase subjects ("update foo to v3.14") and that's acceptable
+          # for this project. Capitalisation is not a hard rule.
           validateSingleCommit: true       # also check lone commit if PR has only one
 
   validate:
@@ -103,7 +105,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
-      - run: uvx ty check src/
+      # `--with-editable ".[all]"` installs the project plus every optional
+      # extra (matplotlib, mne, transformers, kneed, …) into ty's ephemeral
+      # env so it can resolve guarded imports like `matplotlib.axes` inside
+      # `igl.viz`. Without this, ty reports unresolved-import diagnostics
+      # for every optional dependency.
+      - run: uvx --with-editable ".[all]" ty check src/
 
   validate-docs:
     name: Validate Docs
@@ -122,5 +129,7 @@ jobs:
     - name: Build docs
       run: |
         source .venv/bin/activate
-        uvx hatch version dev
+        # `hatch version dev` requires dynamic versioning; this project uses
+        # static `project.version` (managed by python-semantic-release), so
+        # we build docs with the current static version.
         mkdocs build

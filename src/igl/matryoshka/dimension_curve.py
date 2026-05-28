@@ -11,6 +11,7 @@ import math
 
 import torch
 
+from igl.core.normalization import normalize_phi
 from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError
 from igl.nn.module import IGLModule
@@ -65,7 +66,7 @@ def eval_dimension_curve(
         mask[:k] = 1.0
         z_trunc = z_full * mask.unsqueeze(0)
         phi = module.green(z_trunc, gate_mask=mask)
-        phi = _normalize_via_module(phi, module)
+        phi = normalize_phi(phi, module.normalize)
         # Bias column so each k gets its own intercept.
         ones_col = torch.ones(phi.shape[0], 1, device=device, dtype=phi.dtype)
         phi_aug = torch.cat([phi, ones_col], dim=-1)
@@ -74,14 +75,6 @@ def eval_dimension_curve(
         results[k] = loss.curve_score(pred, target)
 
     return results
-
-
-def _normalize_via_module(phi: torch.Tensor, module: IGLModule) -> torch.Tensor:
-    # Inlined to avoid circular imports of the normalization helper from
-    # core/ — we just need to honour the module's chosen mode.
-    from igl.core.normalization import normalize_phi  # noqa: PLC0415
-
-    return normalize_phi(phi, module.normalize)
 
 
 def detect_elbow(curve: DimensionCurve, *, ratio: float = 2.0) -> int:

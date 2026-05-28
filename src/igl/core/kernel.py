@@ -24,6 +24,7 @@ from torch import nn
 
 from igl.exceptions import IGLConfigError
 from igl.kernels._registry import Operator, get_operator
+from igl.types import NullSpaceBasis
 
 
 class GreenKernel(nn.Module):
@@ -41,11 +42,18 @@ class GreenKernel(nn.Module):
             ``(-1.5, 1.5)``).
         anchor_init_std: Standard deviation for the Gaussian initialisation
             of anchor positions (default ``0.5``).
+        null_space: Optional :class:`igl.types.NullSpaceBasis` (e.g.
+            :class:`igl.spectral.ConstantNullSpace`) whose ``evaluate(z)``
+            output is concatenated as extra columns to the design matrix.
+            These columns receive their own lstsq weights without Tikhonov
+            shrinkage — useful to give the local kernel a DC mode it
+            doesn't otherwise carry.
     """
 
     latent_dim: int
     n_anchors: int
     n_scales: int
+    output_dim: int
 
     def __init__(
         self,
@@ -56,6 +64,7 @@ class GreenKernel(nn.Module):
         operator: str | Sequence[str] = "gaussian",
         sigma_log_range: tuple[float, float] = (-1.5, 1.5),
         anchor_init_std: float = 0.5,
+        null_space: NullSpaceBasis | None = None,
     ) -> None:
         super().__init__()
         if latent_dim < 1:
@@ -85,6 +94,8 @@ class GreenKernel(nn.Module):
         self.n_scales = total_k
         self._operators: list[Operator] = operators
         self._op_counts: list[int] = op_counts
+        self._null_space = null_space
+        self.output_dim = n_anchors + (null_space.n_columns if null_space is not None else 0)
 
         self.anchor_positions = nn.Parameter(torch.randn(n_anchors, latent_dim) * anchor_init_std)
         self.rank_importance = nn.Parameter(torch.ones(n_anchors))
@@ -156,7 +167,12 @@ class GreenKernel(nn.Module):
             k_offset += k_count
 
         importance = torch.sigmoid(self.rank_importance)
-        return phi * importance.unsqueeze(0)
+        phi = phi * importance.unsqueeze(0)
+
+        if self._null_space is None:
+            return phi
+        null_cols = self._null_space.evaluate(z)  # [N, n_columns]
+        return torch.cat([phi, null_cols], dim=-1)
 
     def forward(self, z: torch.Tensor, *, gate_mask: torch.Tensor | None = None) -> torch.Tensor:
         """Alias of :meth:`compute_design_matrix`."""

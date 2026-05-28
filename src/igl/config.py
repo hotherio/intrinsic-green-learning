@@ -24,12 +24,16 @@ from igl.types import (
     NormalizeModeLike,
     NormType,
     NormTypeLike,
+    NullSpaceKind,
+    NullSpaceKindLike,
     OperatorName,
     OperatorNameLike,
     SamplingMode,
     SamplingModeLike,
     SchedulerType,
     SchedulerTypeLike,
+    SpectralKind,
+    SpectralKindLike,
 )
 
 
@@ -73,10 +77,45 @@ class KernelConfig:
     sigma_log_range: tuple[float, float] = (-1.5, 1.5)
     anchor_init_std: float = 0.5
     normalize: NormalizeModeLike = NormalizeMode.SOFTMAX
+    null_space: NullSpaceKindLike = NullSpaceKind.NONE
+    polynomial_degree: int = 1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operator", _coerce_operator(self.operator))
         object.__setattr__(self, "normalize", NormalizeMode(self.normalize))
+        object.__setattr__(self, "null_space", NullSpaceKind(self.null_space))
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpectralConfig:
+    """Spectral-kernel configuration. Mirrors :class:`igl.spectral.SpectralKernel`.
+
+    When set on :class:`IGLConfig.spectral`, the sklearn wrappers build a
+    :class:`igl.spectral.SpectralKernel` (with the listed basis(es)) in
+    place of the local :class:`igl.GreenKernel`.
+    """
+
+    kind: SpectralKindLike | tuple[SpectralKindLike, ...] = SpectralKind.FOURIER_SINE
+    n_modes: int = 16
+    n_anchors: int = 64
+    null_space: NullSpaceKindLike = NullSpaceKind.NONE
+    polynomial_degree: int = 1
+    epsilon: float = 1e-4
+    anchor_init_std: float = 0.25
+    # Learned-LB only:
+    k_nn: int = 10
+    refresh_every: int = 200
+
+    def __post_init__(self) -> None:
+        if isinstance(self.kind, str | SpectralKind):
+            object.__setattr__(self, "kind", SpectralKind(self.kind))
+        else:
+            object.__setattr__(
+                self,
+                "kind",
+                tuple(SpectralKind(k) for k in self.kind),
+            )
+        object.__setattr__(self, "null_space", NullSpaceKind(self.null_space))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -112,12 +151,18 @@ def _operator_to_serial(value: OperatorName | tuple[OperatorName, ...]) -> str |
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class IGLConfig:
-    """Top-level IGL configuration composing the per-component configs."""
+    """Top-level IGL configuration composing the per-component configs.
+
+    When ``spectral`` is set, the spectral kernel replaces the local Green
+    kernel; ``kernel`` is then ignored. When ``spectral`` is ``None``
+    (default), the local kernel is used.
+    """
 
     max_dim: int = 16
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     kernel: KernelConfig = field(default_factory=KernelConfig)
     matryoshka: MatryoshkaConfig = field(default_factory=MatryoshkaConfig)
+    spectral: SpectralConfig | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Serialise to a plain dict (suitable for JSON / TOML round-trips).
@@ -132,6 +177,7 @@ class IGLConfig:
         encoder_activation = cast(ActivationType, self.encoder.activation)
         encoder_kind = cast(EncoderKind, self.encoder.kind)
         kernel_normalize = cast(NormalizeMode, self.kernel.normalize)
+        kernel_null = cast(NullSpaceKind, self.kernel.null_space)
         matryoshka_sampling = cast(SamplingMode, self.matryoshka.sampling)
         matryoshka_scheduler = cast(SchedulerType, self.matryoshka.scheduler)
 
@@ -154,7 +200,10 @@ class IGLConfig:
                 "sigma_log_range": list(self.kernel.sigma_log_range),
                 "anchor_init_std": self.kernel.anchor_init_std,
                 "normalize": str(kernel_normalize),
+                "null_space": str(kernel_null),
+                "polynomial_degree": self.kernel.polynomial_degree,
             },
+            "spectral": _spectral_to_dict(self.spectral),
             "matryoshka": {
                 "epochs": self.matryoshka.epochs,
                 "batch_size": self.matryoshka.batch_size,
@@ -202,7 +251,37 @@ class IGLConfig:
         ker = _make_kernel_config(cast(Mapping[str, object], ker_raw))
         mat = _make_matryoshka_config(cast(Mapping[str, object], mat_raw))
 
-        return cls(max_dim=max_dim_raw, encoder=enc, kernel=ker, matryoshka=mat)
+        spectral_raw = data.get("spectral", None)
+        spectral: SpectralConfig | None
+        if spectral_raw is None:
+            spectral = None
+        elif isinstance(spectral_raw, Mapping):
+            spectral = _make_spectral_config(cast(Mapping[str, object], spectral_raw))
+        else:
+            raise IGLConfigError("spectral must be a mapping or null")
+
+        return cls(max_dim=max_dim_raw, encoder=enc, kernel=ker, matryoshka=mat, spectral=spectral)
+
+
+def _spectral_to_dict(spectral: SpectralConfig | None) -> dict[str, object] | None:
+    if spectral is None:
+        return None
+    kind = spectral.kind
+    kind_serial: str | list[str] = (
+        str(cast(SpectralKind, kind)) if isinstance(kind, str | SpectralKind) else [str(SpectralKind(k)) for k in kind]
+    )
+    null_space = cast(NullSpaceKind, spectral.null_space)
+    return {
+        "kind": kind_serial,
+        "n_modes": spectral.n_modes,
+        "n_anchors": spectral.n_anchors,
+        "null_space": str(null_space),
+        "polynomial_degree": spectral.polynomial_degree,
+        "epsilon": spectral.epsilon,
+        "anchor_init_std": spectral.anchor_init_std,
+        "k_nn": spectral.k_nn,
+        "refresh_every": spectral.refresh_every,
+    }
 
 
 def _make_encoder_config(data: Mapping[str, object]) -> EncoderConfig:
@@ -247,6 +326,33 @@ def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
         sigma_log_range=sigma_pair,
         anchor_init_std=cast(float, data.get("anchor_init_std", 0.5)),
         normalize=cast(NormalizeModeLike, data.get("normalize", NormalizeMode.SOFTMAX)),
+        null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
+        polynomial_degree=cast(int, data.get("polynomial_degree", 1)),
+    )
+
+
+def _make_spectral_config(data: Mapping[str, object]) -> SpectralConfig:
+    kind_raw = data.get("kind", SpectralKind.FOURIER_SINE)
+    kind: SpectralKindLike | tuple[SpectralKindLike, ...]
+    if isinstance(kind_raw, list):
+        kind = tuple(SpectralKind(k) for k in cast(list[str], kind_raw))
+    elif isinstance(kind_raw, tuple):
+        kind = tuple(SpectralKind(k) for k in cast(tuple[str, ...], kind_raw))
+    elif isinstance(kind_raw, str | SpectralKind):
+        kind = SpectralKind(kind_raw)
+    else:
+        raise IGLConfigError("spectral.kind must be a string, list, or tuple of strings")
+
+    return SpectralConfig(
+        kind=kind,
+        n_modes=cast(int, data.get("n_modes", 16)),
+        n_anchors=cast(int, data.get("n_anchors", 64)),
+        null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
+        polynomial_degree=cast(int, data.get("polynomial_degree", 1)),
+        epsilon=cast(float, data.get("epsilon", 1e-4)),
+        anchor_init_std=cast(float, data.get("anchor_init_std", 0.25)),
+        k_nn=cast(int, data.get("k_nn", 10)),
+        refresh_every=cast(int, data.get("refresh_every", 200)),
     )
 
 
@@ -275,4 +381,5 @@ __all__ = [
     "IGLConfig",
     "KernelConfig",
     "MatryoshkaConfig",
+    "SpectralConfig",
 ]

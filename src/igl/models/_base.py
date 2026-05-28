@@ -148,6 +148,25 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
             np.random.seed(self.random_state)
 
     def _build_module(self, *, input_dim: int, output_dim: int) -> IGLModule:
+        # Spectral path: build a SpectralKernel from the config and hand it
+        # to IGLModule as a pre-built kernel. Local-kernel path: IGLModule
+        # builds GreenKernel from per-field kwargs as before.
+        kernel: object = None
+        if self.config is not None and self.config.spectral is not None:
+            from igl.spectral._build import build_spectral_kernel  # noqa: PLC0415
+
+            kernel = build_spectral_kernel(
+                latent_dim=self.max_dim,
+                config=self.config.spectral,
+            )
+        elif self.config is not None:
+            from igl.spectral._build import build_kernel_null_space  # noqa: PLC0415
+
+            kernel = build_kernel_null_space(
+                latent_dim=self.max_dim,
+                config=self.config.kernel,
+            )
+
         return IGLModule(
             input_dim=input_dim,
             max_dim=self.max_dim,
@@ -158,6 +177,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
             encoder_config=self._resolve_encoder_config(),
             normalize=self.normalize,
             config=None,  # encoder_config already encodes the overrides
+            kernel=kernel,  # type: ignore[arg-type]
         )
 
     def _matryoshka_config(self) -> MatryoshkaConfig:

@@ -5,7 +5,24 @@ edit_uri: ""
 dev_addr: 0.0.0.0:1234
 site_dir: "static/docs"
 nav:
-  - 'index.md'
+  - Home: 'index.md'
+  - Quickstart: 'quickstart.md'
+  - Concepts: 'concepts.md'
+  - API reference:
+    - Overview: 'reference/index.md'
+    - 'igl.config': 'reference/config.md'
+    - 'igl.types': 'reference/types.md'
+    - 'igl.exceptions': 'reference/exceptions.md'
+    - 'igl.core': 'reference/core.md'
+    - 'igl.kernels': 'reference/kernels.md'
+    - 'igl.matryoshka': 'reference/matryoshka.md'
+    - 'igl.models': 'reference/models.md'
+    - 'igl.metrics': 'reference/metrics.md'
+    - 'igl.nn': 'reference/nn.md'
+    - 'igl.spd': 'reference/spd.md'
+    - 'igl.spectral': 'reference/spectral.md'
+    - 'igl.data': 'reference/data.md'
+    - 'igl.viz': 'reference/viz.md'
   - About: 'about.md'
   - Security: 'security.md'
   - Guidelines:

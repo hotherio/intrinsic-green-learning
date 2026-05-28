@@ -65,8 +65,7 @@
       "Bash(lefthook install*)",
       "Bash(python -c:*)",
       "Bash(python -m json.tool*)",
-      "Bash(python -m tomllib*)",
-      "Bash(curl -s https://api.clickup.com*)"
+      "Bash(python -m tomllib*)"
     ],
     "deny": []
   }

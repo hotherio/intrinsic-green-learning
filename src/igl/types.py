@@ -152,6 +152,68 @@ SchedulerTypeLiteral = Literal["cosine_warm_restarts", "none"]
 type SchedulerTypeLike = SchedulerType | SchedulerTypeLiteral
 
 
+class SpectralKind(StrEnum):
+    """Built-in 1-D spectral-basis identifiers.
+
+    Each value names an orthonormal basis with known (or estimated)
+    eigenvalues — the spectral decomposition of a self-adjoint operator
+    on its domain. The first six are closed-form; the last two are
+    data-driven (learned LB / user-supplied graph).
+    """
+
+    FOURIER_SINE = "fourier_sine"
+    FOURIER_COSINE = "fourier_cosine"
+    CHEBYSHEV = "chebyshev"
+    LEGENDRE = "legendre"
+    HERMITE = "hermite"
+    LAGUERRE = "laguerre"
+    LEARNED_LB = "learned_lb"
+    GRAPH_LAPLACIAN = "graph_laplacian"
+
+
+SpectralKindLiteral = Literal[
+    "fourier_sine",
+    "fourier_cosine",
+    "chebyshev",
+    "legendre",
+    "hermite",
+    "laguerre",
+    "learned_lb",
+    "graph_laplacian",
+]
+"""Literal companion of :class:`SpectralKind`."""
+
+type SpectralKindLike = SpectralKind | SpectralKindLiteral
+
+
+class NullSpaceKind(StrEnum):
+    """Built-in null-space augmentation strategies."""
+
+    NONE = "none"
+    CONSTANT = "constant"
+    POLYNOMIAL = "polynomial"
+
+
+NullSpaceKindLiteral = Literal["none", "constant", "polynomial"]
+"""Literal companion of :class:`NullSpaceKind`."""
+
+type NullSpaceKindLike = NullSpaceKind | NullSpaceKindLiteral
+
+
+class GraphLaplacianNorm(StrEnum):
+    """Normalisation modes for the graph Laplacian."""
+
+    SYMMETRIC = "symmetric"
+    RANDOM_WALK = "rw"
+    UNNORMALIZED = "unnormalized"
+
+
+GraphLaplacianNormLiteral = Literal["symmetric", "rw", "unnormalized"]
+"""Literal companion of :class:`GraphLaplacianNorm`."""
+
+type GraphLaplacianNormLike = GraphLaplacianNorm | GraphLaplacianNormLiteral
+
+
 DimensionCurve = Mapping[int, float]
 """Post-training mapping from truncation level ``k`` to validation loss at ``k``."""
 
@@ -222,6 +284,50 @@ class MatryoshkaSampler(Protocol):
 
 
 @runtime_checkable
+class SpectralBasis(Protocol):
+    """A 1-D orthonormal basis with known (or estimated) eigenvalues.
+
+    Implementations cover both closed-form bases (Fourier sine/cosine,
+    Chebyshev, Legendre, Hermite, Laguerre) and data-driven bases
+    (learned Laplace-Beltrami, graph Laplacian).
+
+    Attributes:
+        n_modes: Number of modes ``K`` exposed by the basis.
+        eigenvalues: ``[K]`` tensor, sorted ascending.
+        null_indices: Indices of modes with ``λ ≈ 0`` — the kernel's
+            null space.
+    """
+
+    n_modes: int
+    eigenvalues: torch.Tensor
+    null_indices: tuple[int, ...]
+
+    def evaluate(self, z: torch.Tensor, /) -> torch.Tensor:
+        """Evaluate every mode at ``z``. Returns ``[..., K]``."""
+        ...  # pragma: no cover  # Protocol method body
+
+
+@runtime_checkable
+class NullSpaceBasis(Protocol):
+    """Extra design-matrix columns capturing the operator's null space.
+
+    Concretely: a set of functions ``ξ_i(x)`` such that ``L ξ_i = 0`` for
+    the physical operator ``L`` being inverted. Their coefficients are
+    learned by the closed-form lstsq solve with no Tikhonov shrinkage,
+    so the null component is data-driven rather than shrunk to zero.
+
+    Attributes:
+        n_columns: Number of basis columns this null space contributes.
+    """
+
+    n_columns: int
+
+    def evaluate(self, z: torch.Tensor, /) -> torch.Tensor:
+        """Evaluate every null-space basis function. Returns ``[N, n_columns]``."""
+        ...  # pragma: no cover  # Protocol method body
+
+
+@runtime_checkable
 class ExtraLoss(Protocol):
     """Optional regularizer that contributes a scalar term to the training loss.
 
@@ -267,6 +373,9 @@ __all__ = [
     "EncoderKindLiteral",
     "EncoderProtocol",
     "ExtraLoss",
+    "GraphLaplacianNorm",
+    "GraphLaplacianNormLike",
+    "GraphLaplacianNormLiteral",
     "LossStrategy",
     "MatryoshkaSampler",
     "NormType",
@@ -275,6 +384,10 @@ __all__ = [
     "NormalizeMode",
     "NormalizeModeLike",
     "NormalizeModeLiteral",
+    "NullSpaceBasis",
+    "NullSpaceKind",
+    "NullSpaceKindLike",
+    "NullSpaceKindLiteral",
     "OperatorFn",
     "OperatorName",
     "OperatorNameLike",
@@ -285,4 +398,8 @@ __all__ = [
     "SchedulerType",
     "SchedulerTypeLike",
     "SchedulerTypeLiteral",
+    "SpectralBasis",
+    "SpectralKind",
+    "SpectralKindLike",
+    "SpectralKindLiteral",
 ]

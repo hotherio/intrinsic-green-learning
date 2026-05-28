@@ -137,6 +137,80 @@ regularizer — say, a sparsity penalty on the latents — is one new
 `ExtraLoss`. The reference implementation contains gate-sparsity,
 Stäckel-pullback, and AIRM losses all sharing these two seams.
 
+## Spectral formulation and the null space
+
+The local `GreenKernel` is a *product* of fixed-shape 1-D kernels at
+learnable anchors. The **spectral formulation** replaces this with the
+eigendecomposition of an operator $L$:
+
+$$
+G(z, s) = \sum_n \frac{\phi_n(z)\,\phi_n(s)}{\max(\lambda_n, \varepsilon)}.
+$$
+
+The library ships eight bases in
+[`igl.spectral`][igl.spectral.kernel.SpectralKernel]:
+
+| Basis | Domain | Notes |
+|---|---|---|
+| [`FourierSineBasis`][igl.spectral.bases.fourier_sine.FourierSineBasis] | $[0, 1]$ | Dirichlet BCs, no null mode. |
+| [`FourierCosineBasis`][igl.spectral.bases.fourier_cosine.FourierCosineBasis] | $[0, 1]$ | Neumann BCs, $\phi_0 = 1$ is the null mode. |
+| [`ChebyshevBasis`][igl.spectral.bases.chebyshev.ChebyshevBasis] | $[-1, 1]$ | Polynomial spectral-element basis. |
+| [`LegendreBasis`][igl.spectral.bases.legendre.LegendreBasis] | $[-1, 1]$ | Orthogonality w.r.t. uniform weight. |
+| [`HermiteBasis`][igl.spectral.bases.hermite.HermiteBasis] | $\mathbb{R}$ | Gaussian-weighted. |
+| [`LaguerreBasis`][igl.spectral.bases.laguerre.LaguerreBasis] | $[0, \infty)$ | Exponentially-weighted. |
+| [`LearnedLaplacianBasis`][igl.spectral.bases.learned_lb.LearnedLaplacianBasis] | learned manifold | $k$-NN graph + sparse eigsh + Nyström extension. |
+| [`GraphLaplacianBasis`][igl.spectral.bases.graph_laplacian.GraphLaplacianBasis] | user-supplied graph | Symmetric / random-walk / unnormalized. |
+
+For multi-dimensional latents,
+[`SpectralKernel`][igl.spectral.kernel.SpectralKernel] takes either one
+basis (uniform across dims) or a sequence (per-dim). For mixtures on
+the same dimension,
+[`MultiSpectralBasis`][igl.spectral.multi.MultiSpectralBasis] wraps
+$K$ bases with a softmax-mixed weighting.
+
+### Null-space augmentation
+
+Operators with non-trivial kernels — e.g. the Neumann Laplacian, whose
+$\phi_0 = 1$ has $\lambda_0 = 0$ — cannot reach those modes via the
+Green's expansion. The library exposes
+`NullSpaceBasis` as a kernel-agnostic
+add-on: extra design-matrix columns that the lstsq solve fits *without*
+Tikhonov shrinkage, so the null component comes from the data.
+
+Three concrete bases:
+
+- [`ConstantNullSpace`][igl.spectral.null_space.ConstantNullSpace] —
+  one column of ones (the DC mode).
+- [`PolynomialNullSpace`][igl.spectral.null_space.PolynomialNullSpace] —
+  constant + per-dimension monomials up to a given degree.
+- [`CustomNullSpace`][igl.spectral.null_space.CustomNullSpace] — wraps
+  an arbitrary callable.
+
+Both the local [`GreenKernel`][igl.core.kernel.GreenKernel] and the
+[`SpectralKernel`][igl.spectral.kernel.SpectralKernel] accept a
+`null_space=` argument; the lstsq target column count and the
+`source_weights` buffer width adjust automatically.
+
+### Learned Laplace–Beltrami spectrum
+
+For data on an unknown manifold, the operator to invert is the
+Laplace–Beltrami operator of the *learned* metric $g = J^\top J$ where
+$J$ is the encoder's Jacobian.
+[`LearnedLaplacianBasis`][igl.spectral.bases.learned_lb.LearnedLaplacianBasis]
+estimates the spectrum numerically:
+
+1. Build a $k$-NN graph on the encoded latents.
+2. Symmetric normalised Laplacian
+   $L = I - D^{-1/2} W D^{-1/2}$ with Gaussian edge weights.
+3. Sparse eigendecomposition via `scipy.sparse.linalg.eigsh`.
+4. Nyström extension to evaluate the eigenfunctions on new points.
+
+Because the metric drifts during training, the basis must be
+refreshed periodically. The
+[`LearnedLBRefresh`][igl.spectral.refresh.LearnedLBRefresh] hook plugs
+into the trainer via the `extra_losses=` parameter and re-runs the
+eigendecomposition every $N$ batches with the current encoder.
+
 ## What lives where
 
 | Subpackage | Role |
@@ -149,5 +223,6 @@ Stäckel-pullback, and AIRM losses all sharing these two seams.
 | `igl.models` | sklearn estimators: classifier, regressor, autoencoder. |
 | `igl.nn` | Bare [`IGLModule`][igl.IGLModule] for custom training loops. |
 | `igl.spd` | Riemannian extension: AIRM, log-Eig, orthogonality, reconstruction. |
+| `igl.spectral` | Spectral kernels + null-space augmentation: closed-form bases, learned LB, graph Laplacian. |
 | `igl.data` | Synthetic generators: torus, moons, swiss roll, SPD dataset. |
 | `igl.viz` | Optional matplotlib helpers (gated behind the `[viz]` extra). |

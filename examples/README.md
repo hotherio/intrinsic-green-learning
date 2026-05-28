@@ -24,8 +24,9 @@ viz module is not implemented yet in this milestone.
 
 ## v0.1 examples
 
-| Script | Manifold | Tasks | Expected `d_eff` |
+| Script | Manifold | Tasks | Expected outcome |
 |---|---|---|---|
-| `synthetic/torus_classification.py` | Flat torus T² in R⁴ → R³² | XOR cls + sin/cos reg | ≈ 2 |
+| `synthetic/torus_classification.py` | Flat torus T² in R⁴ → R³² | XOR cls + sin/cos reg | d_eff ≈ 2 |
 | `synthetic/moons_xor.py` | Moons in R² → R^16 | cls + reg + recon | d_cls ≤ d_reg ≤ d_recon |
-| `synthetic/swiss_roll_recon.py` | Swiss roll in R³ | autoencoder + reg | ≈ 2 |
+| `synthetic/swiss_roll_recon.py` | Swiss roll in R³ | autoencoder + reg | d_eff ≈ 2 |
+| `synthetic/poisson_1d.py` | $-u'' = f$ on $[0, 1]$ (Neumann) | regression | spectral + null-space recovers the DC mode |

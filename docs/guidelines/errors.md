@@ -21,8 +21,6 @@ class CancelableError(Exception):
 
 Cancelable does this (`CancelationError(Exception)`). Streamblocks chose a different model — see "Errors as events" below — appropriate to its event-stream domain.
 
-> **Hother decision needed:** the template package is empty, so no base exception is shipped. Downstream projects should create `<PackageName>Error` (or `<DomainName>Error`) on first use.
-
 ### Exception hierarchy
 
 Inherit specific exceptions from the base. Use one level deep by default; add a third level only for genuinely distinct cases consumers will want to catch differently:

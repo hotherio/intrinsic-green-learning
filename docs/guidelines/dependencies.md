@@ -53,8 +53,6 @@ doc = [
 | `[dependency-groups]` (dev, doc) | `>=` lower bound | We don't ship these; flexibility is fine. The `uv.lock` pins the actual version we test against. |
 | `uv.lock` | Auto-pinned by uv | Authoritative for reproducible builds. **Commit it.** |
 
-> **Hother decision needed:** historically some pinned-with-`==` tool versions (like `ruff==0.8.6`) sat in dev. Block 4 of the modernization loosened most to `>=`. Decide if any deserve the strict pin (e.g., ruff format-stability across versions) and document why.
-
 ### Upper bounds — when?
 
 Only when you have evidence the next major breaks you:

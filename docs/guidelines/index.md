@@ -17,6 +17,5 @@ Each guideline:
 
 - States what's **enforced** automatically (basedpyright, ruff, pip-audit, etc.).
 - States what's **expected** in review (the team's conventions).
-- Marks **opinionated decisions** with `> **Hother decision needed:** …` blocks that the maintainer fills in or vetoes.
 
 If you find yourself wanting to do something a guideline forbids, the right move is to discuss the guideline change — don't silently work around it.

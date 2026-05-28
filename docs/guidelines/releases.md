@@ -101,8 +101,6 @@ The `[tool.semantic_release].allow_zero_version = true` setting permits 0.x rele
 
 The template does **not** ship a dedicated RC workflow (cancelable and streamblocks release directly from main). If you need an RC flow, see KB §`rc-release.yml`.
 
-> **Hother decision needed:** the KB documents a dev-release pattern (every-push-to-main → `1.2.3.dev10+gSHA`) that requires hatch-vcs. The template removed hatch-vcs when migrating to PSR. Decide whether to (a) skip dev releases (current default), (b) re-introduce hatch-vcs alongside PSR for dev builds, (c) use PSR `--prerelease --prerelease-token dev` on every push (noisy).
-
 ### How to preview a release
 
 ```bash

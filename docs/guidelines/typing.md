@@ -34,8 +34,6 @@ T = TypeVar("T")
 def wrap(fn: Callable[P, R]) -> Callable[P, R]: ...
 ```
 
-> **Hother decision needed:** PEP 695 syntax (`def foo[T](x: T) -> T:`) is fully supported in Python 3.12+. We could adopt it now. We haven't because basedpyright + pre-695 is what siblings shipped. Decide whether to migrate template-wide and update siblings, or stay on `TypeVar` for consistency.
-
 ### Protocols
 
 - **Use Protocols for structural callback typing**, e.g. `ProgressCallback`, `StatusCallback`. Both siblings do this in `types.py`.

@@ -31,8 +31,6 @@ Avoid "rainbow-coloured" APIs that ship both sync and async versions of the same
 
 **Sibling pattern:** `cancelable` uses **anyio** (it's a cancellation library — needed anyio's first-class cancellation). `streamblocks` uses **asyncio** (just stream processing, no fancy cancellation).
 
-> **Hother decision needed:** the template is async-agnostic until a downstream library picks. The dev group doesn't include `pytest-asyncio` or `pytest-anyio`. Add whichever the new library needs.
-
 ### Async context managers
 
 Use `@asynccontextmanager` or `__aenter__` / `__aexit__` for any async resource that needs cleanup:

@@ -46,21 +46,6 @@ gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
 ```
 
-## One-time PyPI Trusted Publisher setup
-
-When forking this template for a new project, configure PyPI to trust GitHub Actions to publish on your behalf — no API token needed.
-
-1. Create the project on [pypi.org](https://pypi.org) (or [test.pypi.org](https://test.pypi.org)).
-2. Go to **Manage → Publishing**.
-3. Add a **Trusted Publisher** with:
-   - Owner: `hotherio`
-   - Repository: your repo name
-   - Workflow filename: `semantic-release.yml`
-   - Environment: leave blank (or set if you use [environment protection](https://docs.github.com/en/actions/deployment/targeting-different-environments/managing-environments-for-deployment))
-4. That's it. The next push to `main` with a release-worthy commit will publish via OIDC.
-
-Reference: [PyPI Trusted Publishers docs](https://docs.pypi.org/trusted-publishers/).
-
 ## Forgejo / self-hosted git forge
 
 PyPI does **not currently trust Forgejo OIDC tokens** (immutable-ID claims are missing). If you mirror this repo to a Forgejo instance and run the release workflow there, the publish step will fall back to a PyPI API token (`UV_PUBLISH_TOKEN` secret). See `FORGEJO.md` for details.

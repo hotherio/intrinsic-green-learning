@@ -78,8 +78,6 @@ Example:
 """
 ```
 
-> **Hother decision needed:** doctest opt-in. Sibling repos use `>>>` REPL examples in some places (streamblocks's `ProcessorConfig`) but don't run them via doctest. Decide whether the template should wire `pytest --doctest-modules` into the test config — currently no.
-
 ### Don't repeat the type hints
 
 ```python

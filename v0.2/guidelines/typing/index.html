@@ -1358,9 +1358,6 @@
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">wrap</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="n">P</span><span class="p">,</span> <span class="n">R</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="n">P</span><span class="p">,</span> <span class="n">R</span><span class="p">]:</span> <span class="o">...</span>
 </code></pre></div>
-<blockquote>
-<p><strong>Hother decision needed:</strong> PEP 695 syntax (<code>def foo[T](x: T) -&gt; T:</code>) is fully supported in Python 3.12+. We could adopt it now. We haven't because basedpyright + pre-695 is what siblings shipped. Decide whether to migrate template-wide and update siblings, or stay on <code>TypeVar</code> for consistency.</p>
-</blockquote>
 <h3 id="protocols">Protocols</h3>
 <ul>
 <li><strong>Use Protocols for structural callback typing</strong>, e.g. <code>ProgressCallback</code>, <code>StatusCallback</code>. Both siblings do this in <code>types.py</code>.</li>

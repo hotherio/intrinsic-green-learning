@@ -1346,9 +1346,6 @@
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Base class for all exceptions raised by hother.cancelable.&quot;&quot;&quot;</span>
 </code></pre></div>
 <p>Cancelable does this (<code>CancelationError(Exception)</code>). Streamblocks chose a different model — see "Errors as events" below — appropriate to its event-stream domain.</p>
-<blockquote>
-<p><strong>Hother decision needed:</strong> the template package is empty, so no base exception is shipped. Downstream projects should create <code>&lt;PackageName&gt;Error</code> (or <code>&lt;DomainName&gt;Error</code>) on first use.</p>
-</blockquote>
 <h3 id="exception-hierarchy">Exception hierarchy</h3>
 <p>Inherit specific exceptions from the base. Use one level deep by default; add a third level only for genuinely distinct cases consumers will want to catch differently:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">CancelableError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span> <span class="o">...</span>

@@ -1385,9 +1385,6 @@
 <li>Class attributes: <code>self._lock</code>, <code>self._pending_callbacks</code> — private state.</li>
 <li>Module names: <code>_internal.py</code> for whole modules that shouldn't be imported externally.</li>
 </ul>
-<blockquote>
-<p><strong>Hother decision needed:</strong> <code>__all__</code> exhaustiveness is itself a contract. Some teams prefer "anything not prefixed <code>_</code> is public." Both siblings use <code>__all__</code> and selective re-exports — keep that.</p>
-</blockquote>
 <h3 id="keyword-only-arguments">Keyword-only arguments</h3>
 <p>Use <code>*</code> to <strong>force kwargs</strong> in constructors and public functions with more than one optional argument:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_iterable</span><span class="p">(</span>
@@ -1435,9 +1432,6 @@
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="k">return</span> <span class="n">new_function</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
 </code></pre></div>
 <p>Then bump the major version when removing (see <a href="../releases/"><code>releases.md</code></a>).</p>
-<blockquote>
-<p><strong>Hother decision needed:</strong> how long do we promise to keep deprecated APIs alive — one minor version, two, until next major? Streamblocks's <code>0.x</code> line has done breaking changes per minor; consider whether the template's recommendation should be stricter once a downstream library hits 1.0.</p>
-</blockquote>
 <h3 id="avoiding-leaky-abstractions">Avoiding leaky abstractions</h3>
 <ul>
 <li><strong>Don't return third-party types from the public API</strong> unless they're part of a well-known contract (<code>pathlib.Path</code>, <code>datetime</code>, <code>pydantic.BaseModel</code>). Wrap them.</li>

@@ -1482,9 +1482,6 @@
 <li><code>1.2.0</code> — final</li>
 </ul>
 <p>The template does <strong>not</strong> ship a dedicated RC workflow (cancelable and streamblocks release directly from main). If you need an RC flow, see KB §<code>rc-release.yml</code>.</p>
-<blockquote>
-<p><strong>Hother decision needed:</strong> the KB documents a dev-release pattern (every-push-to-main → <code>1.2.3.dev10+gSHA</code>) that requires hatch-vcs. The template removed hatch-vcs when migrating to PSR. Decide whether to (a) skip dev releases (current default), (b) re-introduce hatch-vcs alongside PSR for dev builds, (c) use PSR <code>--prerelease --prerelease-token dev</code> on every push (noisy).</p>
-</blockquote>
 <h3 id="how-to-preview-a-release">How to preview a release</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Show what version PSR would compute next (no side effects)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uvx<span class="w"> </span>python-semantic-release<span class="w"> </span>version<span class="w"> </span>--noop<span class="w"> </span>--print-version

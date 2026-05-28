@@ -1429,9 +1429,6 @@
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="sd">    ```</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="sd">&quot;&quot;&quot;</span>
 </code></pre></div>
-<blockquote>
-<p><strong>Hother decision needed:</strong> doctest opt-in. Sibling repos use <code>&gt;&gt;&gt;</code> REPL examples in some places (streamblocks's <code>ProcessorConfig</code>) but don't run them via doctest. Decide whether the template should wire <code>pytest --doctest-modules</code> into the test config — currently no.</p>
-</blockquote>
 <h3 id="dont-repeat-the-type-hints">Don't repeat the type hints</h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Bad — type info is duplicated and rots independently</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">foo</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>

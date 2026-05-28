@@ -1424,9 +1424,6 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p><strong>Hother decision needed:</strong> historically some pinned-with-<code>==</code> tool versions (like <code>ruff==0.8.6</code>) sat in dev. Block 4 of the modernization loosened most to <code>&gt;=</code>. Decide if any deserve the strict pin (e.g., ruff format-stability across versions) and document why.</p>
-</blockquote>
 <h3 id="upper-bounds-when">Upper bounds — when?</h3>
 <p>Only when you have evidence the next major breaks you:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="s2">&quot;pydantic&gt;=2.11,&lt;3&quot;</span>        <span class="c1"># OK: Pydantic 3 is a known future incompat</span>

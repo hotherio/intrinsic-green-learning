@@ -13,6 +13,7 @@ from igl.config import (
     IGLConfig,
     KernelConfig,
     MatryoshkaConfig,
+    SpectralConfig,
 )
 from igl.core.encoder import LinearEncoder, MLPEncoder
 from igl.core.kernel import GreenKernel
@@ -49,6 +50,9 @@ from igl.types import (
     EncoderKindLike,
     EncoderKindLiteral,
     EncoderProtocol,
+    GraphLaplacianNorm,
+    GraphLaplacianNormLike,
+    GraphLaplacianNormLiteral,
     LossStrategy,
     MatryoshkaSampler,
     NormalizeMode,
@@ -57,6 +61,10 @@ from igl.types import (
     NormType,
     NormTypeLike,
     NormTypeLiteral,
+    NullSpaceBasis,
+    NullSpaceKind,
+    NullSpaceKindLike,
+    NullSpaceKindLiteral,
     OperatorFn,
     OperatorName,
     OperatorNameLike,
@@ -67,6 +75,10 @@ from igl.types import (
     SchedulerType,
     SchedulerTypeLike,
     SchedulerTypeLiteral,
+    SpectralBasis,
+    SpectralKind,
+    SpectralKindLike,
+    SpectralKindLiteral,
 )
 
 try:
@@ -83,6 +95,7 @@ __all__ = [
     "IGLConfig",
     "KernelConfig",
     "MatryoshkaConfig",
+    "SpectralConfig",
     # Core building blocks
     "GreenKernel",
     "IGLModule",
@@ -122,6 +135,9 @@ __all__ = [
     "EncoderKindLike",
     "EncoderKindLiteral",
     "EncoderProtocol",
+    "GraphLaplacianNorm",
+    "GraphLaplacianNormLike",
+    "GraphLaplacianNormLiteral",
     "LossStrategy",
     "MatryoshkaSampler",
     "NormType",
@@ -130,6 +146,10 @@ __all__ = [
     "NormalizeMode",
     "NormalizeModeLike",
     "NormalizeModeLiteral",
+    "NullSpaceBasis",
+    "NullSpaceKind",
+    "NullSpaceKindLike",
+    "NullSpaceKindLiteral",
     "OperatorFn",
     "OperatorName",
     "OperatorNameLike",
@@ -140,6 +160,10 @@ __all__ = [
     "SchedulerType",
     "SchedulerTypeLike",
     "SchedulerTypeLiteral",
+    "SpectralBasis",
+    "SpectralKind",
+    "SpectralKindLike",
+    "SpectralKindLiteral",
     # Exceptions
     "IGLConfigError",
     "IGLConvergenceError",

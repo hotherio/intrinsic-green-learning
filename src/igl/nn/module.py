@@ -101,7 +101,7 @@ class IGLModule(nn.Module):
     max_dim: int
     output_dim: int
 
-    def __init__(
+    def __init__(  # noqa: PLR0912
         self,
         input_dim: int,
         max_dim: int,
@@ -115,6 +115,7 @@ class IGLModule(nn.Module):
         normalize: NormalizeModeLike | None = None,
         normalize_input: bool = True,
         config: IGLConfig | None = None,
+        kernel: nn.Module | None = None,
     ) -> None:
         super().__init__()
         if input_dim < 1:
@@ -173,12 +174,24 @@ class IGLModule(nn.Module):
         else:
             self.encoder = inner_encoder
 
-        self.green = GreenKernel(
-            latent_dim=max_dim,
-            n_anchors=resolved_anchors,
-            n_scales=resolved_scales,
-            operator=resolved_operator,
-        )
+        if kernel is None:
+            self.green: nn.Module = GreenKernel(
+                latent_dim=max_dim,
+                n_anchors=resolved_anchors,
+                n_scales=resolved_scales,
+                operator=resolved_operator,
+            )
+        else:
+            # Pre-built kernel (e.g. SpectralKernel). It must expose
+            # `output_dim` for sizing the source_weights buffer.
+            if not hasattr(kernel, "output_dim"):
+                raise IGLConfigError(
+                    "kernel must expose an `output_dim` attribute (number of design-matrix columns)",
+                )
+            self.green = kernel
+
+        # Size the readout buffer to the kernel's design-matrix width.
+        n_columns = int(getattr(self.green, "output_dim", resolved_anchors))
 
         self.input_dim = input_dim
         self.max_dim = max_dim
@@ -187,7 +200,7 @@ class IGLModule(nn.Module):
 
         # Closed-form readout. Stored as a non-learnable buffer so it travels
         # with the module's device but doesn't pick up gradients.
-        self.register_buffer("source_weights", torch.zeros(resolved_anchors, output_dim))
+        self.register_buffer("source_weights", torch.zeros(n_columns, output_dim))
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
     def latent(self, x: torch.Tensor) -> torch.Tensor:

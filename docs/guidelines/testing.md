@@ -36,8 +36,6 @@ Two patterns, pick per library:
 | `anyio` (e.g., `cancelable`) | `pytest-anyio`, mark tests `@pytest.mark.anyio`, parametrize the backend via a fixture |
 | `asyncio` (e.g., `streamblocks`) | `pytest-asyncio` with `asyncio_mode = "auto"` (no marker needed per test) |
 
-> **Hother decision needed:** the template ships neither yet — pick one based on the downstream library's runtime. `async.md` covers the runtime choice.
-
 ### Coverage threshold
 
 **`fail_under = 100`** is the Hother default — siblings both target 100%.

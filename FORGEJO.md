@@ -16,7 +16,7 @@ This template is designed to work on both **GitHub** and **Forgejo** (Codeberg, 
 | | GitHub | Forgejo |
 |---|---|---|
 | Mechanism | OIDC Trusted Publishing | API token (`UV_PUBLISH_TOKEN`) |
-| Configuration | One-time setup at pypi.org → Manage → Publishing | Add `UV_PUBLISH_TOKEN` secret to the repo |
+| Configuration | Trusted Publisher on the PyPI project | `UV_PUBLISH_TOKEN` secret on the repo |
 | Attestations | Automatic (PEP 740, sigstore) | None |
 | Step | `pypa/gh-action-pypi-publish@release/v1` | `uv publish --token "$UV_PUBLISH_TOKEN"` |
 

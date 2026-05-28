@@ -53,8 +53,6 @@ Internal modules can stay deeply nested; only the import surface is flat.
 - Class attributes: `self._lock`, `self._pending_callbacks` — private state.
 - Module names: `_internal.py` for whole modules that shouldn't be imported externally.
 
-> **Hother decision needed:** `__all__` exhaustiveness is itself a contract. Some teams prefer "anything not prefixed `_` is public." Both siblings use `__all__` and selective re-exports — keep that.
-
 ### Keyword-only arguments
 
 Use `*` to **force kwargs** in constructors and public functions with more than one optional argument:
@@ -120,8 +118,6 @@ def old_function(...) -> ...:
 ```
 
 Then bump the major version when removing (see [`releases.md`](releases.md)).
-
-> **Hother decision needed:** how long do we promise to keep deprecated APIs alive — one minor version, two, until next major? Streamblocks's `0.x` line has done breaking changes per minor; consider whether the template's recommendation should be stricter once a downstream library hits 1.0.
 
 ### Avoiding leaky abstractions
 

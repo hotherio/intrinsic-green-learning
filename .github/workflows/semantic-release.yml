@@ -5,6 +5,21 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_level:
+        description: |
+          Force a version bump regardless of commit types. Use when you want
+          to cut a release that the conventional-commits log alone wouldn't
+          justify (e.g. a marketing milestone). Leave as `none` for normal
+          operation.
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: read  # default; release job below overrides with its needs
@@ -77,8 +92,18 @@ jobs:
 
       - name: Run Semantic Release (no VCS release)
         id: release
+        env:
+          FORCE_LEVEL: ${{ inputs.force_level }}
         run: |
-          semantic-release version --no-vcs-release
+          # Map workflow_dispatch input to PSR force flag.
+          # "none" / unset → normal commit-driven release path.
+          FORCE_FLAG=""
+          case "${FORCE_LEVEL:-none}" in
+            patch) FORCE_FLAG="--patch" ;;
+            minor) FORCE_FLAG="--minor" ;;
+            major) FORCE_FLAG="--major" ;;
+          esac
+          semantic-release version --no-vcs-release ${FORCE_FLAG}
           if [ $? -eq 0 ]; then
             # Defensive check: verify dist/ has artifacts before claiming success
             if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then

@@ -18,6 +18,12 @@ Optional ``orthogonality_weight > 0`` plugs an
 :class:`igl.spd.OrthogonalityPenalty` into stage A.
 """
 
+# Stubs for sklearn (LogisticRegression.fit/predict/predict_proba) and torch
+# (manual_seed) are partial; silence Unknown-member diagnostics module-wide
+# instead of annotating each call. The wrapper class is thin, so this trades
+# inline noise for a single header.
+# pyright: reportUnknownMemberType=false, reportUnknownArgumentType=false
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -210,7 +216,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         with torch.no_grad():
             phi = self._design_matrix(x_tensor).cpu().numpy()
         self.readout_: LogisticRegression = LogisticRegression(max_iter=1000)
-        self.readout_.fit(phi, np.asarray(y))  # pyright: ignore[reportUnknownMemberType]
+        self.readout_.fit(phi, np.asarray(y))
         return self
 
     def _design_matrix(self, x: torch.Tensor) -> torch.Tensor:
@@ -229,14 +235,14 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self._check_fitted()
         with torch.no_grad():
             phi = self._design_matrix(torch.as_tensor(np.asarray(x, dtype=np.float32))).cpu().numpy()
-        return cast("NDArray[np.generic]", self.readout_.predict(phi))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        return cast("NDArray[np.generic]", self.readout_.predict(phi))
 
     def predict_proba(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
         """Class probabilities via the readout's :meth:`predict_proba`."""
         self._check_fitted()
         with torch.no_grad():
             phi = self._design_matrix(torch.as_tensor(np.asarray(x, dtype=np.float32))).cpu().numpy()
-        return np.asarray(self.readout_.predict_proba(phi), dtype=np.float64)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        return np.asarray(self.readout_.predict_proba(phi), dtype=np.float64)
 
 
 __all__ = ["IGLReconSPDClassifier"]

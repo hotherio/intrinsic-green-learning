@@ -4,6 +4,10 @@ Requires the ``[viz]`` extra; importing this module raises
 :class:`igl.IGLDependencyError` if ``matplotlib`` is missing.
 """
 
+# Matplotlib's stubs leave most Axes/Figure methods as Unknown; silence those
+# diagnostics module-wide rather than annotating every plot call.
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
+
 from typing import TYPE_CHECKING
 
 from igl.viz._matplotlib import require_matplotlib
@@ -46,24 +50,24 @@ def plot_dimension_curve(
     # matplotlib's stubs are partial — the runtime types are stable, so the
     # whole function is one big stub-tolerance zone.
     if ax is None:
-        _fig, ax = plt.subplots(figsize=(6, 4))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        _fig, ax = plt.subplots(figsize=(6, 4))
 
     ks = sorted(curve)
     values = [curve[k] for k in ks]
-    ax.plot(ks, values, marker="o", label=label)  # pyright: ignore[reportUnknownMemberType]
+    ax.plot(ks, values, marker="o", label=label)
 
     if elbow is not None:
-        ax.axvline(elbow, linestyle="--", alpha=0.6, label=f"d_eff = {elbow}")  # pyright: ignore[reportUnknownMemberType]
+        ax.axvline(elbow, linestyle="--", alpha=0.6, label=f"d_eff = {elbow}")
 
-    ax.set_xlabel("truncation level k")  # pyright: ignore[reportUnknownMemberType]
-    ax.set_ylabel("curve score (lower is better)")  # pyright: ignore[reportUnknownMemberType]
+    ax.set_xlabel("truncation level k")
+    ax.set_ylabel("curve score (lower is better)")
     if log_y:
-        ax.set_yscale("log")  # pyright: ignore[reportUnknownMemberType]
+        ax.set_yscale("log")
     if title:
-        ax.set_title(title)  # pyright: ignore[reportUnknownMemberType]
+        ax.set_title(title)
     if label is not None or elbow is not None:
-        ax.legend()  # pyright: ignore[reportUnknownMemberType]
-    ax.grid(visible=True, alpha=0.3)  # pyright: ignore[reportUnknownMemberType]
+        ax.legend()
+    ax.grid(visible=True, alpha=0.3)
     return ax
 
 

@@ -1,8 +1,33 @@
 # Concepts
 
-This page summarises the mathematical setup IGL is built around. For the
-API itself, see [Quickstart](quickstart.md) and the
-[API reference](reference/index.md).
+This page explains the moving parts of IGL: what the encoder, the
+Green's-function kernel, and Matryoshka truncation each contribute, and
+how they combine into an end-to-end training procedure that *reports* the
+effective latent dimension as a byproduct of fitting the task.
+
+The pieces work together as follows: an **encoder** maps your input to a
+low-dimensional latent; the **Green's-function kernel** turns that latent
+into a structured design matrix; and **Variable Projection with
+Matryoshka truncation** jointly fits the encoder and reads off how few
+dimensions of the design matrix the task actually needs. The rest of the
+page walks through each piece in math, then covers two extensions — the
+SPD/Riemannian module and the spectral formulation.
+
+## Where each piece lives
+
+| Subpackage | Role |
+|---|---|
+| `igl` | Top-level surface: configs, building blocks, sklearn models, metrics. |
+| `igl.core` | Geometry-agnostic primitives: encoder, kernel, solver, trainer. |
+| `igl.kernels` | Operator zoo: Gaussian, Laplacian, Cauchy, Helmholtz, Gabor, Mexican-hat, Yukawa, multiquadric, soft-box. Registration via `register_operator`. |
+| `igl.matryoshka` | Truncation samplers (uniform, power-law) and the post-fit dimension curve. |
+| `igl.metrics` | `d_eff_from_curve`, `compare_d_eff`, elbow detectors. |
+| `igl.models` | sklearn estimators: classifier, regressor, autoencoder. |
+| `igl.nn` | Bare [`IGLModule`][igl.IGLModule] for custom training loops. |
+| `igl.spd` | Riemannian extension: AIRM, log-Eig, orthogonality, reconstruction. |
+| `igl.spectral` | Spectral kernels + null-space augmentation: closed-form bases, learned LB, graph Laplacian. |
+| `igl.data` | Synthetic generators: torus, moons, swiss roll, SPD dataset. |
+| `igl.viz` | Optional matplotlib helpers (gated behind the `[viz]` extra). |
 
 ## Encoder + Green-kernel design
 
@@ -70,6 +95,7 @@ more dimensions stops giving substantial improvements. That $k$ is the
 **effective dimension** $d_{\text{eff}}$.
 
 ## The task-conditioned hierarchy
+{ #the-task-conditioned-hierarchy }
 
 The same input data carries different amounts of "useful structure" for
 different tasks:
@@ -137,7 +163,13 @@ regularizer — say, a sparsity penalty on the latents — is one new
 `ExtraLoss`. The reference implementation contains gate-sparsity,
 Stäckel-pullback, and AIRM losses all sharing these two seams.
 
-## Spectral formulation and the null space
+## Advanced: spectral formulation and the null space
+
+The default `GreenKernel` is enough for most use cases — you can skip
+this section on a first read. It's relevant when you need a basis tied
+to a specific differential operator (e.g. a Laplacian with known
+boundary conditions) or when your data lives on a learned/graph
+manifold that's natural to express via an eigendecomposition.
 
 The local `GreenKernel` is a *product* of fixed-shape 1-D kernels at
 learnable anchors. The **spectral formulation** replaces this with the
@@ -210,19 +242,3 @@ refreshed periodically. The
 [`LearnedLBRefresh`][igl.spectral.refresh.LearnedLBRefresh] hook plugs
 into the trainer via the `extra_losses=` parameter and re-runs the
 eigendecomposition every $N$ batches with the current encoder.
-
-## What lives where
-
-| Subpackage | Role |
-|---|---|
-| `igl` | Top-level surface: configs, building blocks, sklearn models, metrics. |
-| `igl.core` | Geometry-agnostic primitives: encoder, kernel, solver, trainer. |
-| `igl.kernels` | Operator zoo: Gaussian, Laplacian, Cauchy, Helmholtz, Gabor, Mexican-hat, Yukawa, multiquadric, soft-box. Registration via `register_operator`. |
-| `igl.matryoshka` | Truncation samplers (uniform, power-law) and the post-fit dimension curve. |
-| `igl.metrics` | `d_eff_from_curve`, `compare_d_eff`, elbow detectors. |
-| `igl.models` | sklearn estimators: classifier, regressor, autoencoder. |
-| `igl.nn` | Bare [`IGLModule`][igl.IGLModule] for custom training loops. |
-| `igl.spd` | Riemannian extension: AIRM, log-Eig, orthogonality, reconstruction. |
-| `igl.spectral` | Spectral kernels + null-space augmentation: closed-form bases, learned LB, graph Laplacian. |
-| `igl.data` | Synthetic generators: torus, moons, swiss roll, SPD dataset. |
-| `igl.viz` | Optional matplotlib helpers (gated behind the `[viz]` extra). |

@@ -27,7 +27,7 @@ depending on the internal modules where they're consumed.
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol
 
 import torch
 
@@ -218,7 +218,6 @@ DimensionCurve = Mapping[int, float]
 """Post-training mapping from truncation level ``k`` to validation loss at ``k``."""
 
 
-@runtime_checkable
 class EncoderProtocol(Protocol):
     """A callable mapping ambient inputs to an ``max_dim``-dimensional latent."""
 
@@ -228,7 +227,6 @@ class EncoderProtocol(Protocol):
     def __call__(self, x: torch.Tensor, /) -> torch.Tensor: ...
 
 
-@runtime_checkable
 class OperatorFn(Protocol):
     """Log-space kernel operator.
 
@@ -247,7 +245,6 @@ class OperatorFn(Protocol):
     ) -> tuple[torch.Tensor, torch.Tensor]: ...
 
 
-@runtime_checkable
 class LossStrategy(Protocol):
     """Pluggable loss for :class:`igl.MatryoshkaTrainer`.
 
@@ -276,14 +273,12 @@ class LossStrategy(Protocol):
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float: ...
 
 
-@runtime_checkable
 class MatryoshkaSampler(Protocol):
     """Samples a truncation level ``k ∈ {1, …, d_max}`` per training step."""
 
     def __call__(self, d_max: int, /) -> int: ...
 
 
-@runtime_checkable
 class SpectralBasis(Protocol):
     """A 1-D orthonormal basis with known (or estimated) eigenvalues.
 
@@ -307,7 +302,6 @@ class SpectralBasis(Protocol):
         ...  # pragma: no cover  # Protocol method body
 
 
-@runtime_checkable
 class NullSpaceBasis(Protocol):
     """Extra design-matrix columns capturing the operator's null space.
 
@@ -327,7 +321,6 @@ class NullSpaceBasis(Protocol):
         ...  # pragma: no cover  # Protocol method body
 
 
-@runtime_checkable
 class ExtraLoss(Protocol):
     """Optional regularizer that contributes a scalar term to the training loss.
 

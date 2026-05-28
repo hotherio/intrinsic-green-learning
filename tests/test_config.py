@@ -170,6 +170,22 @@ def test_iglconfig_from_dict_rejects_bad_operator() -> None:
         IGLConfig.from_dict({"kernel": {"operator": 42}})
 
 
+def test_iglconfig_from_dict_rejects_wrong_typed_leaf_value() -> None:
+    """_typed_get raises IGLConfigError naming the bad key + expected type.
+
+    Regression for the helper introduced to replace 20+ `cast(X, .get(...))`
+    sites: silently falling back to the default on a type mismatch would hide
+    config typos that "happen to parse"; raising surfaces them.
+    """
+    import pytest  # noqa: PLC0415
+
+    from igl import IGLConfigError  # noqa: PLC0415
+
+    # `epochs` should be an int; a string here is a user typo.
+    with pytest.raises(IGLConfigError, match="'epochs' must be int, got str"):
+        IGLConfig.from_dict({"matryoshka": {"epochs": "1500"}})
+
+
 def test_iglconfig_from_dict_rejects_bad_sigma_log_range() -> None:
     import pytest  # noqa: PLC0415
 

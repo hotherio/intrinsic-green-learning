@@ -12,7 +12,7 @@ coerces strings to enums so internal code can rely on identity comparisons.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Self, cast
+from typing import Self, TypeVar, cast
 
 from igl.exceptions import IGLConfigError
 from igl.types import (
@@ -35,6 +35,32 @@ from igl.types import (
     SpectralKind,
     SpectralKindLike,
 )
+
+_T = TypeVar("_T", int, float, bool)
+
+
+def _typed_get(data: Mapping[str, object], key: str, default: _T, /) -> _T:
+    """Return ``data[key]`` if present and the same concrete type as ``default``.
+
+    A focused helper for leaf-typed config fields: int, float, bool. The
+    return type is inferred from ``default``, so callers don't need to
+    annotate or :func:`cast`. For union / nullable / enum fields, keep
+    :func:`cast` explicit — those don't have a single ``type`` to match
+    against at runtime.
+
+    Raises:
+        IGLConfigError: If ``key`` is present with a wrongly-typed value.
+            Falling back to ``default`` silently on a type mismatch would
+            hide config typos that "happen to parse"; raising surfaces them.
+    """
+    if key not in data:
+        return default
+    val = data[key]
+    if isinstance(val, type(default)):
+        return val
+    raise IGLConfigError(
+        f"{key!r} must be {type(default).__name__}, got {type(val).__name__}",
+    )
 
 
 def _coerce_operator(
@@ -293,7 +319,7 @@ def _make_encoder_config(data: Mapping[str, object]) -> EncoderConfig:
     return EncoderConfig(
         kind=cast(EncoderKindLike, data.get("kind", EncoderKind.MLP)),
         hidden=cast(int | tuple[int, ...], hidden),
-        depth=cast(int, data.get("depth", 2)),
+        depth=_typed_get(data, "depth", 2),
         norm=cast(NormTypeLike, data.get("norm", NormType.LAYER)),
         activation=cast(ActivationTypeLike, data.get("activation", ActivationType.SILU)),
     )
@@ -320,14 +346,14 @@ def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
     sigma_pair = cast(tuple[float, float], sigma_raw)
 
     return KernelConfig(
-        n_anchors=cast(int, data.get("n_anchors", 64)),
-        n_scales=cast(int, data.get("n_scales", 4)),
+        n_anchors=_typed_get(data, "n_anchors", 64),
+        n_scales=_typed_get(data, "n_scales", 4),
         operator=operator,
         sigma_log_range=sigma_pair,
-        anchor_init_std=cast(float, data.get("anchor_init_std", 0.5)),
+        anchor_init_std=_typed_get(data, "anchor_init_std", 0.5),
         normalize=cast(NormalizeModeLike, data.get("normalize", NormalizeMode.SOFTMAX)),
         null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
-        polynomial_degree=cast(int, data.get("polynomial_degree", 1)),
+        polynomial_degree=_typed_get(data, "polynomial_degree", 1),
     )
 
 
@@ -345,34 +371,34 @@ def _make_spectral_config(data: Mapping[str, object]) -> SpectralConfig:
 
     return SpectralConfig(
         kind=kind,
-        n_modes=cast(int, data.get("n_modes", 16)),
-        n_anchors=cast(int, data.get("n_anchors", 64)),
+        n_modes=_typed_get(data, "n_modes", 16),
+        n_anchors=_typed_get(data, "n_anchors", 64),
         null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
-        polynomial_degree=cast(int, data.get("polynomial_degree", 1)),
-        epsilon=cast(float, data.get("epsilon", 1e-4)),
-        anchor_init_std=cast(float, data.get("anchor_init_std", 0.25)),
-        k_nn=cast(int, data.get("k_nn", 10)),
-        refresh_every=cast(int, data.get("refresh_every", 200)),
+        polynomial_degree=_typed_get(data, "polynomial_degree", 1),
+        epsilon=_typed_get(data, "epsilon", 1e-4),
+        anchor_init_std=_typed_get(data, "anchor_init_std", 0.25),
+        k_nn=_typed_get(data, "k_nn", 10),
+        refresh_every=_typed_get(data, "refresh_every", 200),
     )
 
 
 def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
     return MatryoshkaConfig(
-        epochs=cast(int, data.get("epochs", 1500)),
-        batch_size=cast(int, data.get("batch_size", 256)),
-        inner_batch_size=cast(int, data.get("inner_batch_size", 4096)),
-        encoder_lr=cast(float, data.get("encoder_lr", 1e-3)),
+        epochs=_typed_get(data, "epochs", 1500),
+        batch_size=_typed_get(data, "batch_size", 256),
+        inner_batch_size=_typed_get(data, "inner_batch_size", 4096),
+        encoder_lr=_typed_get(data, "encoder_lr", 1e-3),
         weight_decay=cast("float | None", data.get("weight_decay", 1e-4)),
-        source_l2=cast(float, data.get("source_l2", 1e-3)),
-        grad_clip=cast(float, data.get("grad_clip", 1.0)),
+        source_l2=_typed_get(data, "source_l2", 1e-3),
+        grad_clip=_typed_get(data, "grad_clip", 1.0),
         sampling=cast(SamplingModeLike, data.get("sampling", SamplingMode.UNIFORM)),
-        alpha=cast(float, data.get("alpha", 1.0)),
+        alpha=_typed_get(data, "alpha", 1.0),
         scheduler=cast(SchedulerTypeLike, data.get("scheduler", SchedulerType.COSINE_WARM_RESTARTS)),
         early_stop_patience=cast("int | None", data.get("early_stop_patience", 100)),
-        early_stop_min_epochs=cast(int, data.get("early_stop_min_epochs", 200)),
-        noise_std=cast(float, data.get("noise_std", 0.0)),
-        log_every=cast(int, data.get("log_every", 100)),
-        verbose=cast(bool, data.get("verbose", False)),
+        early_stop_min_epochs=_typed_get(data, "early_stop_min_epochs", 200),
+        noise_std=_typed_get(data, "noise_std", 0.0),
+        log_every=_typed_get(data, "log_every", 100),
+        verbose=_typed_get(data, "verbose", False),
     )
 
 

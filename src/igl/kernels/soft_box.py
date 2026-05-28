@@ -7,9 +7,9 @@ The result is always non-negative, so the kernel is non-oscillatory.
 
 import torch
 
+from igl.kernels._constants import KERNEL_EPS
 from igl.kernels._registry import register_operator
 
-_EPS = 1e-8
 _TAU = 0.1
 
 
@@ -19,7 +19,7 @@ class _SoftBox:
     def __call__(self, d: torch.Tensor, sigma: torch.Tensor, /) -> tuple[torch.Tensor, torch.Tensor]:
         left = torch.sigmoid((d + sigma) / _TAU)
         right = torch.sigmoid((d - sigma) / _TAU)
-        log_abs = torch.log((left - right).clamp(min=_EPS))
+        log_abs = torch.log((left - right).clamp(min=KERNEL_EPS))
         return log_abs, torch.ones_like(d)
 
 

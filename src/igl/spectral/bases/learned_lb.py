@@ -45,6 +45,12 @@ from torch import nn
 from igl.exceptions import IGLConfigError
 
 _MIN_K_NN = 1
+_MEDIAN_DIST_FLOOR: float = 1e-12
+"""Lower bound on the squared median nearest-neighbour distance — keeps the kNN
+Gaussian similarity finite when all points happen to coincide."""
+_DEGREE_FLOOR: float = 1e-12
+"""Lower bound on graph-node degree before inverting; mirrors the same constant
+in :mod:`igl.spectral.bases.graph_laplacian`."""
 
 
 class LearnedLaplacianBasis(nn.Module):
@@ -127,7 +133,7 @@ class LearnedLaplacianBasis(nn.Module):
         distances = distances[:, 1:]
         indices = indices[:, 1:]
 
-        sigma_sq = float(np.median(distances[:, 0]) ** 2 + 1e-12)
+        sigma_sq = float(np.median(distances[:, 0]) ** 2 + _MEDIAN_DIST_FLOOR)
 
         rows = np.repeat(np.arange(n), self.k_nn)
         cols = indices.reshape(-1)
@@ -135,7 +141,7 @@ class LearnedLaplacianBasis(nn.Module):
         w = scipy.sparse.coo_matrix((weights, (rows, cols)), shape=(n, n)).tocsr()
         w = 0.5 * (w + w.T)
         d = np.asarray(w.sum(axis=1)).reshape(-1)
-        d_inv_sqrt = scipy.sparse.diags(1.0 / np.sqrt(d + 1e-12))
+        d_inv_sqrt = scipy.sparse.diags(1.0 / np.sqrt(d + _DEGREE_FLOOR))
         lap = scipy.sparse.eye(n) - d_inv_sqrt @ w @ d_inv_sqrt
 
         # eigsh: smallest eigenvalues via shift-invert; for n_modes < n_total - 1.

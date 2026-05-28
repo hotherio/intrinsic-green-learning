@@ -46,9 +46,11 @@ jobs:
             chore
             revert
           requireScope: false
-          # Subject pattern intentionally unconstrained — Renovate emits
-          # lowercase subjects ("update foo to v3.14") and that's acceptable
-          # for this project. Capitalisation is not a hard rule.
+          # Letter-start, no trailing period. Lowercase is accepted so
+          # Renovate-style subjects ("update foo to v3.14") pass alongside
+          # capitalised ones; we still reject digit/punct-prefixed subjects
+          # and the trailing-period antipattern.
+          subjectPattern: ^[A-Za-z].+[^.]$
           validateSingleCommit: true       # also check lone commit if PR has only one
 
   validate:

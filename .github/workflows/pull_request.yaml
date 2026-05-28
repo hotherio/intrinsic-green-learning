@@ -108,9 +108,10 @@ jobs:
       # `--with-editable ".[all]"` installs the project plus every optional
       # extra (matplotlib, mne, transformers, kneed, …) into ty's ephemeral
       # env so it can resolve guarded imports like `matplotlib.axes` inside
-      # `igl.viz`. Without this, ty reports unresolved-import diagnostics
-      # for every optional dependency.
-      - run: uvx --with-editable ".[all]" ty check src/
+      # `igl.viz`. `--python 3.13` pins the interpreter — without it, uvx
+      # falls back to the runner's default 3.12 and dependency resolution
+      # fails because the project requires Python >= 3.13.
+      - run: uvx --python 3.13 --with-editable ".[all]" ty check src/
 
   validate-docs:
     name: Validate Docs

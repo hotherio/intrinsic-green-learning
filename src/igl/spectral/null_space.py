@@ -116,7 +116,7 @@ class CustomNullSpace:
         out = self._fn(z)
         if out.shape[0] != z.shape[0] or out.shape[-1] != self.n_columns:
             raise IGLConfigError(
-                f"custom null-space fn must return [N={z.shape[0]}, " f"n_columns={self.n_columns}], got {tuple(out.shape)}",
+                f"custom null-space fn must return [N={z.shape[0]}, n_columns={self.n_columns}], got {tuple(out.shape)}",
             )
         return out
 

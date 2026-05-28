@@ -24,9 +24,8 @@ viz module is not implemented yet in this milestone.
 
 ## v0.1 examples
 
-| Script | Manifold | Task | Expected `d_eff` |
+| Script | Manifold | Tasks | Expected `d_eff` |
 |---|---|---|---|
-| `synthetic/torus_classification.py` | Flat torus T² in R⁴ → R³² | XOR-of-quadrants (2 classes) | ≈ 2 |
-
-More examples (moons-XOR cls/reg comparison, swiss-roll reconstruction) ship
-with M3.
+| `synthetic/torus_classification.py` | Flat torus T² in R⁴ → R³² | XOR cls + sin/cos reg | ≈ 2 |
+| `synthetic/moons_xor.py` | Moons in R² → R^16 | cls + reg + recon | d_cls ≤ d_reg ≤ d_recon |
+| `synthetic/swiss_roll_recon.py` | Swiss roll in R³ | autoencoder + reg | ≈ 2 |

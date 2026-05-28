@@ -33,12 +33,12 @@ from igl.kernels._registry import (
     list_operators,
     register_operator,
 )
-from igl.matryoshka.dimension_curve import (
-    d_eff_from_curve,
-    detect_elbow,
-    eval_dimension_curve,
-)
+from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
+from igl.metrics.dimension import DimensionComparison, compare_d_eff, d_eff_from_curve
+from igl.models.autoencoder import IGLAutoencoder
+from igl.models.classifier import IGLClassifier
+from igl.models.regressor import IGLRegressor
 from igl.nn.module import IGLModule
 from igl.types import (
     ActivationType,
@@ -89,6 +89,13 @@ __all__ = [
     "LinearEncoder",
     "MLPEncoder",
     "normalize_phi",
+    # sklearn-compatible models
+    "IGLAutoencoder",
+    "IGLClassifier",
+    "IGLRegressor",
+    # Metrics
+    "DimensionComparison",
+    "compare_d_eff",
     # Training
     "CrossEntropyLoss",
     "MSELoss",

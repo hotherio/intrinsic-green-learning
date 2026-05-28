@@ -73,6 +73,44 @@ def test_classifier_fits_and_predicts(moons_data: tuple[np.ndarray, np.ndarray])
     assert hasattr(clf, "effective_dimension_")
 
 
+def test_classifier_fit_does_not_mutate_global_torch_rng(
+    moons_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Regression test for the scoped-RNG fix.
+
+    Two properties asserted in one shot:
+
+    1. ``.fit()`` with ``random_state`` set must NOT advance the caller's
+       global torch RNG (previously it called ``torch.manual_seed`` directly,
+       clobbering any state the caller had built up).
+    2. As a consequence, two ``fit()`` calls with the same ``random_state``
+       in the same process must produce identical predictions even when
+       arbitrary torch RNG churn happens between them.
+    """
+    x, y = moons_data
+
+    # Property 1: post-fit global state matches the no-fit baseline.
+    torch.manual_seed(123)
+    _ = torch.randn(10)  # advance baseline
+    baseline_after = torch.randn(10)
+
+    torch.manual_seed(123)
+    _ = torch.randn(10)  # same advance as above
+    clf = IGLClassifier(max_dim=4, n_anchors=8, n_scales=2, random_state=42, config=_fast_config(epochs=2))
+    clf.fit(x, y)
+    real_after = torch.randn(10)
+    torch.testing.assert_close(real_after, baseline_after)
+
+    # Property 2: identical predictions across two fits with the same seed,
+    # despite arbitrary RNG churn between them.
+    clf1 = IGLClassifier(max_dim=4, n_anchors=8, n_scales=2, random_state=7, config=_fast_config(epochs=2))
+    clf1.fit(x, y)
+    _ = torch.randn(500)  # heavy churn
+    clf2 = IGLClassifier(max_dim=4, n_anchors=8, n_scales=2, random_state=7, config=_fast_config(epochs=2))
+    clf2.fit(x, y)
+    np.testing.assert_array_equal(clf1.predict(x), clf2.predict(x))
+
+
 def test_classifier_predict_proba_sums_to_one(moons_data: tuple[np.ndarray, np.ndarray]) -> None:
     x, y = moons_data
     clf = IGLClassifier(

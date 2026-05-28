@@ -15,6 +15,8 @@ factors out the shared scaffolding so each estimator stays small:
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Generic, TypeVar
 
 import numpy as np
@@ -72,8 +74,11 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         encoder_depth: Encoder depth shorthand.
         config: Optional top-level :class:`IGLConfig`; explicit kwargs above
             override its values.
-        random_state: Optional integer seed; if set, both PyTorch and NumPy
-            RNGs are seeded before fit.
+        random_state: Optional integer seed. When set, the PyTorch RNG is
+            seeded inside a :func:`torch.random.fork_rng` scope (so the
+            caller's global RNG state is preserved across the fit); NumPy
+            sampling uses a local :class:`np.random.RandomState` derived from
+            the same seed.
     """
 
     # Declared on the class so `clone()` finds them via get_params.
@@ -143,10 +148,21 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
             activation=base_encoder.activation,
         )
 
-    def _seed(self) -> None:
-        if self.random_state is not None:
+    @contextmanager
+    def _local_rng(self) -> Generator[None]:
+        """Scope torch RNG mutations to this block so callers' RNG state survives the fit.
+
+        When :attr:`random_state` is set, fork torch's global RNG, seed the
+        fork, and restore the parent on exit. Numpy needs no equivalent: the
+        only direct ``np.random`` use in :meth:`_fit_core` already creates a
+        local :class:`np.random.RandomState`.
+        """
+        if self.random_state is None:
+            yield
+            return
+        with torch.random.fork_rng():  # pyright: ignore[reportUnknownMemberType]
             torch.manual_seed(self.random_state)  # pyright: ignore[reportUnknownMemberType]
-            np.random.seed(self.random_state)
+            yield
 
     def _build_module(self, *, input_dim: int, output_dim: int) -> IGLModule:
         # Spectral path: build a SpectralKernel from the config and hand it
@@ -196,7 +212,6 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         ``self.n_features_in_``, and returns the loss strategy used for
         future prediction.
         """
-        self._seed()
         if x.ndim != _EXPECTED_X_NDIM:
             x = np.asarray(x).reshape(len(x), -1)
         n_features = x.shape[1]
@@ -226,9 +241,12 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
 
         # Determine the output_dim per task.
         output_dim = self._output_dim(y)
-        self.module_: IGLModule = self._build_module(input_dim=n_features, output_dim=output_dim)
-        trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
-        self.history_: TrainingHistory = trainer.fit(self.module_, x_train, y_train, x_val=x_val, y_val=y_val)
+        # Scope torch RNG mutations to module construction + training so the
+        # caller's global RNG state is preserved.
+        with self._local_rng():
+            self.module_: IGLModule = self._build_module(input_dim=n_features, output_dim=output_dim)
+            trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
+            self.history_: TrainingHistory = trainer.fit(self.module_, x_train, y_train, x_val=x_val, y_val=y_val)
 
         # Compute dimension curve on whatever data we have for evaluation.
         x_curve = x_val if x_val is not None else x_train

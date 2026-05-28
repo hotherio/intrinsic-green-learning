@@ -1,16 +1,52 @@
-"""Public Protocols, Literal aliases, and lightweight type aliases used across :mod:`igl`.
+"""Public Protocols, enums, and lightweight type aliases used across :mod:`igl`.
 
-These types are imported by `igl/__init__.py` and re-exported at the top level so
-that downstream consumers can implement custom encoders, loss strategies, and
-samplers without depending on the internal modules where they're consumed.
+String-valued choices (kernel operator names, sampling modes, normalization
+modes) are :class:`enum.StrEnum` classes — the **canonical reference** for
+their value sets. Each enum is paired with a companion ``Literal`` alias
+listing the same values so callers can pass either an enum member (recommended
+for IDE autocomplete and rename safety) or a raw literal string (basedpyright
+narrows the allowed values via the Literal). The Literal must stay synced
+with the StrEnum; both live side-by-side in this module so drift is hard to
+miss.
+
+A ``…Like`` union alias is also provided per concept so function signatures
+can advertise the friendly union directly:
+
+::
+
+    def fn(operator: OperatorNameLike) -> None: ...
+
+    fn(OperatorName.GAUSSIAN)   # OK (member)
+    fn("gaussian")              # OK (Literal-narrowed)
+    fn("not-a-kernel")          # static type error
+
+These types are re-exported by ``igl/__init__.py`` so downstream consumers
+can implement custom encoders, loss strategies, and samplers without
+depending on the internal modules where they're consumed.
 """
 
 from collections.abc import Mapping
+from enum import StrEnum
 from typing import Literal, Protocol, runtime_checkable
 
 import torch
 
-OperatorName = Literal[
+
+class OperatorName(StrEnum):
+    """Built-in kernel operator names. Canonical reference for kernel choices."""
+
+    GAUSSIAN = "gaussian"
+    LAPLACIAN = "laplacian"
+    CAUCHY = "cauchy"
+    YUKAWA = "yukawa"
+    MULTIQUADRIC = "multiquadric"
+    HELMHOLTZ = "helmholtz"
+    GABOR = "gabor"
+    MEXICAN_HAT = "mexican_hat"
+    SOFT_BOX = "soft_box"
+
+
+OperatorNameLiteral = Literal[
     "gaussian",
     "laplacian",
     "cauchy",
@@ -21,19 +57,100 @@ OperatorName = Literal[
     "mexican_hat",
     "soft_box",
 ]
-"""Built-in kernel operators. Custom operators may be registered at runtime."""
+"""Literal companion of :class:`OperatorName`. Mirrors the enum's values."""
 
-SamplingMode = Literal["uniform", "power_law"]
-"""Truncation-level sampling strategies for Matryoshka training."""
+type OperatorNameLike = OperatorName | OperatorNameLiteral
+"""Type accepting either an :class:`OperatorName` member or a matching string."""
 
-NormalizeMode = Literal["none", "softmax", "l2", "nw"]
-"""Row-wise normalization applied to the design matrix Φ before the lstsq solve.
 
-- ``"none"``: identity.
-- ``"softmax"``: row-softmax.
-- ``"l2"``: L2-normalise each row.
-- ``"nw"``: Nadaraya–Watson (divide each row by its sum, with a small epsilon).
-"""
+class SamplingMode(StrEnum):
+    """Truncation-level sampling strategies for Matryoshka training."""
+
+    UNIFORM = "uniform"
+    POWER_LAW = "power_law"
+
+
+SamplingModeLiteral = Literal["uniform", "power_law"]
+"""Literal companion of :class:`SamplingMode`."""
+
+type SamplingModeLike = SamplingMode | SamplingModeLiteral
+
+
+class NormalizeMode(StrEnum):
+    """Row-wise normalization applied to the design matrix Φ before lstsq.
+
+    - ``NONE``: identity.
+    - ``SOFTMAX``: row-softmax.
+    - ``L2``: L2-normalise each row.
+    - ``NW``: Nadaraya–Watson (divide each row by its sum, with a small epsilon).
+    """
+
+    NONE = "none"
+    SOFTMAX = "softmax"
+    L2 = "l2"
+    NW = "nw"
+
+
+NormalizeModeLiteral = Literal["none", "softmax", "l2", "nw"]
+"""Literal companion of :class:`NormalizeMode`."""
+
+type NormalizeModeLike = NormalizeMode | NormalizeModeLiteral
+
+
+class NormType(StrEnum):
+    """Normalization layer inserted after each hidden ``Linear`` of an MLP encoder."""
+
+    LAYER = "layer"
+    BATCH = "batch"
+    NONE = "none"
+
+
+NormTypeLiteral = Literal["layer", "batch", "none"]
+"""Literal companion of :class:`NormType`."""
+
+type NormTypeLike = NormType | NormTypeLiteral
+
+
+class ActivationType(StrEnum):
+    """Activation function applied after each ``(Linear → Norm)`` block."""
+
+    SILU = "silu"
+    TANH = "tanh"
+    RELU = "relu"
+    GELU = "gelu"
+
+
+ActivationTypeLiteral = Literal["silu", "tanh", "relu", "gelu"]
+"""Literal companion of :class:`ActivationType`."""
+
+type ActivationTypeLike = ActivationType | ActivationTypeLiteral
+
+
+class EncoderKind(StrEnum):
+    """Kind of encoder built by :func:`igl.build_mlp_encoder` / future factories."""
+
+    MLP = "mlp"
+    LINEAR = "linear"
+
+
+EncoderKindLiteral = Literal["mlp", "linear"]
+"""Literal companion of :class:`EncoderKind`."""
+
+type EncoderKindLike = EncoderKind | EncoderKindLiteral
+
+
+class SchedulerType(StrEnum):
+    """Learning-rate scheduler choices for :class:`igl.MatryoshkaTrainer`."""
+
+    COSINE_WARM_RESTARTS = "cosine_warm_restarts"
+    NONE = "none"
+
+
+SchedulerTypeLiteral = Literal["cosine_warm_restarts", "none"]
+"""Literal companion of :class:`SchedulerType`."""
+
+type SchedulerTypeLike = SchedulerType | SchedulerTypeLiteral
+
 
 DimensionCurve = Mapping[int, float]
 """Post-training mapping from truncation level ``k`` to validation loss at ``k``."""
@@ -98,12 +215,30 @@ class MatryoshkaSampler(Protocol):
 
 
 __all__ = [
+    "ActivationType",
+    "ActivationTypeLike",
+    "ActivationTypeLiteral",
     "DimensionCurve",
+    "EncoderKind",
+    "EncoderKindLike",
+    "EncoderKindLiteral",
     "EncoderProtocol",
     "LossStrategy",
     "MatryoshkaSampler",
+    "NormType",
+    "NormTypeLike",
+    "NormTypeLiteral",
     "NormalizeMode",
+    "NormalizeModeLike",
+    "NormalizeModeLiteral",
     "OperatorFn",
     "OperatorName",
+    "OperatorNameLike",
+    "OperatorNameLiteral",
     "SamplingMode",
+    "SamplingModeLike",
+    "SamplingModeLiteral",
+    "SchedulerType",
+    "SchedulerTypeLike",
+    "SchedulerTypeLiteral",
 ]

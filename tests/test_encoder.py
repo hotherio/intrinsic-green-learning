@@ -58,3 +58,75 @@ def test_mlp_encoder_deeper_models_have_more_parameters() -> None:
     n_shallow = sum(p.numel() for p in shallow.parameters())
     n_deep = sum(p.numel() for p in deep.parameters())
     assert n_deep > n_shallow
+
+
+def test_mlp_encoder_per_layer_widths_sequence() -> None:
+    from torch import nn  # noqa: PLC0415
+
+    enc = MLPEncoder(input_dim=10, max_dim=2, hidden=(64, 32, 16))
+    assert enc.hidden_widths == (64, 32, 16)
+    linear_widths = [layer.out_features for layer in enc.net if isinstance(layer, nn.Linear)]
+    assert linear_widths == [64, 32, 16, 2]
+
+
+def test_mlp_encoder_single_element_sequence() -> None:
+    enc = MLPEncoder(input_dim=4, max_dim=2, hidden=(128,))
+    assert enc.hidden_widths == (128,)
+
+
+def test_mlp_encoder_explicit_depth_with_matching_sequence_ok() -> None:
+    enc = MLPEncoder(input_dim=4, max_dim=2, hidden=(64, 32), depth=2)
+    assert enc.hidden_widths == (64, 32)
+
+
+def test_mlp_encoder_rejects_contradictory_depth_and_sequence() -> None:
+    import pytest  # noqa: PLC0415
+
+    with pytest.raises(IGLConfigError, match="does not match hidden sequence length"):
+        MLPEncoder(input_dim=4, max_dim=2, hidden=(64, 32), depth=3)
+
+
+def test_mlp_encoder_rejects_empty_sequence() -> None:
+    import pytest  # noqa: PLC0415
+
+    with pytest.raises(IGLConfigError, match="must be non-empty"):
+        MLPEncoder(input_dim=4, max_dim=2, hidden=())
+
+
+def test_mlp_encoder_rejects_non_positive_width_in_sequence() -> None:
+    import pytest  # noqa: PLC0415
+
+    with pytest.raises(IGLConfigError, match=r"hidden\[1\] must be >= 1"):
+        MLPEncoder(input_dim=4, max_dim=2, hidden=(64, 0))
+
+
+def test_mlp_encoder_rejects_non_positive_depth_with_int_hidden() -> None:
+    import pytest  # noqa: PLC0415
+
+    with pytest.raises(IGLConfigError, match="depth must be >= 1"):
+        MLPEncoder(input_dim=4, max_dim=2, hidden=16, depth=0)
+
+
+def test_mlp_encoder_accepts_string_norm_and_activation() -> None:
+    enc = MLPEncoder(input_dim=4, max_dim=2, hidden=8, norm="batch", activation="relu")
+    assert enc.hidden_widths == (8, 8)
+
+
+def test_build_mlp_encoder_from_encoder_config() -> None:
+    from igl import EncoderConfig  # noqa: PLC0415
+    from igl.core.encoder import build_mlp_encoder  # noqa: PLC0415
+
+    cfg = EncoderConfig(hidden=(48, 24), depth=2, norm="layer", activation="gelu")
+    enc = build_mlp_encoder(input_dim=6, max_dim=3, config=cfg)
+    assert enc.hidden_widths == (48, 24)
+
+
+def test_build_mlp_encoder_rejects_non_mlp_kind() -> None:
+    import pytest  # noqa: PLC0415
+
+    from igl import EncoderConfig, EncoderKind  # noqa: PLC0415
+    from igl.core.encoder import build_mlp_encoder  # noqa: PLC0415
+
+    cfg = EncoderConfig(kind=EncoderKind.LINEAR, hidden=8)
+    with pytest.raises(IGLConfigError, match="kind=MLP"):
+        build_mlp_encoder(input_dim=6, max_dim=3, config=cfg)

@@ -3,16 +3,53 @@
 This is the bare PyTorch entry point for users who want to write a custom
 training loop. The high-level scikit-learn wrappers (M3) compose this module
 with :class:`igl.MatryoshkaTrainer` internally.
+
+Construction supports four mutually-exclusive paths for the encoder:
+
+1. Pass a pre-built ``encoder`` instance satisfying
+   :class:`igl.types.EncoderProtocol` — escape hatch for fully custom
+   encoders.
+2. Pass an ``encoder_config: EncoderConfig`` — IGLModule builds an
+   :class:`igl.MLPEncoder` from the config.
+3. Pass a top-level ``config: IGLConfig`` — IGLModule uses
+   ``config.encoder`` and ``config.kernel`` to populate defaults. Explicit
+   per-field kwargs (e.g. ``n_anchors=32``) override the config.
+4. Pass nothing — IGLModule uses default :class:`EncoderConfig` /
+   :class:`KernelConfig` values.
+
+Combining paths 1 with 2/3, or 2 with 3 when the configs disagree, raises
+:class:`igl.IGLConfigError`.
 """
 
 import torch
 from torch import nn
 
-from igl.core.encoder import MLPEncoder
+from igl.config import EncoderConfig, IGLConfig, KernelConfig
+from igl.core.encoder import build_mlp_encoder
 from igl.core.kernel import GreenKernel
 from igl.core.normalization import normalize_phi
 from igl.exceptions import IGLConfigError
-from igl.types import EncoderProtocol, NormalizeMode
+from igl.types import EncoderProtocol, NormalizeMode, NormalizeModeLike, OperatorName, OperatorNameLike
+
+
+def _resolve_kernel_params(
+    *,
+    n_anchors: int | None,
+    n_scales: int | None,
+    operator: OperatorNameLike | None,
+    normalize: NormalizeModeLike | None,
+    kernel_cfg: KernelConfig,
+) -> tuple[int, int, OperatorName | tuple[OperatorName, ...], NormalizeMode]:
+    """Explicit kwargs win over the kernel config; otherwise use config values."""
+    resolved_anchors = n_anchors if n_anchors is not None else kernel_cfg.n_anchors
+    resolved_scales = n_scales if n_scales is not None else kernel_cfg.n_scales
+    resolved_operator: OperatorName | tuple[OperatorName, ...] = (
+        OperatorName(operator) if operator is not None else kernel_cfg.operator
+    )
+    # kernel_cfg.normalize is coerced to a NormalizeMode in __post_init__;
+    # rewrap to satisfy the static type checker.
+    resolved_normalize = NormalizeMode(normalize) if normalize is not None else NormalizeMode(kernel_cfg.normalize)
+    return resolved_anchors, resolved_scales, resolved_operator, resolved_normalize
 
 
 class IGLModule(nn.Module):
@@ -21,29 +58,43 @@ class IGLModule(nn.Module):
     The readout weights ``source_weights`` are *not* learned by gradient
     descent — they are refreshed in closed form by
     :func:`igl.direct_solve_weights` (called by :class:`MatryoshkaTrainer`).
-    The bias is a learnable parameter, the encoder and Green-kernel parameters
-    are too; only the readout is closed-form.
+    The bias is a learnable parameter; the encoder and Green-kernel
+    parameters are too — only the readout is closed-form.
 
     Args:
         input_dim: Ambient input dimension ``D``.
-        max_dim: Latent dimension ``d_max``.
+        max_dim: Latent dimension ``d_max``. Always wins over
+            ``config.max_dim`` if both are explicit (raises on mismatch).
         output_dim: Output dimension (``C`` classes or regression outputs).
-        n_anchors: Number of anchors ``R`` in the Green kernel.
-        n_scales: Number of kernel scales ``K``.
-        operator: Single operator name or a sequence of names. Defaults to
-            ``"gaussian"``.
+        n_anchors: Number of anchors ``R`` in the Green kernel. ``None``
+            defers to ``config.kernel.n_anchors`` (or
+            :class:`KernelConfig`'s default of ``64``).
+        n_scales: Number of kernel scales ``K``. ``None`` defers to
+            ``config.kernel.n_scales`` (default ``4``).
+        operator: Single operator name. ``None`` defers to
+            ``config.kernel.operator`` (default
+            :data:`igl.OperatorName.GAUSSIAN`). For multi-operator setups
+            (e.g. ``("gaussian", "helmholtz")``), build the kernel via
+            :class:`KernelConfig` and pass through ``config``.
         encoder: Optional pre-built encoder satisfying
-            :class:`igl.types.EncoderProtocol`. When ``None``, an
-            :class:`igl.MLPEncoder` of width 256 / depth 2 is used.
-        normalize: Φ-normalization mode (default ``"softmax"``).
+            :class:`igl.types.EncoderProtocol`.
+        encoder_config: Optional :class:`EncoderConfig` from which to build
+            an :class:`MLPEncoder`. Mutually exclusive with ``encoder``.
+        normalize: Φ-normalization mode. ``None`` defers to
+            ``config.kernel.normalize`` (default
+            :data:`igl.NormalizeMode.SOFTMAX`).
         normalize_input: If ``True`` (default), prepend an
             ``nn.BatchNorm1d(affine=False)`` to the encoder. Stabilises
             training when ambient input dimensions have wildly different
             scales.
+        config: Optional top-level :class:`IGLConfig`. When provided,
+            populates defaults for any field passed as ``None``. Explicit
+            per-field kwargs always win.
 
     Raises:
-        IGLConfigError: When any dimension is non-positive, or the provided
-            encoder's ``input_dim`` / ``max_dim`` don't match the module's.
+        IGLConfigError: For dimension mismatches, conflicting parameters,
+            non-positive dimensions, or an explicit ``max_dim`` that
+            contradicts ``config.max_dim``.
     """
 
     input_dim: int
@@ -56,12 +107,14 @@ class IGLModule(nn.Module):
         max_dim: int,
         output_dim: int,
         *,
-        n_anchors: int = 64,
-        n_scales: int = 4,
-        operator: str = "gaussian",
+        n_anchors: int | None = None,
+        n_scales: int | None = None,
+        operator: OperatorNameLike | None = None,
         encoder: EncoderProtocol | None = None,
-        normalize: NormalizeMode = "softmax",
+        encoder_config: EncoderConfig | None = None,
+        normalize: NormalizeModeLike | None = None,
         normalize_input: bool = True,
+        config: IGLConfig | None = None,
     ) -> None:
         super().__init__()
         if input_dim < 1:
@@ -71,9 +124,21 @@ class IGLModule(nn.Module):
         if output_dim < 1:
             raise IGLConfigError(f"output_dim must be >= 1, got {output_dim}")
 
-        if encoder is None:
-            inner_encoder: nn.Module = MLPEncoder(input_dim=input_dim, max_dim=max_dim)
-        else:
+        if encoder is not None and encoder_config is not None:
+            raise IGLConfigError(
+                "pass either encoder or encoder_config (or rely on config), not both",
+            )
+        if config is not None and config.max_dim != max_dim:
+            raise IGLConfigError(
+                f"max_dim ({max_dim}) does not match config.max_dim ({config.max_dim})",
+            )
+        if encoder is not None and config is not None:
+            # A pre-built encoder takes precedence, but we still want the kernel
+            # defaults from config — that's fine, no conflict to flag.
+            pass
+
+        # Resolve encoder source.
+        if encoder is not None:
             if encoder.input_dim != input_dim:
                 raise IGLConfigError(
                     f"encoder.input_dim ({encoder.input_dim}) != input_dim ({input_dim})",
@@ -83,7 +148,22 @@ class IGLModule(nn.Module):
                     f"encoder.max_dim ({encoder.max_dim}) != max_dim ({max_dim})",
                 )
             assert isinstance(encoder, nn.Module), "encoder must be an nn.Module"
-            inner_encoder = encoder
+            inner_encoder: nn.Module = encoder
+        else:
+            resolved_encoder_cfg = (
+                encoder_config if encoder_config is not None else (config.encoder if config is not None else EncoderConfig())
+            )
+            inner_encoder = build_mlp_encoder(input_dim, max_dim, config=resolved_encoder_cfg)
+
+        # Resolve kernel + normalize params.
+        kernel_cfg = config.kernel if config is not None else KernelConfig()
+        resolved_anchors, resolved_scales, resolved_operator, resolved_normalize = _resolve_kernel_params(
+            n_anchors=n_anchors,
+            n_scales=n_scales,
+            operator=operator,
+            normalize=normalize,
+            kernel_cfg=kernel_cfg,
+        )
 
         if normalize_input:
             self.encoder: nn.Module = nn.Sequential(
@@ -95,19 +175,19 @@ class IGLModule(nn.Module):
 
         self.green = GreenKernel(
             latent_dim=max_dim,
-            n_anchors=n_anchors,
-            n_scales=n_scales,
-            operator=operator,
+            n_anchors=resolved_anchors,
+            n_scales=resolved_scales,
+            operator=resolved_operator,
         )
 
         self.input_dim = input_dim
         self.max_dim = max_dim
         self.output_dim = output_dim
-        self.normalize: NormalizeMode = normalize
+        self.normalize: NormalizeMode = resolved_normalize
 
         # Closed-form readout. Stored as a non-learnable buffer so it travels
         # with the module's device but doesn't pick up gradients.
-        self.register_buffer("source_weights", torch.zeros(n_anchors, output_dim))
+        self.register_buffer("source_weights", torch.zeros(resolved_anchors, output_dim))
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
     def latent(self, x: torch.Tensor) -> torch.Tensor:

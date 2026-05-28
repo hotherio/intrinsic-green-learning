@@ -26,7 +26,7 @@ from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
-from igl.types import LossStrategy, MatryoshkaSampler
+from igl.types import LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
 
 
 @dataclass(slots=True)
@@ -44,7 +44,7 @@ class TrainingHistory:
 
 
 def _build_sampler(config: MatryoshkaConfig) -> MatryoshkaSampler:
-    if config.sampling == "uniform":
+    if config.sampling is SamplingMode.UNIFORM:
         return UniformSampler()
     return PowerLawSampler(alpha=config.alpha)
 
@@ -119,7 +119,9 @@ class MatryoshkaTrainer:
             else AdamW(params, lr=config.encoder_lr)
         )
         scheduler = (
-            CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1) if config.scheduler == "cosine_warm_restarts" else None
+            CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1)
+            if config.scheduler is SchedulerType.COSINE_WARM_RESTARTS
+            else None
         )
 
         use_early_stop = config.early_stop_patience is not None and x_val is not None

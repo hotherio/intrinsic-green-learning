@@ -77,26 +77,25 @@ def _run_regression(
     print("Part 2 — Regression (sin/cos of both angles)")
     print("=" * 60)
 
-    module = igl.IGLModule(
-        input_dim=ambient_dim,
+    # Showcase the config-driven construction path: shape the encoder (here a
+    # pyramidal 192 → 96 MLP) and kernel through IGLConfig, no manual
+    # MLPEncoder instantiation required.
+    config = igl.IGLConfig(
         max_dim=12,
-        output_dim=4,
-        n_anchors=48,
-        n_scales=4,
-        operator="gaussian",
-    )
-    trainer = igl.MatryoshkaTrainer(
-        loss=igl.MSELoss(),
-        config=igl.MatryoshkaConfig(
+        encoder=igl.EncoderConfig(hidden=(192, 96), depth=2, norm=igl.NormType.LAYER),
+        kernel=igl.KernelConfig(n_anchors=48, n_scales=4, operator=igl.OperatorName.GAUSSIAN),
+        matryoshka=igl.MatryoshkaConfig(
             epochs=400,
             batch_size=128,
             inner_batch_size=1500,
             encoder_lr=1e-3,
-            scheduler="cosine_warm_restarts",
+            scheduler=igl.SchedulerType.COSINE_WARM_RESTARTS,
             early_stop_patience=None,
             verbose=False,
         ),
     )
+    module = igl.IGLModule(input_dim=ambient_dim, max_dim=12, output_dim=4, config=config)
+    trainer = igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=config.matryoshka)
     history = trainer.fit(module, x_train, y_train, x_val=x_val, y_val=y_val)
     curve = dict(igl.eval_dimension_curve(module, x_val, y_val, loss=igl.MSELoss()))
     d_eff = igl.detect_elbow(curve)

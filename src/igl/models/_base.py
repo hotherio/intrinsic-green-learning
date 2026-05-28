@@ -28,6 +28,7 @@ from igl.core.trainer import MatryoshkaTrainer, TrainingHistory
 from igl.exceptions import IGLNotFittedError
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.nn.module import IGLModule
+from igl.spectral._build import build_kernel_null_space, build_spectral_kernel
 from igl.types import DimensionCurve, LossStrategy, NormalizeModeLike, OperatorNameLike
 
 _LossT = TypeVar("_LossT", bound=LossStrategy)
@@ -153,15 +154,11 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         # builds GreenKernel from per-field kwargs as before.
         kernel: object = None
         if self.config is not None and self.config.spectral is not None:
-            from igl.spectral._build import build_spectral_kernel  # noqa: PLC0415
-
             kernel = build_spectral_kernel(
                 latent_dim=self.max_dim,
                 config=self.config.spectral,
             )
         elif self.config is not None:
-            from igl.spectral._build import build_kernel_null_space  # noqa: PLC0415
-
             kernel = build_kernel_null_space(
                 latent_dim=self.max_dim,
                 config=self.config.kernel,

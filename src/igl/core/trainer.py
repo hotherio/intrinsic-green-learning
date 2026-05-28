@@ -22,6 +22,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from igl.config import MatryoshkaConfig
+from igl.core.normalization import normalize_phi
 from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
@@ -242,8 +243,6 @@ class MatryoshkaTrainer:
             z = module.encoder(x_batch)
             z_trunc = z * mask.unsqueeze(0)
             phi = module.green(z_trunc, gate_mask=mask)
-            from igl.core.normalization import normalize_phi  # noqa: PLC0415
-
             phi = normalize_phi(phi, module.normalize)
 
             with torch.no_grad():
@@ -304,8 +303,6 @@ class MatryoshkaTrainer:
             inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
             z_full = module.encoder(x_train[inner_idx])
             phi_full = module.green(z_full)
-            from igl.core.normalization import normalize_phi  # noqa: PLC0415
-
             phi_full = normalize_phi(phi_full, module.normalize)
             target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
             w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)

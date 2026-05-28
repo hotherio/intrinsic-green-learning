@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from igl.core.kernel import GreenKernel
 from igl.exceptions import IGLConfigError
 from igl.spectral.bases.chebyshev import ChebyshevBasis
 from igl.spectral.bases.fourier_cosine import FourierCosineBasis
@@ -86,8 +87,6 @@ def build_kernel_null_space(*, latent_dim: int, config: KernelConfig) -> object:
     Returns ``None`` (no pre-built kernel) when no null-space is configured —
     :class:`IGLModule` will construct the default GreenKernel itself.
     """
-    from igl.core.kernel import GreenKernel  # noqa: PLC0415
-
     null = build_null_space(
         config.null_space,
         latent_dim=latent_dim,

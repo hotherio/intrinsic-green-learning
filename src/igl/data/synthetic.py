@@ -11,6 +11,7 @@ from typing import cast
 import torch
 
 from igl.exceptions import IGLConfigError
+from igl.spd.linalg import matrix_exp_sym
 
 _MIN_MOON_SAMPLES = 2
 
@@ -245,8 +246,6 @@ def make_spd_dataset(
         raise IGLConfigError(f"d must be >= 1, got {d}")
     if n_classes < 2:  # noqa: PLR2004
         raise IGLConfigError(f"n_classes must be >= 2, got {n_classes}")
-
-    from igl.spd.linalg import matrix_exp_sym  # noqa: PLC0415
 
     gen = _maybe_seed(seed)
     class_means: list[torch.Tensor] = []

@@ -40,6 +40,7 @@ import numpy as np
 import scipy.sparse  # noqa: ICN001
 import scipy.sparse.linalg
 import torch
+from scipy.spatial import cKDTree
 from torch import nn
 
 from igl.exceptions import IGLConfigError
@@ -120,9 +121,7 @@ class LearnedLaplacianBasis(nn.Module):
         z_np = z.detach().cpu().numpy().astype(np.float64)
         n = z_np.shape[0]
 
-        # k-NN via cKDTree (already a scipy dep).
-        from scipy.spatial import cKDTree  # noqa: PLC0415  # pyright: ignore[reportUnknownVariableType]
-
+        # k-NN via cKDTree (already a scipy dep, imported at module top).
         tree = cKDTree(z_np)
         # +1 because the closest neighbour is the point itself.
         distances, indices = cast(

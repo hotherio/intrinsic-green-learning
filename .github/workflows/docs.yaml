@@ -30,7 +30,7 @@ jobs:
       version: ${{ steps.version.outputs.value }}
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         token: ${{ secrets.GH_TOKEN }}
 
@@ -59,14 +59,14 @@ jobs:
     - prepare
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         fetch-depth: 0
         token: ${{ secrets.GH_TOKEN }}
 
     - name: "Import GPG key"
       id: import-gpg
-      uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6
+      uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7
       with:
         gpg_private_key: ${{ secrets.HOTHER_BOT_GPG_KEY }}
         passphrase: ${{ secrets.HOTHER_BOT_GPG_PASSPHRASE }}

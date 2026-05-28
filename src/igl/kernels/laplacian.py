@@ -2,16 +2,15 @@
 
 import torch
 
+from igl.kernels._constants import KERNEL_EPS
 from igl.kernels._registry import register_operator
-
-_EPS = 1e-8
 
 
 class _Laplacian:
     is_oscillatory: bool = False
 
     def __call__(self, d: torch.Tensor, sigma: torch.Tensor, /) -> tuple[torch.Tensor, torch.Tensor]:
-        log_abs = -torch.abs(d) / (sigma + _EPS)
+        log_abs = -torch.abs(d) / (sigma + KERNEL_EPS)
         return log_abs, torch.ones_like(d)
 
 

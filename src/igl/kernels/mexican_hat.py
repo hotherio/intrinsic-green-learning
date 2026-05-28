@@ -2,18 +2,17 @@
 
 import torch
 
+from igl.kernels._constants import KERNEL_EPS
 from igl.kernels._registry import register_operator
-
-_EPS = 1e-8
 
 
 class _MexicanHat:
     is_oscillatory: bool = True
 
     def __call__(self, d: torch.Tensor, sigma: torch.Tensor, /) -> tuple[torch.Tensor, torch.Tensor]:
-        ratio = d**2 / (sigma**2 + _EPS)
+        ratio = d**2 / (sigma**2 + KERNEL_EPS)
         factor = 1 - ratio
-        log_abs = torch.log(factor.abs().clamp(min=_EPS)) + (-ratio / 2)
+        log_abs = torch.log(factor.abs().clamp(min=KERNEL_EPS)) + (-ratio / 2)
         sign = torch.where(factor >= 0, torch.ones_like(d), -torch.ones_like(d))
         return log_abs, sign
 

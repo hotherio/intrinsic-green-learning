@@ -4,17 +4,16 @@ import math
 
 import torch
 
+from igl.kernels._constants import KERNEL_EPS
 from igl.kernels._registry import register_operator
-
-_EPS = 1e-8
 
 
 class _Helmholtz:
     is_oscillatory: bool = True
 
     def __call__(self, d: torch.Tensor, sigma: torch.Tensor, /) -> tuple[torch.Tensor, torch.Tensor]:
-        cos_val = torch.cos(math.pi * d / (sigma + _EPS))
-        log_abs = -torch.abs(d) / (sigma + _EPS) + torch.log(cos_val.abs().clamp(min=_EPS))
+        cos_val = torch.cos(math.pi * d / (sigma + KERNEL_EPS))
+        log_abs = -torch.abs(d) / (sigma + KERNEL_EPS) + torch.log(cos_val.abs().clamp(min=KERNEL_EPS))
         sign = torch.where(cos_val >= 0, torch.ones_like(d), -torch.ones_like(d))
         return log_abs, sign
 

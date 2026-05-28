@@ -82,9 +82,9 @@ class GreenKernel(nn.Module):
                 f"n_scales ({n_scales}) must be >= number of operators ({len(op_names)})",
             )
 
-        base = n_scales // len(op_names)
-        remainder = n_scales % len(op_names)
-        op_counts = [base + (1 if i < remainder else 0) for i in range(len(op_names))]
+        n_ops = len(op_names)
+        base, remainder = divmod(n_scales, n_ops)
+        op_counts = [base + (1 if i < remainder else 0) for i in range(n_ops)]
         total_k = sum(op_counts)
         # Resolve operators eagerly so an unknown name fails at construction time.
         operators: list[Operator] = [get_operator(name) for name in op_names]

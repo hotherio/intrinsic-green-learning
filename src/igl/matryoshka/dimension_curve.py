@@ -121,7 +121,7 @@ def detect_elbow(curve: DimensionCurve, *, ratio: float = 2.0) -> int:
         return ks[0]
     eps = min(pos_losses) * 1e-3
     log_losses = [math.log(max(v, eps)) for v in losses]
-    log_deltas = [log_losses[i] - log_losses[i + 1] for i in range(len(ks) - 1)]
+    log_deltas = [a - b for a, b in zip(log_losses, log_losses[1:], strict=False)]
 
     max_log_delta = max(log_deltas)
     if max_log_delta <= 0:

@@ -69,7 +69,7 @@ def compare_d_eff(
     """
     d_effs: dict[str, int] = {name: detect_elbow(curve, ratio=ratio) for name, curve in curves.items()}
     values = list(d_effs.values())
-    hierarchy_holds = all(values[i] <= values[i + 1] for i in range(len(values) - 1))
+    hierarchy_holds = all(a <= b for a, b in zip(values, values[1:], strict=False))
     return DimensionComparison(d_effs=d_effs, hierarchy_holds=hierarchy_holds)
 
 

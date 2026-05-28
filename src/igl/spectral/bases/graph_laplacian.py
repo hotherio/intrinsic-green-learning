@@ -33,6 +33,9 @@ from torch import nn
 from igl.exceptions import IGLConfigError
 from igl.types import GraphLaplacianNorm, GraphLaplacianNormLike
 
+_DEGREE_FLOOR: float = 1e-12
+"""Lower bound on node degree before inverting; protects 1/d and 1/sqrt(d) at isolated nodes."""
+
 
 def _build_laplacian(
     adjacency: scipy.sparse.spmatrix,
@@ -43,10 +46,10 @@ def _build_laplacian(
     if norm is GraphLaplacianNorm.UNNORMALIZED:
         return scipy.sparse.diags(degrees) - adjacency
     if norm is GraphLaplacianNorm.RANDOM_WALK:
-        d_inv = scipy.sparse.diags(1.0 / np.clip(degrees, 1e-12, None))
+        d_inv = scipy.sparse.diags(1.0 / np.clip(degrees, _DEGREE_FLOOR, None))
         return scipy.sparse.eye(n) - d_inv @ adjacency
     # Symmetric (default).
-    d_inv_sqrt = scipy.sparse.diags(1.0 / np.sqrt(np.clip(degrees, 1e-12, None)))
+    d_inv_sqrt = scipy.sparse.diags(1.0 / np.sqrt(np.clip(degrees, _DEGREE_FLOOR, None)))
     return scipy.sparse.eye(n) - d_inv_sqrt @ adjacency @ d_inv_sqrt
 
 

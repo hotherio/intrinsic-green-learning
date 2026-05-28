@@ -221,6 +221,42 @@ class MatryoshkaSampler(Protocol):
     def __call__(self, d_max: int, /) -> int: ...
 
 
+@runtime_checkable
+class ExtraLoss(Protocol):
+    """Optional regularizer that contributes a scalar term to the training loss.
+
+    Used by :class:`igl.MatryoshkaTrainer` to fold in geometry-specific
+    penalties (e.g. the SPD orthogonality penalty from
+    :class:`igl.spd.OrthogonalityPenalty`) without coupling the trainer to
+    that geometry.
+
+    The trainer calls the extra loss once per batch (subject to
+    :attr:`every`), adds ``weight * contribution`` to the task loss, and
+    backpropagates through everything in one go. Implementations may return
+    ``None`` to skip the contribution for this step (useful when the
+    regularizer is only defined for ``k ≥ 2``, for example).
+
+    Attributes:
+        weight: Multiplier applied to the returned tensor before adding to
+            the task loss.
+        every: Call frequency in *batches* (1 = every batch).
+    """
+
+    weight: float
+    every: int
+
+    def __call__(
+        self,
+        *,
+        encoder: torch.nn.Module,
+        x_batch: torch.Tensor,
+        gate_mask: torch.Tensor,
+        k: int,
+        epoch: int,
+        batch_idx: int,
+    ) -> torch.Tensor | None: ...
+
+
 __all__ = [
     "ActivationType",
     "ActivationTypeLike",
@@ -230,6 +266,7 @@ __all__ = [
     "EncoderKindLike",
     "EncoderKindLiteral",
     "EncoderProtocol",
+    "ExtraLoss",
     "LossStrategy",
     "MatryoshkaSampler",
     "NormType",

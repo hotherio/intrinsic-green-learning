@@ -156,6 +156,13 @@ markers = [
     "general: general tests",
 ]
 
+[tool.vulture]
+# Names that vulture flags but are kept intentionally: Protocol parameter
+# names (callers pass by keyword, so they can't be renamed) and a
+# TYPE_CHECKING-guarded import used in quoted annotations.
+ignore_names = ["batch_idx", "epoch", "Axes"]
+paths = ["src/igl"]
+
 [tool.coverage.run]
 source = ["src/igl"]
 omit = ["*/tests/*", "*/__init__.py", "*/_version.py"]

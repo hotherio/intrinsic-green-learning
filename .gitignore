@@ -124,6 +124,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+# mkdocs build output (configured via `site_dir: static/docs` in mkdocs.yml).
+/static
 
 # mypy
 .mypy_cache/

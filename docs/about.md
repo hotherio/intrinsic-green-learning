@@ -56,8 +56,8 @@ The library realises the inverse-PDE formulation from the paper above:
   off `d_eff` at deployment time.
 
 Concrete derivations and worked examples live under
-[`docs/concepts.md`](concepts.md); the API reference under
-[`docs/reference/`](reference/).
+[Concepts](concepts.md); the per-symbol API reference under
+[Reference](reference/index.md).
 
 ## Status
 

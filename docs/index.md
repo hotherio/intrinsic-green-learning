@@ -1,12 +1,16 @@
 # Intrinsic Green Learning
 
-**Task-conditioned intrinsic-dimensionality discovery** for high-dimensional
-data. IGL pairs a learned encoder with a multi-scale Green's-function
-kernel and trains the system end-to-end via Variable Projection with random
-Matryoshka truncation.
+You have high-dimensional inputs — pixel grids, EEG channels, embedding
+vectors — and a model that probably needs far fewer dimensions than the
+data suggests. IGL **discovers how many dimensions your task actually
+needs while it trains**: no separate "dimensionality reduction" step, no
+fixed bottleneck, the answer falls out of fitting.
 
-The model fits the task and simultaneously reveals how many dimensions the
-task actually needs — usually far fewer than the ambient input.
+Technically: IGL pairs a learned encoder with a multi-scale Green's-
+function kernel and trains the system end-to-end via Variable Projection
+with random Matryoshka truncation. The model fits the task and
+simultaneously reveals the effective dimension — usually far fewer than
+the ambient input.
 
 ## Why IGL?
 

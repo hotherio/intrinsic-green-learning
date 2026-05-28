@@ -1,5 +1,17 @@
 # Quickstart
 
+This page walks through fitting an IGL estimator and reading off the
+effective dimension it discovered. Every example below uses two
+attributes that every fitted IGL estimator carries:
+
+- **`effective_dimension_`** — an integer: the smallest latent dimension
+  the trained model needs to keep solving the task well.
+- **`dimension_curve_`** — a `{k: score}` mapping showing how
+  quality changes as you truncate the latent at $k = 1, 2, \dots,
+  d_{\max}$. The curve is what `effective_dimension_` is read off from.
+
+Install:
+
 ```bash
 pip install intrinsic-green-learning
 ```
@@ -47,12 +59,11 @@ Every fitted IGL estimator carries:
 
 ## Comparing tasks on the same data
 
-The canonical IGL hierarchy is
-
-    d_eff(cls) ≤ d_eff(reg) ≤ d_eff(recon)
-
-[`igl.compare_d_eff`][igl.compare_d_eff] checks the ordering across any
-number of tasks:
+The same dataset will resolve into different effective dimensions for
+classification, regression, and reconstruction — see
+[Concepts: the task-conditioned hierarchy](concepts.md#the-task-conditioned-hierarchy)
+for why. [`igl.compare_d_eff`][igl.compare_d_eff] checks the ordering
+across any number of tasks:
 
 ```python
 from igl.data import make_swiss_roll
@@ -97,9 +108,14 @@ All string-valued fields also accept their `enum.StrEnum` member form:
 
 ## SPD / covariance-valued data
 
-For matrices in the SPD cone (covariance, EEG epoch correlations, …),
-the `igl.spd` subpackage ships an AIRM-based reconstruction
-classifier:
+Some inputs are not vectors but **symmetric positive-definite matrices**:
+EEG channel covariances, fMRI connectivity matrices, financial
+correlations. These live on a Riemannian manifold — the SPD cone — and
+ordinary Euclidean losses misrepresent distances between them. The
+`igl.spd` subpackage ships an AIRM-loss-based classifier that respects
+that geometry, plus a vectoriser that maps SPD matrices into the
+log-Euclidean tangent space where the kernel solver can operate
+flatly:
 
 ```python
 from igl.data import make_spd_dataset

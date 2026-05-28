@@ -908,18 +908,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#origins" class="md-nav__link">
+  <a href="#author" class="md-nav__link">
     <span class="md-ellipsis">
-      Origins
+      Author
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#roadmap" class="md-nav__link">
+  <a href="#where-igl-sits-in-the-landscape" class="md-nav__link">
     <span class="md-ellipsis">
-      Roadmap
+      Where IGL sits in the landscape
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theoretical-underpinnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Theoretical underpinnings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      Status
     </span>
   </a>
   
@@ -1225,26 +1243,72 @@
 
 
 <h1 id="about">About</h1>
-<p>Intrinsic Green Learning (IGL) consolidates two research codebases — an
-NLP/embedding implementation and an EEG/SPD implementation — into a single
-library with a stable public API.</p>
-<h2 id="origins">Origins</h2>
-<p>The theoretical framework and original prototypes live under
-<code>hother/laplacian</code> (Knowledge Base + matryoshka implementations). The library
-here is the <strong>production-ready consolidation</strong>: strict typing, full test
-coverage, sklearn-compatible models, optional Riemannian extension.</p>
-<h2 id="roadmap">Roadmap</h2>
+<p>Intrinsic Green Learning (IGL) is a Python library implementing the
+<strong>task-conditioned intrinsic-dimensionality discovery</strong> framework
+introduced in <a href="https://openreview.net/forum?id=Y6RpdS98l8"><em>Quemy, A. (2026). Intrinsic Green's Learning: Supervised
+Learning on Manifolds via Inverse PDE.</em> ICLR 2026 Workshop on AI and
+PDE</a>.</p>
+<h2 id="author">Author</h2>
+<p><strong>Alexandre Quemy</strong> (<a href="https://github.com/aquemy"><code>@aquemy</code></a>,
+<a href="https://orcid.org/0000-0002-5865-6403">ORCID 0000-0002-5865-6403</a>)
+— research and implementation. The library is developed under
+<a href="https://hother.io">Hother</a> and released under the MIT license.</p>
+<h2 id="where-igl-sits-in-the-landscape">Where IGL sits in the landscape</h2>
+<p>Intrinsic-dimensionality estimation has historically split into two
+camps:</p>
 <ul>
-<li><strong>0.1.0</strong> — Matryoshka classifier/regressor; SPD reconstruction with AIRM
-  loss and orthogonality penalty; synthetic examples demonstrating
-  <span class="arithmatex">\(d_{\text{eff}}(\text{cls}) \le d_{\text{eff}}(\text{reg}) \le d_{\text{eff}}(\text{recon})\)</span>.</li>
-<li><strong>Post-0.1</strong> — EEG/MOABB and NLP/BERT examples; <code>contrib/</code> variants (Hard
-  Concrete gates, Direction-IGL, Deep IGL, TimeIGL, adaptive kernels).</li>
-<li><strong>Beyond</strong> — Vision integrations, distributed training, ONNX export.</li>
+<li><strong>Purely geometric</strong> estimators (Levina–Bickel, TwoNN, MLE-based
+  approaches in <a href="https://scikit-dimension.readthedocs.io/"><code>scikit-dimension</code></a>)
+  look at the input data alone and ignore what the user actually
+  wants to predict.</li>
+<li><strong>Implicit bottlenecks</strong> in deep networks (autoencoders,
+  information-bottleneck methods, variational approaches) <em>use</em> a
+  low-dimensional latent but don't <em>report</em> its size without a
+  separate analysis pass.</li>
 </ul>
+<p>IGL takes a third position: solve the supervised task and read off
+the effective dimension in the same training run. The discovered
+<code>d_eff</code> is a property of <em>(input, task)</em>, not of the input alone — the
+same dataset resolves into different effective dimensions for a
+classifier, a regressor, and an autoencoder, and the hierarchy
+<span class="arithmatex">\(d_{\text{cls}} \le d_{\text{reg}} \le d_{\text{recon}}\)</span> falls out
+naturally.</p>
+<h2 id="theoretical-underpinnings">Theoretical underpinnings</h2>
+<p>The library realises the inverse-PDE formulation from the paper above:</p>
+<ul>
+<li>The latent-space operator <span class="arithmatex">\(L\)</span> is encoded by the <strong>Green's-function
+  kernel</strong> <span class="arithmatex">\(G(z, s)\)</span>, which can be expressed either as a local product
+  of per-dimension kernels (the default <code>GreenKernel</code>) or via its
+  spectral expansion <span class="arithmatex">\(G(z, s) = \sum_n \phi_n(z)\,\phi_n(s) / \lambda_n\)</span>
+  (the <code>SpectralKernel</code> plus closed-form Fourier / Chebyshev /
+  Legendre / Hermite / Laguerre bases, or learned Laplace–Beltrami /
+  user-supplied graph bases).</li>
+<li>The non-trivial <strong>null space</strong> of <span class="arithmatex">\(L\)</span> — the modes the Green's-
+  function expansion cannot reach (e.g. the constant function under a
+  Neumann Laplacian) — is fitted as un-regularised columns of the
+  design matrix via the kernel-agnostic <code>NullSpaceBasis</code> protocol.</li>
+<li><strong>Variable Projection with random Matryoshka truncation</strong> trains the
+  encoder while sampling the latent-dimension cutoff <span class="arithmatex">\(k\)</span>, so a single
+  trained model exposes a quality-vs-<code>k</code> <em>dimension curve</em> that reads
+  off <code>d_eff</code> at deployment time.</li>
+</ul>
+<p>Concrete derivations and worked examples live under
+<a href="../concepts/"><code>docs/concepts.md</code></a>; the API reference under
+<a href="reference/"><code>docs/reference/</code></a>.</p>
+<h2 id="status">Status</h2>
+<p>IGL is <strong>active research-grade software</strong>. The API follows strict
+typing discipline (<code>basedpyright --strict</code>, ≥99% test coverage with
+property-based fuzzing on the numerical core), but minor versions may
+introduce breaking changes as the framework evolves. The <code>0.x</code> line is
+appropriate for research and experimentation; production users should
+pin specific minor versions.</p>
 <h2 id="citing">Citing</h2>
-<p>If IGL helps your work, cite via the project's
-<a href="https://github.com/hotherio/intrinsic-green-learning/blob/main/CITATION.cff"><code>CITATION.cff</code></a>.</p>
+<p>See the
+<a href="https://github.com/hotherio/intrinsic-green-learning#bibliography">Bibliography</a>
+section of the project README for the recommended citation, or the
+<a href="https://github.com/hotherio/intrinsic-green-learning/blob/main/CITATION.cff"><code>CITATION.cff</code></a>
+file for the structured form (GitHub's <em>"Cite this repository"</em>
+widget reads it automatically).</p>
 
 
 

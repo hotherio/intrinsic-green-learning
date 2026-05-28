@@ -55,7 +55,9 @@ jobs:
           python-version: '3.13'
 
       - name: Install python-semantic-release
-        run: pip install python-semantic-release
+        # Version pinned to silence Scorecard's "Pinned-Dependencies" check
+        # and make releases reproducible. Bump via Renovate.
+        run: pip install python-semantic-release==10.5.3
 
       - name: Import GPG key
         id: import-gpg

@@ -1,12 +1,13 @@
 cff-version: 1.2.0
 title: intrinsic-green-learning
-message: "If you use this library in academic or published work, please cite it as below."
+message: "If you use this library in academic or published work, please cite both the software (this entry) and the underlying paper (see `preferred-citation` below)."
 type: software
 authors:
   - given-names: Alexandre
     family-names: Quemy
     email: alexandre@hother.io
     affiliation: Hother
+    orcid: "https://orcid.org/0000-0002-5865-6403"
 repository-code: "https://github.com/hotherio/intrinsic-green-learning"
 url: "https://hotherio.github.io/intrinsic-green-learning/latest/"
 license: MIT
@@ -30,3 +31,17 @@ abstract: >-
   compatible API, bare PyTorch building blocks for custom training loops, and
   a Riemannian/SPD extension for covariance-valued data (EEG and clinical
   signals).
+preferred-citation:
+  type: conference-paper
+  title: "Intrinsic Green's Learning: Supervised Learning on Manifolds via Inverse PDE"
+  authors:
+    - given-names: Alexandre
+      family-names: Quemy
+      email: alexandre@hother.io
+      affiliation: Hother
+      orcid: "https://orcid.org/0000-0002-5865-6403"
+  year: 2026
+  month: 3
+  conference:
+    name: "ICLR 2026 Workshop on AI and PDE"
+  url: "https://openreview.net/forum?id=Y6RpdS98l8"

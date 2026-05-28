@@ -16,6 +16,7 @@ import torch
 from sklearn.base import TransformerMixin
 
 from igl.core.loss import MSELoss
+from igl.exceptions import IGLConfigError
 from igl.models._base import _BaseIGLEstimator
 
 if TYPE_CHECKING:
@@ -78,7 +79,11 @@ class IGLAutoencoder(_BaseIGLEstimator[MSELoss], TransformerMixin):
         device: torch.device,
         x_scaled: NDArray[np.floating] | None = None,
     ) -> torch.Tensor:
-        assert x_scaled is not None, "IGLAutoencoder requires x_scaled to be passed through"
+        if x_scaled is None:
+            raise IGLConfigError(
+                "IGLAutoencoder._prepare_y requires x_scaled (the StandardScaler-transformed input) "
+                "to be passed through; this is an internal contract from _BaseIGLEstimator._fit_core.",
+            )
         self.n_outputs_: int = int(x_scaled.shape[1])
         return torch.as_tensor(x_scaled, dtype=torch.float32, device=device)
 

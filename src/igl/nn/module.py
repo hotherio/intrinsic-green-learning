@@ -21,6 +21,8 @@ Combining paths 1 with 2/3, or 2 with 3 when the configs disagree, raises
 :class:`igl.IGLConfigError`.
 """
 
+from typing import cast
+
 import torch
 from torch import nn
 
@@ -148,7 +150,10 @@ class IGLModule(nn.Module):
                 raise IGLConfigError(
                     f"encoder.max_dim ({encoder.max_dim}) != max_dim ({max_dim})",
                 )
-            assert isinstance(encoder, nn.Module), "encoder must be an nn.Module"
+            if not isinstance(encoder, nn.Module):
+                raise IGLConfigError(
+                    f"encoder must be an nn.Module, got {type(encoder).__name__}",
+                )
             inner_encoder: nn.Module = encoder
         else:
             resolved_encoder_cfg = (
@@ -218,8 +223,9 @@ class IGLModule(nn.Module):
     def forward(self, x: torch.Tensor, *, gate_mask: torch.Tensor | None = None) -> torch.Tensor:
         """Forward pass returning ``Φ w + b`` of shape ``[N, output_dim]``."""
         phi = self.design_matrix(x, gate_mask=gate_mask)
-        weights = self.source_weights
-        assert isinstance(weights, torch.Tensor), "source_weights must be a tensor"
+        # source_weights is registered as a zero Tensor in __init__ (never None);
+        # cast narrows the register_buffer "Tensor | None" return for the type checker.
+        weights = cast(torch.Tensor, self.source_weights)
         return phi @ weights + self.bias
 
     def set_source_weights(self, weights: torch.Tensor) -> None:

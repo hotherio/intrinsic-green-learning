@@ -21,7 +21,7 @@ Combining paths 1 with 2/3, or 2 with 3 when the configs disagree, raises
 :class:`igl.IGLConfigError`.
 """
 
-from typing import cast
+from typing import Protocol, cast
 
 import torch
 from torch import nn
@@ -32,6 +32,17 @@ from igl.core.kernel import GreenKernel
 from igl.core.normalization import normalize_phi
 from igl.exceptions import IGLConfigError
 from igl.types import EncoderProtocol, NormalizeMode, NormalizeModeLike, OperatorName, OperatorNameLike
+
+
+class _HasOutputDim(Protocol):
+    """Structural type for kernels exposing the number of design-matrix columns.
+
+    Both :class:`igl.GreenKernel` and :class:`igl.spectral.SpectralKernel`
+    declare ``output_dim: int`` as a class attribute, so they satisfy this
+    Protocol structurally. Used to narrow ``self.green`` for buffer sizing.
+    """
+
+    output_dim: int
 
 
 def _resolve_kernel_params(
@@ -195,8 +206,10 @@ class IGLModule(nn.Module):
                 )
             self.green = kernel
 
-        # Size the readout buffer to the kernel's design-matrix width.
-        n_columns = int(getattr(self.green, "output_dim", resolved_anchors))
+        # Size the readout buffer to the kernel's design-matrix width. Both
+        # branches above guarantee `self.green` satisfies _HasOutputDim
+        # (built-in GreenKernel declares it; user kernels are validated above).
+        n_columns = int(cast(_HasOutputDim, self.green).output_dim)
 
         self.input_dim = input_dim
         self.max_dim = max_dim

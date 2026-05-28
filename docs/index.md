@@ -1,68 +1,31 @@
-# CHANGE-ME
+# Intrinsic Green Learning
 
+**Task-conditioned intrinsic-dimensionality discovery** for high-dimensional
+data, via a learned encoder, a multi-scale Green's-function kernel, and
+Variable Projection / Matryoshka training.
 
-## TEST
+## What it does
+
+Given high-dimensional inputs $x \in \mathbb{R}^D$ and a task — classification,
+regression, or reconstruction — IGL learns:
+
+1. **An encoder** $\Psi_\theta : \mathbb{R}^D \to \mathbb{R}^{d_{\max}}$ that
+   maps inputs onto an ambient latent space.
+2. **A structured design matrix** $\Phi \in \mathbb{R}^{N \times R}$ built
+   from a multi-scale product Green's kernel with $R$ learnable anchors.
+3. **The effective dimension** $d_{\text{eff}}$ at which the task is solved,
+   discovered automatically via random Matryoshka truncation during training.
+
+The library validates the empirical hierarchy
 
 $$
-\operatorname{ker} f=\{g\in G:f(g)=e_{H}\}{\mbox{.}}
+d_{\text{eff}}(\text{classification}) \;\le\; d_{\text{eff}}(\text{regression}) \;\le\; d_{\text{eff}}(\text{reconstruction})
 $$
 
-The `#!python range()` function is used to generate a sequence of numbers.
-``` py title="bubble_sort.py" linenums="1" hl_lines="2 3"
-def bubble_sort(items):
-    for i in range(len(items)):
-        for j in range(len(items) - 1 - i):
-            if items[j] > items[j + 1]:
-                items[j], items[j + 1] = items[j + 1], items[j] # (1)
-```
+on the same underlying manifold — and lets you measure it on your own data.
 
-1. :A lot of loops!
+## Status
 
-``` yaml
-theme:
-  features:
-    - content.code.annotate # (1)
-```
-
-1. :man_raising_hand: I'm a code annotation! I can contain `code`, __formatted
-    text__, images, ... basically anything that can be expressed in Markdown[^1].
-
-[^1]: Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-
-## Installation
-
-=== "Windows"
-
-    For Windows
-
-=== "Linux"
-
-    For Linux
-
-
-| Method      | Description                          |
-| ----------- | ------------------------------------ |
-| `GET`       | :material-check:     Fetch resource  |
-| `PUT`       | :material-check-all: Update resource |
-| `DELETE`    | :material-close:     Delete resource |
-
-## Test
-
-``` mermaid
-sequenceDiagram
-  Alice->>John: Hello John, how are you?
-  loop Healthcheck
-      John->>John: Fight against hypochondria
-  end
-  Note right of John: Rational thoughts!
-  John-->>Alice: Great!
-  John->>Bob: How about you?
-  Bob-->>John: Jolly good!
-```
-
-
-
-<figure markdown>
-  ![Image title](https://dummyimage.com/600x400/){ width="300" loading=lazy }
-  <figcaption>Image caption</figcaption>
-</figure>
+This is **0.0.0** scaffolding. The public API is unstable until 0.1.0; see
+[`docs/about.md`](about.md) for the roadmap and
+[the guidelines](guidelines/index.md) for development practices.

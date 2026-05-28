@@ -1,31 +1,52 @@
 [project]
-name = "hother-change-me"
+name = "intrinsic-green-learning"
 version = "0.0.0"
-description = "Template for python projects"
+description = "Intrinsic Green Learning: task-conditioned intrinsic-dimensionality discovery via a learned encoder and a multi-scale Green's-function kernel."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "torch>=2.5",
+    "numpy>=1.26",
+    "scikit-learn>=1.5",
+    "scipy>=1.13",
 ]
 
 
 [project.urls]
-"Homepage" = "https://github.com/hotherio/CHANGE-ME"
-"Bug Tracker" = "https://github.com/hotherio/CHANGE-ME/issues"
-"Source" = "https://github.com/hotherio/CHANGE-ME"
-"Documentation" = "https://hotherio.github.io/CHANGE-ME/latest/"
+"Homepage" = "https://github.com/hotherio/intrinsic-green-learning"
+"Bug Tracker" = "https://github.com/hotherio/intrinsic-green-learning/issues"
+"Source" = "https://github.com/hotherio/intrinsic-green-learning"
+"Documentation" = "https://hotherio.github.io/intrinsic-green-learning/latest/"
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.8"]
+eeg = ["mne>=1.7", "moabb>=1.1", "pyriemann>=0.6"]
+nlp = ["transformers>=4.40", "datasets>=2.20"]
+elbow = ["kneed>=0.8"]
+all = [
+    "matplotlib>=3.8",
+    "mne>=1.7",
+    "moabb>=1.1",
+    "pyriemann>=0.6",
+    "transformers>=4.40",
+    "datasets>=2.20",
+    "kneed>=0.8",
+]
 
 [build-system]
 requires = ["uv_build>=0.9,<0.10"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "hother"
+module-name = "igl"
 module-root = "src"
 source-include = [
     "tests/**",
@@ -43,6 +64,7 @@ dev = [
     "pytest-cov>=6.0",
     "pytest-xdist>=3.6",
     "pytest-randomly>=3.16",
+    "pytest-mock>=3.14",
     "hypothesis>=6.122",
     "vulture>=2.14",
     "pretty_errors>=1.2",
@@ -61,13 +83,11 @@ doc = [
     "mkdocstrings[python]==0.27.0"
 ]
 
-[tool.uv.sources]
-torch = { index = "hother" }
-
 [[tool.uv.index]]
 name = "hother"
 url = "https://hotherio.github.io/pypi-registry/"
 publish-url = "https://hotherio.github.io/pypi-registry/"
+explicit = true
 
 [tool.ruff]
 line-length = 128
@@ -100,7 +120,7 @@ ignore = [
 
 # Configure import sorting (replaces isort)
 [tool.ruff.isort]
-known-first-party = ["hother"]
+known-first-party = ["igl"]
 
 # Format settings
 [tool.ruff.format]
@@ -111,7 +131,7 @@ indent-style = "space"
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
-include = ["src/hother"]
+include = ["src/igl"]
 exclude = [
     "tests",
     "build",
@@ -127,13 +147,13 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 xfail_strict = true
-addopts = "-n auto --strict-markers --strict-config --cov=hother --cov-report=term-missing --cov-report=html"
+addopts = "-n auto --strict-markers --strict-config --cov=igl --cov-report=term-missing --cov-report=html"
 markers = [
     "general: general tests",
 ]
 
 [tool.coverage.run]
-source = ["src/hother"]
+source = ["src/igl"]
 omit = ["*/tests/*", "*/__init__.py", "*/_version.py"]
 
 [tool.coverage.report]
@@ -178,5 +198,3 @@ exclude_commit_patterns = [
     "^chore\\(release\\):",
     "^Merge pull request",
 ]
-
-

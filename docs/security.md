@@ -18,7 +18,7 @@ Every release of this library ships with:
 ### Verify the PyPI attestation (recommended, pip ≥ 25.1)
 
 ```bash
-pip install --verify-attestations hother-change-me
+pip install --verify-attestations intrinsic-green-learning
 ```
 
 Pip fetches the sigstore attestation from PyPI, verifies it against the public Sigstore transparency log, and refuses to install if verification fails. No additional tooling required.
@@ -27,10 +27,10 @@ Pip fetches the sigstore attestation from PyPI, verifies it against the public S
 
 ```bash
 # Download a wheel from a specific release
-gh release download v1.2.3 --repo hotherio/CHANGE-ME --pattern "*.whl"
+gh release download v1.2.3 --repo hotherio/intrinsic-green-learning --pattern "*.whl"
 
 # Verify it was built from the expected source
-gh attestation verify hother_change_me-1.2.3-py3-none-any.whl \
+gh attestation verify intrinsic_green_learning-1.2.3-py3-none-any.whl \
   --owner hotherio
 ```
 
@@ -41,7 +41,7 @@ gh attestation verify hother_change_me-1.2.3-py3-none-any.whl \
 gpg --recv-keys <bot-key-id>
 
 # Verify the checksum file's signature, then verify file hashes
-gh release download v1.2.3 --repo hotherio/CHANGE-ME
+gh release download v1.2.3 --repo hotherio/intrinsic-green-learning
 gpg --verify SHA256SUMS.asc SHA256SUMS
 sha256sum -c SHA256SUMS
 ```
@@ -67,4 +67,4 @@ PyPI does **not currently trust Forgejo OIDC tokens** (immutable-ID claims are m
 
 ## Reporting a vulnerability
 
-See [`SECURITY.md`](https://github.com/hotherio/CHANGE-ME/blob/main/SECURITY.md) for the disclosure process.
+See [`SECURITY.md`](https://github.com/hotherio/intrinsic-green-learning/blob/main/SECURITY.md) for the disclosure process.

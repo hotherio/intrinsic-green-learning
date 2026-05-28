@@ -1,20 +1,54 @@
 # Intrinsic Green Learning
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/hotherio/intrinsic-green-learning/badge)](https://scorecard.dev/viewer/?uri=github.com/hotherio/intrinsic-green-learning)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/intrinsic-green-learning/badge)](https://www.bestpractices.dev/projects/intrinsic-green-learning)
-[![REUSE compliant](https://api.reuse.software/badge/github.com/hotherio/intrinsic-green-learning)](https://api.reuse.software/info/github.com/hotherio/intrinsic-green-learning)
 
-**Task-conditioned intrinsic-dimensionality discovery** for high-dimensional
-data. IGL pairs a learned encoder with a multi-scale Green's-function
-kernel and trains the system end-to-end via Variable Projection with random
-Matryoshka truncation. The model fits the task and *simultaneously* reveals
-how many dimensions the task actually needs — usually far fewer than the
-ambient input.
+High-dimensional inputs — pixel grids, EEG channels, embedding vectors —
+almost never *use* all the dimensions they appear to. The handful that
+actually matter depends on the question you ask: a binary classifier
+may need only one or two latent axes, a regressor to a continuous
+target may need a few more, and a full reconstruction needs whatever
+dimension the data manifold genuinely has.
+
+**Intrinsic Green Learning (IGL)** discovers that task-conditioned
+effective dimension while it fits the model. A learned encoder maps the
+ambient input to a low-dimensional latent space; a multi-scale
+**Green's-function kernel** computes a structured design matrix on that
+latent space; and **Variable Projection with random Matryoshka
+truncation** trains the encoder and reads off the smallest dimension
+that still solves the task. There's no separate "dimensionality
+reduction" step and no fixed bottleneck — the dimension you should use
+falls out of training.
+
+The key difference from PCA, UMAP, t-SNE, or any other purely-geometric
+manifold-learning method: the effective dimension IGL reports is a
+property of *(input, task)*, not of the input alone. The same dataset
+will resolve into different `d_eff` values for a classifier, a
+regressor, and an autoencoder — and the hierarchy
+$d_{\text{cls}} \le d_{\text{reg}} \le d_{\text{recon}}$ holds out of
+the box.
+
+What ships:
+
+- **scikit-learn-compatible estimators** (`IGLClassifier`,
+  `IGLRegressor`, `IGLAutoencoder`) for drop-in use in existing
+  pipelines.
+- **Bare PyTorch building blocks** (`IGLModule`, `GreenKernel`,
+  `MatryoshkaTrainer`, …) for custom training loops, novel kernels,
+  and research extensions.
+- **Spectral formulation** (`SpectralKernel` + closed-form Fourier /
+  Chebyshev / Legendre / Hermite / Laguerre bases, plus learned
+  Laplace–Beltrami and user-supplied graph bases) with kernel-agnostic
+  null-space augmentation for operators with non-trivial $\ker(L)$.
+- **Riemannian / SPD extension** (`igl.spd`) for covariance-valued
+  data — EEG, fMRI-derived connectivity, financial covariances — with
+  an AIRM-based loss plugged in through the same `ExtraLoss` seam used
+  by every other training-time regulariser.
 
 > **Note on the import name.** The distribution is
-> `intrinsic-green-learning`; the import name is `igl`. This collides with
-> [`libigl`](https://github.com/libigl/libigl-python-bindings); if you need
-> both in the same env, install one of them with a different module name.
+> `intrinsic-green-learning`; the import name is `igl`. This collides
+> with [`libigl`](https://github.com/libigl/libigl-python-bindings);
+> if you need both in the same env, install one of them under a
+> different module name.
 
 ## Why IGL?
 
@@ -181,19 +215,9 @@ uv run lefthook run pre-commit --all-files   # full pre-commit pass
 
 ### Conventions
 
-The library follows the Hother Python guidelines under
-[`docs/guidelines/`](docs/guidelines/):
-
-- **basedpyright strict** type checking; `Any` is not allowed in public
-  signatures.
-- **`__all__` exhaustive** at every module surface.
-- **Google-style docstrings** on every public symbol.
-- **Single base exception** `igl.IGLError`, one level deep.
-- **Conventional Commits**: commit subjects drive `python-semantic-release`
-  (`feat:` → minor, `fix:` / `perf:` / `refactor:` → patch, `BREAKING
-  CHANGE:` → major).
-- **String-valued type aliases** are `enum.StrEnum` classes with a
-  companion `Literal` mirror; public APIs accept either form.
+Style, typing, exceptions, commit-message format, and the rest are
+documented in [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) and
+[`docs/guidelines/`](docs/guidelines/).
 
 ### Release process
 
@@ -202,6 +226,30 @@ Releases are fully automated by
 on every push to `main` via `.github/workflows/semantic-release.yml`. See
 [`docs/security.md`](docs/security.md) for the supply-chain posture
 (OIDC, sigstore attestations, GPG-signed checksums, `pip-audit`).
+
+## Bibliography
+
+If you use IGL in academic work, please cite the paper this library
+implements:
+
+> Quemy, A. (2026). *Intrinsic Green's Learning: Supervised Learning on
+> Manifolds via Inverse PDE*. ICLR 2026 Workshop on AI and PDE.
+> <https://openreview.net/forum?id=Y6RpdS98l8>
+
+```bibtex
+@inproceedings{quemy2026igl,
+  title     = {{Intrinsic Green's Learning: Supervised Learning on Manifolds via Inverse PDE}},
+  author    = {Quemy, Alexandre},
+  booktitle = {ICLR 2026 Workshop on AI and PDE},
+  year      = {2026},
+  month     = {3},
+  url       = {https://openreview.net/forum?id=Y6RpdS98l8}
+}
+```
+
+For a citation to this exact software version, GitHub's *"Cite this
+repository"* widget reads [`CITATION.cff`](CITATION.cff); its
+`preferred-citation` block points back to the paper above.
 
 ## License
 

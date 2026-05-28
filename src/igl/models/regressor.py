@@ -8,8 +8,10 @@ import numpy as np
 import torch
 from sklearn.base import RegressorMixin
 
+from igl.config import IGLConfig
 from igl.core.loss import MSELoss
 from igl.models._base import _BaseIGLEstimator
+from igl.types import NormalizeModeLike, OperatorNameLike
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -45,11 +47,11 @@ class IGLRegressor(_BaseIGLEstimator[MSELoss], RegressorMixin):
         max_dim: int = 16,
         n_anchors: int | None = None,
         n_scales: int | None = None,
-        operator: object = None,
-        normalize: object = None,
+        operator: OperatorNameLike | None = None,
+        normalize: NormalizeModeLike | None = None,
         encoder_hidden: int | tuple[int, ...] | None = None,
         encoder_depth: int | None = None,
-        config: object = None,
+        config: IGLConfig | None = None,
         random_state: int | None = None,
         validation_fraction: float | None = 0.2,
     ) -> None:
@@ -57,11 +59,11 @@ class IGLRegressor(_BaseIGLEstimator[MSELoss], RegressorMixin):
             max_dim=max_dim,
             n_anchors=n_anchors,
             n_scales=n_scales,
-            operator=operator,  # type: ignore[arg-type]
-            normalize=normalize,  # type: ignore[arg-type]
+            operator=operator,
+            normalize=normalize,
             encoder_hidden=encoder_hidden,
             encoder_depth=encoder_depth,
-            config=config,  # type: ignore[arg-type]
+            config=config,
             random_state=random_state,
         )
         self.validation_fraction = validation_fraction

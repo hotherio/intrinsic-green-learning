@@ -5,6 +5,7 @@ from igl.data.synthetic import (
     make_flat_torus,
     make_flat_torus_labels,
     make_moons,
+    make_spd_dataset,
     make_swiss_roll,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "make_flat_torus",
     "make_flat_torus_labels",
     "make_moons",
+    "make_spd_dataset",
     "make_swiss_roll",
 ]

@@ -26,7 +26,7 @@ from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
-from igl.types import LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
+from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
 
 
 @dataclass(slots=True)
@@ -84,6 +84,7 @@ class MatryoshkaTrainer:
         *,
         x_val: torch.Tensor | None = None,
         y_val: torch.Tensor | None = None,
+        extra_losses: Sequence[ExtraLoss] = (),
     ) -> TrainingHistory:
         """Fit ``module`` on the training tensors and return the history.
 
@@ -93,6 +94,11 @@ class MatryoshkaTrainer:
             y_train: Training targets.
             x_val: Optional validation inputs.
             y_val: Optional validation targets.
+            extra_losses: Optional :class:`igl.types.ExtraLoss` regularizers
+                — e.g. :class:`igl.spd.OrthogonalityPenalty`. Each is called
+                per batch (subject to its ``every`` frequency); the returned
+                tensor is multiplied by the extra's ``weight`` and added to
+                the task loss before backprop.
 
         Returns:
             A :class:`TrainingHistory` instance.
@@ -142,6 +148,7 @@ class MatryoshkaTrainer:
                 n_samples=n_samples,
                 history=history,
                 epoch=epoch,
+                extra_losses=extra_losses,
             )
             if not torch.isfinite(torch.tensor(epoch_loss)):
                 raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
@@ -205,7 +212,8 @@ class MatryoshkaTrainer:
         d_max: int,
         n_samples: int,
         history: TrainingHistory,
-        epoch: int,  # noqa: ARG002
+        epoch: int,
+        extra_losses: Sequence[ExtraLoss],
     ) -> float:
         config = self.config
         module.train()
@@ -249,6 +257,22 @@ class MatryoshkaTrainer:
             output = phi @ w_k + module.bias
             target_batch = self.loss.target(y_batch)
             task_loss = self.loss.loss(output, target_batch)
+
+            # Fold in any ExtraLoss regularizers (orthogonality, gate sparsity, etc.).
+            for extra in extra_losses:
+                if (n_batches - 1) % extra.every != 0:
+                    continue
+                contribution = extra(
+                    encoder=module.encoder,
+                    x_batch=x_batch,
+                    gate_mask=mask,
+                    k=k,
+                    epoch=epoch,
+                    batch_idx=n_batches - 1,
+                )
+                if contribution is not None:
+                    task_loss = task_loss + extra.weight * contribution
+
             # torch's autograd entry points have partial stubs in this version.
             task_loss.backward()  # pyright: ignore[reportUnknownMemberType]
 

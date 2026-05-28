@@ -206,10 +206,79 @@ def embed_in_high_dim(
     return padded @ rotation.T
 
 
+def make_spd_dataset(
+    n_samples: int,
+    *,
+    d: int = 4,
+    n_classes: int = 2,
+    class_separation: float = 1.0,
+    seed: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Generate batches of SPD matrices labelled by class.
+
+    Each class is a mixture of two ingredients:
+
+    1. A class-specific mean SPD ``C_k = exp(S_k)`` where ``S_k`` is a
+       symmetric matrix sampled once per class (controlled by
+       ``class_separation``).
+    2. Per-sample noise added in log-Euclidean tangent space, then mapped
+       back to the manifold via :func:`igl.spd.matrix_exp_sym`.
+
+    Useful as a labelled toy dataset for :class:`igl.spd.IGLReconSPDClassifier`
+    smoke tests and synthetic experiments — no MOABB / mne dependency.
+
+    Args:
+        n_samples: Total number of SPD matrices.
+        d: Side length of each SPD matrix.
+        n_classes: Number of distinct class means.
+        class_separation: Std of the per-class log-Euclidean mean. ``0`` →
+            all classes collapse to ``I``; ``1.0`` → well-separated.
+        seed: Optional RNG seed.
+
+    Returns:
+        ``(X, y)`` where ``X`` is ``[n_samples, d, d]`` SPD tensors and ``y``
+        is a ``[n_samples]`` long-tensor of class labels.
+    """
+    if n_samples < 1:
+        raise IGLConfigError(f"n_samples must be >= 1, got {n_samples}")
+    if d < 1:
+        raise IGLConfigError(f"d must be >= 1, got {d}")
+    if n_classes < 2:  # noqa: PLR2004
+        raise IGLConfigError(f"n_classes must be >= 2, got {n_classes}")
+
+    from igl.spd.linalg import matrix_exp_sym  # noqa: PLC0415
+
+    gen = _maybe_seed(seed)
+    class_means: list[torch.Tensor] = []
+    for _ in range(n_classes):
+        sym = torch.randn(d, d, generator=gen) * class_separation
+        sym = 0.5 * (sym + sym.T)
+        class_means.append(sym)
+
+    per_class = n_samples // n_classes
+    remainder = n_samples - per_class * n_classes
+
+    samples: list[torch.Tensor] = []
+    labels: list[int] = []
+    for class_idx, base_sym in enumerate(class_means):
+        n_here = per_class + (1 if class_idx < remainder else 0)
+        noise = torch.randn(n_here, d, d, generator=gen) * 0.1
+        noise = 0.5 * (noise + noise.transpose(-1, -2))
+        batch_sym = base_sym.unsqueeze(0) + noise
+        samples.append(matrix_exp_sym(batch_sym))
+        labels.extend([class_idx] * n_here)
+
+    x = torch.cat(samples, dim=0)
+    y = torch.tensor(labels, dtype=torch.long)
+    perm = torch.randperm(x.shape[0], generator=gen)
+    return x[perm], y[perm]
+
+
 __all__ = [
     "embed_in_high_dim",
     "make_flat_torus",
     "make_flat_torus_labels",
     "make_moons",
+    "make_spd_dataset",
     "make_swiss_roll",
 ]

@@ -94,7 +94,7 @@ def test_module_rejects_non_module_encoder() -> None:
         def __call__(self, x: torch.Tensor) -> torch.Tensor:
             return x[:, :2]
 
-    with pytest.raises(AssertionError, match="encoder must be an nn.Module"):
+    with pytest.raises(IGLConfigError, match="encoder must be an nn.Module"):
         IGLModule(input_dim=4, max_dim=2, output_dim=2, encoder=FakeEncoder())  # type: ignore[arg-type]
 
 

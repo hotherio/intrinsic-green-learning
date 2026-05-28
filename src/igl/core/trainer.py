@@ -23,7 +23,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from igl.config import MatryoshkaConfig
 from igl.core.solver import direct_solve_weights
-from igl.exceptions import IGLConvergenceError
+from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
 from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
@@ -112,7 +112,8 @@ class MatryoshkaTrainer:
         y_train = y_train.to(device)
         if x_val is not None:
             x_val = x_val.to(device)
-            assert y_val is not None, "y_val must be provided when x_val is provided"
+            if y_val is None:
+                raise IGLConfigError("y_val must be provided when x_val is provided")
             y_val = y_val.to(device)
 
         d_max = module.max_dim

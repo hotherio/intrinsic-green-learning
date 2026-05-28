@@ -20,6 +20,8 @@ Optional ``orthogonality_weight > 0`` plugs an
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -136,6 +138,21 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
     def _matryoshka_config(self) -> MatryoshkaConfig:
         return self.config.matryoshka if self.config is not None else MatryoshkaConfig()
 
+    @contextmanager
+    def _local_rng(self) -> Generator[None]:
+        """Scope torch RNG mutations so the caller's global RNG state survives the fit.
+
+        See :class:`igl.models._base._BaseIGLEstimator._local_rng` for the
+        rationale. Stage B (LogisticRegression) is deterministic given its
+        input, so no numpy-side equivalent is needed.
+        """
+        if self.random_state is None:
+            yield
+            return
+        with torch.random.fork_rng():  # pyright: ignore[reportUnknownMemberType]
+            torch.manual_seed(self.random_state)  # pyright: ignore[reportUnknownMemberType]
+            yield
+
     def fit(self, x: NDArray[np.floating], y: NDArray[np.generic]) -> IGLReconSPDClassifier:
         """Fit both stages.
 
@@ -143,10 +160,6 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             x: Log-Eig vectors ``[N, d * (d + 1) / 2]``.
             y: Integer class labels ``[N]``.
         """
-        if self.random_state is not None:
-            torch.manual_seed(self.random_state)  # pyright: ignore[reportUnknownMemberType]
-            np.random.seed(self.random_state)
-
         expected_dim = _vec_dim_for(self.latent_dim)
         if x.shape[1] != expected_dim:
             raise IGLConfigError(
@@ -160,19 +173,8 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.classes_: NDArray[np.generic] = np.unique(y)
 
         x_tensor = torch.as_tensor(np.asarray(x, dtype=np.float32))
-        # Stage A: reconstruct the log-Eig vector via AIRM.
-        self.module_: IGLModule = IGLModule(
-            input_dim=expected_dim,
-            max_dim=self.max_dim,
-            output_dim=expected_dim,
-            n_anchors=self.n_anchors,
-            n_scales=self.n_scales,
-            encoder_config=self._resolve_encoder_config(),
-        )
         loss = AIRMLoss(latent_dim=self.latent_dim)
-        trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
-
-        extras = ()
+        extras: tuple[OrthogonalityPenalty, ...] = ()
         if self.orthogonality_weight > 0.0:
             extras = (
                 OrthogonalityPenalty(
@@ -181,7 +183,19 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 ),
             )
 
-        self.history_ = trainer.fit(self.module_, x_tensor, x_tensor, extra_losses=extras)
+        # Scope torch RNG mutations to module construction + training.
+        with self._local_rng():
+            # Stage A: reconstruct the log-Eig vector via AIRM.
+            self.module_: IGLModule = IGLModule(
+                input_dim=expected_dim,
+                max_dim=self.max_dim,
+                output_dim=expected_dim,
+                n_anchors=self.n_anchors,
+                n_scales=self.n_scales,
+                encoder_config=self._resolve_encoder_config(),
+            )
+            trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
+            self.history_ = trainer.fit(self.module_, x_tensor, x_tensor, extra_losses=extras)
 
         self.dimension_curve_ = eval_dimension_curve(
             self.module_,

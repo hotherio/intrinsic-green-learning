@@ -92,8 +92,6 @@ jobs:
 
       - name: Run Semantic Release (no VCS release)
         id: release
-        env:
-          FORCE_LEVEL: ${{ inputs.force_level }}
         run: |
           # Map workflow_dispatch input to PSR force flag.
           # "none" / unset → normal commit-driven release path.
@@ -121,6 +119,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FORCE_LEVEL: ${{ inputs.force_level }}
 
       - name: Generate release notes for current version
         id: release-notes

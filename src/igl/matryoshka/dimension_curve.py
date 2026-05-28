@@ -44,9 +44,11 @@ def eval_dimension_curve(
             :func:`igl.direct_solve_weights`.
 
     Returns:
-        A dict mapping ``k → loss_value``. The value is the *loss* (not the
-        metric), because :func:`detect_elbow` needs a lower-is-better quantity
-        and the metric is often saturated (e.g. accuracy = 1.0) on easy tasks.
+        A dict mapping ``k → curve_score`` where ``curve_score`` is whatever
+        :meth:`LossStrategy.curve_score` reports — error rate for
+        :class:`igl.CrossEntropyLoss`, MSE for :class:`igl.MSELoss`, etc.
+        The curve score is always lower-is-better so :func:`detect_elbow`
+        can locate the knee.
     """
     module.eval()
     device = next(module.parameters()).device
@@ -69,7 +71,7 @@ def eval_dimension_curve(
         phi_aug = torch.cat([phi, ones_col], dim=-1)
         weights = direct_solve_weights(phi_aug, target, l2=source_l2).to(device)
         pred = phi_aug @ weights
-        results[k] = float(loss.loss(pred, target).item())
+        results[k] = loss.curve_score(pred, target)
 
     return results
 
@@ -133,13 +135,7 @@ def detect_elbow(curve: DimensionCurve, *, ratio: float = 2.0) -> int:
     return last_substantial
 
 
-def d_eff_from_curve(curve: DimensionCurve, *, ratio: float = 2.0) -> int:
-    """Alias of :func:`detect_elbow` — the discovered effective dimension."""
-    return detect_elbow(curve, ratio=ratio)
-
-
 __all__ = [
-    "d_eff_from_curve",
     "detect_elbow",
     "eval_dimension_curve",
 ]

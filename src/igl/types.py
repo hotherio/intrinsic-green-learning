@@ -190,12 +190,17 @@ class LossStrategy(Protocol):
     """Pluggable loss for :class:`igl.MatryoshkaTrainer`.
 
     Implementations supply task-specific targets (one-hot encoding,
-    pass-through, log-Euclidean SPD targets, …), the loss to minimise, and a
-    scalar metric for early-stopping decisions.
+    pass-through, log-Euclidean SPD targets, …), the loss to minimise, a
+    scalar metric for early-stopping decisions, and — separately — a
+    *curve score* used by :func:`igl.eval_dimension_curve` to make
+    dimension curves informative (e.g. error rate for classifiers, which
+    doesn't saturate the way cross-entropy does).
 
     Attributes:
         higher_is_better: ``True`` when ``metric()`` should be maximised
             (e.g. accuracy), ``False`` when minimised (e.g. MSE, AIRM).
+            ``curve_score()`` is always lower-is-better regardless of this
+            flag.
     """
 
     higher_is_better: bool
@@ -205,6 +210,8 @@ class LossStrategy(Protocol):
     def loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor: ...
 
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float: ...
+
+    def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float: ...
 
 
 @runtime_checkable

@@ -1,0 +1,50 @@
+name: Fuzz (Hypothesis)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly Wednesday 03:00 UTC — deeper search profile (max_examples=200)
+    # runs once a week to catch regressions that the bounded CI profile misses.
+    - cron: "0 3 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Hypothesis property tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.13']
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Python and uv
+        uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: ${{ matrix.python-version }}
+          dependency-groups: all
+
+      - name: Run Hypothesis property tests
+        env:
+          # `nightly` profile uses max_examples=200; default `ci` uses 30.
+          PROFILE: ${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
+        run: |
+          source .venv/bin/activate
+          pytest tests/test_fuzz_*.py \
+            --hypothesis-profile=${PROFILE} \
+            --hypothesis-show-statistics \
+            -v

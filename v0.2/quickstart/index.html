@@ -1261,6 +1261,17 @@
 
 
 <h1 id="quickstart">Quickstart</h1>
+<p>This page walks through fitting an IGL estimator and reading off the
+effective dimension it discovered. Every example below uses two
+attributes that every fitted IGL estimator carries:</p>
+<ul>
+<li><strong><code>effective_dimension_</code></strong> — an integer: the smallest latent dimension
+  the trained model needs to keep solving the task well.</li>
+<li><strong><code>dimension_curve_</code></strong> — a <code>{k: score}</code> mapping showing how
+  quality changes as you truncate the latent at <span class="arithmatex">\(k = 1, 2, \dots,
+  d_{\max}\)</span>. The curve is what <code>effective_dimension_</code> is read off from.</li>
+</ul>
+<p>Install:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>intrinsic-green-learning
 </code></pre></div>
 <p>Optional extras:</p>
@@ -1298,11 +1309,11 @@ and inspect the discovered effective dimension.</p>
   <a class="autorefs autorefs-internal" href="../reference/matryoshka/#igl.matryoshka.dimension_curve.detect_elbow"><code>igl.detect_elbow</code></a>).</li>
 </ul>
 <h2 id="comparing-tasks-on-the-same-data">Comparing tasks on the same data</h2>
-<p>The canonical IGL hierarchy is</p>
-<div class="highlight"><pre><span></span><code>d_eff(cls) ≤ d_eff(reg) ≤ d_eff(recon)
-</code></pre></div>
-<p><a class="autorefs autorefs-internal" href="../reference/metrics/#igl.metrics.dimension.compare_d_eff"><code>igl.compare_d_eff</code></a> checks the ordering across any
-number of tasks:</p>
+<p>The same dataset will resolve into different effective dimensions for
+classification, regression, and reconstruction — see
+<a href="../concepts/#the-task-conditioned-hierarchy">Concepts: the task-conditioned hierarchy</a>
+for why. <a class="autorefs autorefs-internal" href="../reference/metrics/#igl.metrics.dimension.compare_d_eff"><code>igl.compare_d_eff</code></a> checks the ordering
+across any number of tasks:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">igl.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_swiss_roll</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">x</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="n">make_swiss_roll</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
@@ -1338,9 +1349,14 @@ shorthand <code>encoder_hidden</code> / <code>encoder_depth</code> kwargs on the
 <code>igl.NormType.LAYER</code>, <code>igl.ActivationType.SILU</code>,
 <code>igl.OperatorName.GAUSSIAN</code>, etc.</p>
 <h2 id="spd-covariance-valued-data">SPD / covariance-valued data</h2>
-<p>For matrices in the SPD cone (covariance, EEG epoch correlations, …),
-the <code>igl.spd</code> subpackage ships an AIRM-based reconstruction
-classifier:</p>
+<p>Some inputs are not vectors but <strong>symmetric positive-definite matrices</strong>:
+EEG channel covariances, fMRI connectivity matrices, financial
+correlations. These live on a Riemannian manifold — the SPD cone — and
+ordinary Euclidean losses misrepresent distances between them. The
+<code>igl.spd</code> subpackage ships an AIRM-loss-based classifier that respects
+that geometry, plus a vectoriser that maps SPD matrices into the
+log-Euclidean tangent space where the kernel solver can operate
+flatly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">igl.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_spd_dataset</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">igl.spd</span><span class="w"> </span><span class="kn">import</span> <span class="n">IGLReconSPDClassifier</span><span class="p">,</span> <span class="n">LogEigVectorizer</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>

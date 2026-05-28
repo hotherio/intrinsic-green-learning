@@ -526,6 +526,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#where-each-piece-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where each piece lives
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#encoder-green-kernel-design" class="md-nav__link">
     <span class="md-ellipsis">
       Encoder + Green-kernel design
@@ -580,13 +589,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spectral-formulation-and-the-null-space" class="md-nav__link">
+  <a href="#advanced-spectral-formulation-and-the-null-space" class="md-nav__link">
     <span class="md-ellipsis">
-      Spectral formulation and the null space
+      Advanced: spectral formulation and the null space
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Spectral formulation and the null space">
+    <nav class="md-nav" aria-label="Advanced: spectral formulation and the null space">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -609,15 +618,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-lives-where" class="md-nav__link">
-    <span class="md-ellipsis">
-      What lives where
-    </span>
-  </a>
   
 </li>
       
@@ -1294,9 +1294,72 @@
 
 
 <h1 id="concepts">Concepts</h1>
-<p>This page summarises the mathematical setup IGL is built around. For the
-API itself, see <a href="../quickstart/">Quickstart</a> and the
-<a href="../reference/">API reference</a>.</p>
+<p>This page explains the moving parts of IGL: what the encoder, the
+Green's-function kernel, and Matryoshka truncation each contribute, and
+how they combine into an end-to-end training procedure that <em>reports</em> the
+effective latent dimension as a byproduct of fitting the task.</p>
+<p>The pieces work together as follows: an <strong>encoder</strong> maps your input to a
+low-dimensional latent; the <strong>Green's-function kernel</strong> turns that latent
+into a structured design matrix; and <strong>Variable Projection with
+Matryoshka truncation</strong> jointly fits the encoder and reads off how few
+dimensions of the design matrix the task actually needs. The rest of the
+page walks through each piece in math, then covers two extensions — the
+SPD/Riemannian module and the spectral formulation.</p>
+<h2 id="where-each-piece-lives">Where each piece lives</h2>
+<table>
+<thead>
+<tr>
+<th>Subpackage</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>igl</code></td>
+<td>Top-level surface: configs, building blocks, sklearn models, metrics.</td>
+</tr>
+<tr>
+<td><code>igl.core</code></td>
+<td>Geometry-agnostic primitives: encoder, kernel, solver, trainer.</td>
+</tr>
+<tr>
+<td><code>igl.kernels</code></td>
+<td>Operator zoo: Gaussian, Laplacian, Cauchy, Helmholtz, Gabor, Mexican-hat, Yukawa, multiquadric, soft-box. Registration via <code>register_operator</code>.</td>
+</tr>
+<tr>
+<td><code>igl.matryoshka</code></td>
+<td>Truncation samplers (uniform, power-law) and the post-fit dimension curve.</td>
+</tr>
+<tr>
+<td><code>igl.metrics</code></td>
+<td><code>d_eff_from_curve</code>, <code>compare_d_eff</code>, elbow detectors.</td>
+</tr>
+<tr>
+<td><code>igl.models</code></td>
+<td>sklearn estimators: classifier, regressor, autoencoder.</td>
+</tr>
+<tr>
+<td><code>igl.nn</code></td>
+<td>Bare <a class="autorefs autorefs-internal" href="../reference/nn/#igl.nn.module.IGLModule"><code>IGLModule</code></a> for custom training loops.</td>
+</tr>
+<tr>
+<td><code>igl.spd</code></td>
+<td>Riemannian extension: AIRM, log-Eig, orthogonality, reconstruction.</td>
+</tr>
+<tr>
+<td><code>igl.spectral</code></td>
+<td>Spectral kernels + null-space augmentation: closed-form bases, learned LB, graph Laplacian.</td>
+</tr>
+<tr>
+<td><code>igl.data</code></td>
+<td>Synthetic generators: torus, moons, swiss roll, SPD dataset.</td>
+</tr>
+<tr>
+<td><code>igl.viz</code></td>
+<td>Optional matplotlib helpers (gated behind the <code>[viz]</code> extra).</td>
+</tr>
+</tbody>
+</table>
 <h2 id="encoder-green-kernel-design">Encoder + Green-kernel design</h2>
 <p>Given ambient inputs <span class="arithmatex">\(x \in \mathbb{R}^D\)</span>, IGL trains:</p>
 <ol>
@@ -1354,6 +1417,7 @@ locates the elbow on a log scale: the smallest <span class="arithmatex">\(k\)</s
 more dimensions stops giving substantial improvements. That <span class="arithmatex">\(k\)</span> is the
 <strong>effective dimension</strong> <span class="arithmatex">\(d_{\text{eff}}\)</span>.</p>
 <h2 id="the-task-conditioned-hierarchy">The task-conditioned hierarchy</h2>
+<p>{ #the-task-conditioned-hierarchy }</p>
 <p>The same input data carries different amounts of "useful structure" for
 different tasks:</p>
 <ul>
@@ -1413,7 +1477,12 @@ multiplied by <code>weight</code>, added to the task loss before backprop).</p>
 regularizer — say, a sparsity penalty on the latents — is one new
 <code>ExtraLoss</code>. The reference implementation contains gate-sparsity,
 Stäckel-pullback, and AIRM losses all sharing these two seams.</p>
-<h2 id="spectral-formulation-and-the-null-space">Spectral formulation and the null space</h2>
+<h2 id="advanced-spectral-formulation-and-the-null-space">Advanced: spectral formulation and the null space</h2>
+<p>The default <code>GreenKernel</code> is enough for most use cases — you can skip
+this section on a first read. It's relevant when you need a basis tied
+to a specific differential operator (e.g. a Laplacian with known
+boundary conditions) or when your data lives on a learned/graph
+manifold that's natural to express via an eigendecomposition.</p>
 <p>The local <code>GreenKernel</code> is a <em>product</em> of fixed-shape 1-D kernels at
 learnable anchors. The <strong>spectral formulation</strong> replaces this with the
 eigendecomposition of an operator <span class="arithmatex">\(L\)</span>:</p>
@@ -1517,61 +1586,6 @@ refreshed periodically. The
 <a class="autorefs autorefs-internal" href="../reference/spectral/#igl.spectral.refresh.LearnedLBRefresh"><code>LearnedLBRefresh</code></a> hook plugs
 into the trainer via the <code>extra_losses=</code> parameter and re-runs the
 eigendecomposition every <span class="arithmatex">\(N\)</span> batches with the current encoder.</p>
-<h2 id="what-lives-where">What lives where</h2>
-<table>
-<thead>
-<tr>
-<th>Subpackage</th>
-<th>Role</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>igl</code></td>
-<td>Top-level surface: configs, building blocks, sklearn models, metrics.</td>
-</tr>
-<tr>
-<td><code>igl.core</code></td>
-<td>Geometry-agnostic primitives: encoder, kernel, solver, trainer.</td>
-</tr>
-<tr>
-<td><code>igl.kernels</code></td>
-<td>Operator zoo: Gaussian, Laplacian, Cauchy, Helmholtz, Gabor, Mexican-hat, Yukawa, multiquadric, soft-box. Registration via <code>register_operator</code>.</td>
-</tr>
-<tr>
-<td><code>igl.matryoshka</code></td>
-<td>Truncation samplers (uniform, power-law) and the post-fit dimension curve.</td>
-</tr>
-<tr>
-<td><code>igl.metrics</code></td>
-<td><code>d_eff_from_curve</code>, <code>compare_d_eff</code>, elbow detectors.</td>
-</tr>
-<tr>
-<td><code>igl.models</code></td>
-<td>sklearn estimators: classifier, regressor, autoencoder.</td>
-</tr>
-<tr>
-<td><code>igl.nn</code></td>
-<td>Bare <a class="autorefs autorefs-internal" href="../reference/nn/#igl.nn.module.IGLModule"><code>IGLModule</code></a> for custom training loops.</td>
-</tr>
-<tr>
-<td><code>igl.spd</code></td>
-<td>Riemannian extension: AIRM, log-Eig, orthogonality, reconstruction.</td>
-</tr>
-<tr>
-<td><code>igl.spectral</code></td>
-<td>Spectral kernels + null-space augmentation: closed-form bases, learned LB, graph Laplacian.</td>
-</tr>
-<tr>
-<td><code>igl.data</code></td>
-<td>Synthetic generators: torus, moons, swiss roll, SPD dataset.</td>
-</tr>
-<tr>
-<td><code>igl.viz</code></td>
-<td>Optional matplotlib helpers (gated behind the <code>[viz]</code> extra).</td>
-</tr>
-</tbody>
-</table>
 
 
 

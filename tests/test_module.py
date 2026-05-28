@@ -105,3 +105,94 @@ def test_module_parameters_include_encoder_kernel_and_bias() -> None:
     assert any("green" in n for n in param_names)
     assert "bias" in param_names
     assert isinstance(module.bias, nn.Parameter)
+
+
+def test_module_accepts_encoder_config_with_per_layer_widths() -> None:
+    from igl import EncoderConfig  # noqa: PLC0415
+
+    module = IGLModule(
+        input_dim=8,
+        max_dim=4,
+        output_dim=2,
+        encoder_config=EncoderConfig(hidden=(64, 32)),
+        normalize_input=False,
+    )
+    inner = module.encoder
+    assert isinstance(inner, nn.Module)
+    out = module(torch.randn(3, 8))
+    assert out.shape == (3, 2)
+
+
+def test_module_accepts_top_level_config() -> None:
+    from igl import EncoderConfig, IGLConfig, KernelConfig, OperatorName  # noqa: PLC0415
+
+    config = IGLConfig(
+        max_dim=4,
+        encoder=EncoderConfig(hidden=(48, 24)),
+        kernel=KernelConfig(n_anchors=20, n_scales=3, operator=OperatorName.GAUSSIAN),
+    )
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, config=config)
+    assert module.green.n_anchors == 20
+    assert module.green.n_scales == 3
+
+
+def test_module_explicit_kwargs_override_config() -> None:
+    from igl import IGLConfig, KernelConfig  # noqa: PLC0415
+
+    config = IGLConfig(
+        max_dim=4,
+        kernel=KernelConfig(n_anchors=20, n_scales=3),
+    )
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, n_anchors=8, config=config)
+    assert module.green.n_anchors == 8  # kwarg wins
+
+
+def test_module_rejects_encoder_and_encoder_config_conflict() -> None:
+    from igl import EncoderConfig, LinearEncoder  # noqa: PLC0415
+
+    enc = LinearEncoder(input_dim=8, max_dim=4)
+    with pytest.raises(IGLConfigError, match="encoder or encoder_config"):
+        IGLModule(
+            input_dim=8,
+            max_dim=4,
+            output_dim=2,
+            encoder=enc,
+            encoder_config=EncoderConfig(),
+            normalize_input=False,
+        )
+
+
+def test_module_rejects_max_dim_config_mismatch() -> None:
+    from igl import IGLConfig  # noqa: PLC0415
+
+    with pytest.raises(IGLConfigError, match="config.max_dim"):
+        IGLModule(input_dim=8, max_dim=4, output_dim=2, config=IGLConfig(max_dim=16))
+
+
+def test_module_pre_built_encoder_with_config_uses_kernel_defaults() -> None:
+    """encoder is pre-built; config supplies the kernel config."""
+    from igl import IGLConfig, KernelConfig, LinearEncoder  # noqa: PLC0415
+
+    config = IGLConfig(max_dim=4, kernel=KernelConfig(n_anchors=7))
+    enc = LinearEncoder(input_dim=8, max_dim=4)
+    module = IGLModule(
+        input_dim=8,
+        max_dim=4,
+        output_dim=2,
+        encoder=enc,
+        normalize_input=False,
+        config=config,
+    )
+    assert module.green.n_anchors == 7
+
+
+def test_module_accepts_operator_kwarg_as_string() -> None:
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, operator="laplacian", n_anchors=8)
+    assert module.green.operator_names == ("laplacian",)
+
+
+def test_module_accepts_normalize_kwarg_as_string() -> None:
+    from igl import NormalizeMode  # noqa: PLC0415
+
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, normalize="l2", n_anchors=8)
+    assert module.normalize is NormalizeMode.L2

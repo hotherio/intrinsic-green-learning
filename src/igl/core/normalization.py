@@ -6,17 +6,17 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 
 from igl.exceptions import IGLConfigError
-from igl.types import NormalizeMode
+from igl.types import NormalizeMode, NormalizeModeLike
 
 _EPS = 1e-8
 
 
-def normalize_phi(phi: torch.Tensor, mode: NormalizeMode) -> torch.Tensor:
+def normalize_phi(phi: torch.Tensor, mode: NormalizeModeLike) -> torch.Tensor:
     """Normalize the design matrix per row.
 
     Args:
         phi: Design matrix of shape ``[N, R]``.
-        mode: One of ``"none"`` / ``"softmax"`` / ``"l2"`` / ``"nw"``.
+        mode: A :class:`NormalizeMode` member or matching string.
 
     Returns:
         The normalised matrix, same shape as ``phi``.
@@ -24,17 +24,19 @@ def normalize_phi(phi: torch.Tensor, mode: NormalizeMode) -> torch.Tensor:
     Raises:
         IGLConfigError: If ``mode`` is not a recognised value.
     """
-    if mode == "none":
+    try:
+        mode_enum = NormalizeMode(mode)
+    except ValueError as exc:
+        raise IGLConfigError(f"unknown normalize mode: {mode!r}") from exc
+    if mode_enum is NormalizeMode.NONE:
         return phi
-    if mode == "softmax":
+    if mode_enum is NormalizeMode.SOFTMAX:
         return F.softmax(phi, dim=-1)
-    if mode == "l2":
+    if mode_enum is NormalizeMode.L2:
         # torch's .norm has partial stubs; cast to recover the known return type.
         norm = cast(torch.Tensor, phi.norm(dim=-1, keepdim=True))  # pyright: ignore[reportUnknownMemberType]
         return phi / (norm + _EPS)
-    if mode == "nw":
-        return phi / (phi.sum(dim=-1, keepdim=True) + _EPS)
-    raise IGLConfigError(f"unknown normalize mode: {mode!r}")
+    return phi / (phi.sum(dim=-1, keepdim=True) + _EPS)
 
 
 __all__ = ["normalize_phi"]

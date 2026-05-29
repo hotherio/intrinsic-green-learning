@@ -162,6 +162,35 @@ def test_issue_1_5__airm_loss_rejects_negative_jitter() -> None:
         AIRMLoss(latent_dim=4, jitter=-1.0)
 
 
+def test_issue_1_5b__jitter_inside_matrix_exp_on_predicted_side() -> None:
+    """Predicted-side jitter is applied to the symmetric matrix *before* matrix_exp_sym.
+
+    This is the discipline the EEG reference uses
+    (`alex-eeg-igl/igl_recon_spd_orth.py:233-236`). v0.2.5 mistakenly added
+    jitter *after* `matrix_exp_sym`, producing a measurably different c_hat
+    for EEG-scale spectra and breaking bit-exact reproduction. This test
+    pins the correct ordering against a hand-computed reference.
+    """
+    from igl.spd.linalg import matrix_exp_sym, unpack_sym_vec  # noqa: PLC0415
+
+    torch.manual_seed(0)
+    d = 4
+    vec_dim = d * (d + 1) // 2
+    pred = torch.randn(6, vec_dim, dtype=torch.float32)
+
+    # Use a deliberately large jitter so "inside" vs "outside" the exp
+    # differs on the order of 1, not float32 noise. 1e-5 (the production
+    # default) would still differ correctly but the assertion would need
+    # tighter tolerances.
+    jitter = 0.5
+    loss = AIRMLoss(latent_dim=d, jitter=jitter)
+    expected = matrix_exp_sym(
+        unpack_sym_vec(pred, d) + jitter * torch.eye(d).expand(pred.shape[0], d, d),
+    )
+    actual = loss._pred_to_spd(pred)  # noqa: SLF001
+    torch.testing.assert_close(actual, expected, rtol=1e-6, atol=1e-6)
+
+
 # --- Issue 2.3: covs= kwarg + raw-C path --------------------------------------
 
 

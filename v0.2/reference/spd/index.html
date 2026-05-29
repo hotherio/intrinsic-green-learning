@@ -2220,6 +2220,69 @@ the same AIRM² value.</p>
                   <code>1e-08</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>jitter</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tikhonov-style ridge added on both sides of the AIRM call
+(<code>jitter * I</code> to the predicted SPD after <code>matrix_exp_sym</code> and
+to the target SPD). Real EEG covariances often span 6+ orders of
+magnitude on their eigenvalue spectrum; without a small ridge
+the <code>eigh</code> backward pass produces NaN gradients on
+ill-conditioned batches. Default <code>1e-5</code> matches the reference
+trainer's discipline. Set <code>0.0</code> to disable.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-05</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covs</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional <code>[N, d, d]</code> raw SPD targets aligned with the
+trainer's training tensor (<code>x_train</code>). When set together with a
+<code>trainer</code> reference, :meth:<code>loss</code> slices <code>covs</code> by the
+trainer's :attr:<code>current_batch_indices</code> and uses the raw
+covariance as the AIRM target instead of round-tripping the
+log-Eig vector through <code>unpack_sym_vec → matrix_exp_sym</code>. This
+avoids ~1e-6 round-trip noise per element that compounds to
+measurable AUC drift over 1000 epochs.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>trainer</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.core.trainer.MatryoshkaTrainer" href="../core/#igl.core.trainer.MatryoshkaTrainer">MatryoshkaTrainer</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The :class:<code>MatryoshkaTrainer</code> instance the loss is attached
+to. Required when <code>covs</code> is set. Stored as a back-reference so
+the loss can read <code>trainer.current_batch_indices</code> per batch.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2295,6 +2358,15 @@ the same AIRM² value.</p>
     <div class="doc doc-contents ">
 
         <p>AIRM² between the predicted SPD and the target SPD.</p>
+<p>When :attr:<code>covs</code> and :attr:<code>trainer</code> are set AND the trainer has
+published a <code>current_batch_indices</code> tensor (i.e. we are inside the
+trainer's training batch loop), the AIRM target is
+<code>covs[indices] + jitter * I</code> (avoiding the log-Eig → matrix-exp
+round-trip). Otherwise — validation pass, dimension-curve eval, or
+any external caller — the target is reconstructed from <code>target</code>
+via <code>unpack_sym_vec</code>. The training-time path is the bit-exact one;
+the val/eval path is the original round-trip (its small numerical
+noise only affects monitoring, not gradients).</p>
 
     </div>
 
@@ -2867,6 +2939,84 @@ penalty.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>normalize_input</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the encoder wraps its input in a
+<code>BatchNorm1d(affine=False)</code>. Default <code>False</code> — log-Eig
+tangent vectors have already been centred upstream, and a
+second input-BN would strip the per-feature scale the Green's
+kernel and the AIRM reconstruction depend on.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>normalize</code>
+            </td>
+            <td>
+                  <code><span title="igl.types.NormalizeModeLike">NormalizeModeLike</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Φ-normalisation mode. <code>None</code> (default) defers to
+<code>config.kernel.normalize</code> if a <code>config</code> is supplied, else
+the package default :data:<code>igl.NormalizeMode.NW</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>validation_fraction</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fraction of the training tensor used for
+validation. The 80/20 split (the default) is performed via
+<code>torch.randperm(N)</code> so the RNG-consumption profile matches
+the EEG reference trainer's split bit-for-bit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.2</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fork_rng</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When <code>True</code> (default), :meth:<code>fit</code> runs inside
+<code>torch.random.fork_rng()</code> so the caller's global torch / numpy
+RNG state is preserved. Set <code>False</code> to mutate the global RNG
+instead — required for bit-exact reproduction of EEG headline
+numbers that were produced with the reference trainer's bare
+<code>torch.manual_seed</code> discipline.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>config</code>
             </td>
             <td>
@@ -2999,7 +3149,7 @@ wrappers — measured in AIRM-curve-score space.</p>
 
 
 <h3 id="igl.spd.reconstruction.IGLReconSPDClassifier.fit" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">covs</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -3050,6 +3200,27 @@ wrappers — measured in AIRM-curve-score space.</p>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>covs</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional raw SPD targets <code>[N, d, d]</code> aligned with <code>x</code>.
+When provided, AIRM uses <code>covs[batch_indices] + jitter * I</code>
+directly as the reconstruction target, bypassing the
+log-Eig → matrix-exp round-trip and the ~1e-6 element-wise
+noise it introduces. Required for bit-exact reproduction of
+AIRM-recon results from the reference trainer.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>

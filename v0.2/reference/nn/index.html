@@ -1441,7 +1441,7 @@ an :class:<code>MLPEncoder</code>. Mutually exclusive with <code>encoder</code>.
               <div class="doc-md-description">
                 <p>Φ-normalization mode. <code>None</code> defers to
 <code>config.kernel.normalize</code> (default
-:data:<code>igl.NormalizeMode.SOFTMAX</code>).</p>
+:data:<code>igl.NormalizeMode.NW</code>).</p>
               </div>
             </td>
             <td>
@@ -1457,14 +1457,16 @@ an :class:<code>MLPEncoder</code>. Mutually exclusive with <code>encoder</code>.
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code> (default), prepend an
+                <p>If <code>True</code>, prepend an
 <code>nn.BatchNorm1d(affine=False)</code> to the encoder. Stabilises
 training when ambient input dimensions have wildly different
-scales.</p>
+scales. Default <code>False</code> — appropriate for inputs that have
+been pre-normalised (e.g. log-Eig tangent vectors from
+:class:<code>igl.spd.LogEigVectorizer</code>).</p>
               </div>
             </td>
             <td>
-                  <code>True</code>
+                  <code>False</code>
             </td>
           </tr>
           <tr class="doc-section-item">

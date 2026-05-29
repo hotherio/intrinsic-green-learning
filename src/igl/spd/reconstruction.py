@@ -294,10 +294,14 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 normalize=resolved_normalize,
             )
 
-            # 80/20 split — `torch.randperm(N)` matches the reference
-            # trainer's RNG-consumption profile (sklearn's `train_test_split`
+            # 80/20 split — ``torch.randperm(N)`` matches the reference
+            # trainer's RNG-consumption profile (sklearn's ``train_test_split``
             # uses its own RNG and would desync every downstream draw).
-            n_val = max(1, int(round(n_samples * self.validation_fraction)))
+            # ``int(N * f)`` **truncates** (matching the reference at
+            # ``igl_recon_spd_orth.py:494``); ``int(round(...))`` would
+            # off-by-one whenever ``N * f`` is non-integer and flip every
+            # subsequent RNG draw (Issue 4 in the EEG reproducibility chain).
+            n_val = max(1, int(n_samples * self.validation_fraction))
             perm = torch.randperm(n_samples)
             val_idx, train_idx = perm[:n_val], perm[n_val:]
             x_train = x_tensor[train_idx]

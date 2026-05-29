@@ -243,6 +243,66 @@ def test_issue_3_1__recon_spd_rejects_zero_validation_fraction() -> None:
         IGLReconSPDClassifier(latent_dim=4, validation_fraction=1.0)
 
 
+def test_issue_4__val_split_uses_truncation_not_rounding(
+    monkeypatch: pytest.MonkeyPatch,
+    spd_xy: tuple[np.ndarray, np.ndarray, torch.Tensor],
+) -> None:
+    """``n_val`` must be computed by ``int(N * f)`` (truncate), not ``int(round(N * f))``.
+
+    The EEG reference at ``alex-eeg-igl/igl_recon_spd_orth.py:494`` truncates.
+    Rounding off-by-ones by 1 whenever ``N * f`` is non-integer, which flips
+    every subsequent RNG draw inside the trainer and breaks bit-exact
+    reproduction (Issue 4 in the EEG reproducibility chain — the actual
+    root cause of the 4/27 folds that v0.2.7's Issue 3.4 ``skip_failing_batches``
+    fix did not close).
+
+    Spy on ``MatryoshkaTrainer.fit`` to capture the ``x_val`` it receives
+    and assert its size matches the truncated formula.
+    """
+    x, y, _ = spd_xy
+    # spd_xy returns N=80 samples. Pick `f` such that round and trunc differ.
+    # 80 × 0.27 = 21.6 → trunc=21, round=22.
+    f = 0.27
+    n_samples = x.shape[0]
+    expected_trunc = max(1, int(n_samples * f))
+    expected_round = max(1, int(round(n_samples * f)))
+    assert expected_trunc != expected_round, "test setup invariant: round and trunc must differ on these N, f"
+
+    captured_x_val_size: list[int] = []
+    real_fit = MatryoshkaTrainer.fit
+
+    def spy_fit(self, module, x_train, y_train, *, x_val=None, y_val=None, extra_losses=()):  # noqa: ANN001, ANN202
+        captured_x_val_size.append(0 if x_val is None else x_val.shape[0])
+        return real_fit(
+            self,
+            module,
+            x_train,
+            y_train,
+            x_val=x_val,
+            y_val=y_val,
+            extra_losses=extra_losses,
+        )
+
+    monkeypatch.setattr(MatryoshkaTrainer, "fit", spy_fit)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        IGLReconSPDClassifier(
+            latent_dim=4,
+            max_dim=4,
+            n_anchors=8,
+            n_scales=2,
+            validation_fraction=f,
+            random_state=0,
+            config=_fast_config(epochs=2),
+        ).fit(x, y)
+
+    assert captured_x_val_size, "MatryoshkaTrainer.fit was never called"
+    assert captured_x_val_size[0] == expected_trunc, (
+        f"n_val should be int(N*f)={expected_trunc} (truncate), not "
+        f"int(round(N*f))={expected_round} (got {captured_x_val_size[0]})"
+    )
+
+
 def test_issue_3_1__recon_spd_uses_split_via_randperm(
     spd_xy: tuple[np.ndarray, np.ndarray, torch.Tensor],
 ) -> None:

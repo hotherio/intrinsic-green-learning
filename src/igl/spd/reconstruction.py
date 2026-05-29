@@ -181,13 +181,22 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
 
         When the user passes ``config=``, that config's ``matryoshka`` block
         is honoured verbatim. When ``config`` is ``None``, a default block
-        is built with ``sigma_max_diagnostic=True`` so the encoder
-        Jacobian-diagnostic forwards run per epoch (matching the EEG
-        reference trainer's RNG and BN-buffer profile).
+        is built with:
+
+        - ``sigma_max_diagnostic=True`` — runs the per-epoch encoder
+          Jacobian diagnostic so the EEG reference trainer's RNG and BN
+          buffer profile is matched.
+        - ``skip_failing_batches=True`` — guards each batch's
+          loss/backward/step against ``(RuntimeError, _LinAlgError)``,
+          matching the reference trainer's discipline for ill-conditioned
+          AIRM-on-SPD batches (Issue 3.4).
         """
         if self.config is not None:
             return self.config.matryoshka
-        return MatryoshkaConfig(sigma_max_diagnostic=True)
+        return MatryoshkaConfig(
+            sigma_max_diagnostic=True,
+            skip_failing_batches=True,
+        )
 
     def _resolve_normalize(self) -> NormalizeModeLike:
         """Pick the Φ normaliser: explicit kwarg > config.kernel.normalize > package default."""

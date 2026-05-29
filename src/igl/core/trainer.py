@@ -29,6 +29,14 @@ from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
 from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
 
+# ``torch._C._LinAlgError`` is the canonical exception raised by torch's
+# linear-algebra backends (e.g. eigh when the input refuses to factor).
+# The underscore in ``_C`` looks private, but it is the documented path
+# torch itself uses internally and the only way to catch this class. Bound
+# once at module level behind a scoped pragma so the per-batch guards stay
+# readable.
+_LinAlgError: type[Exception] = torch._C._LinAlgError  # noqa: SLF001  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue, reportUnknownVariableType, reportUnknownMemberType]
+
 
 @dataclass(slots=True)
 class TrainingHistory:
@@ -266,33 +274,48 @@ class MatryoshkaTrainer:
             # tensor positions (e.g. ``AIRMLoss(covs=...)``) can look them up.
             self.current_batch_indices = idx
             try:
-                task_loss = self.loss.loss(output, target_batch)
+                # Guard the loss + backward + step compound. AIRM on
+                # ill-conditioned EEG SPDs occasionally produces NaN
+                # gradients via eigh-backward or raises
+                # ``torch._C._LinAlgError`` outright; without this guard a
+                # single bad batch corrupts optimiser moments and flips
+                # training to a different basin (Issue 3.4 in the EEG
+                # reproducibility diagnostic). The guard is opt-in via
+                # ``config.skip_failing_batches`` so non-SPD users keep the
+                # loud-crash semantics.
+                try:
+                    task_loss = self.loss.loss(output, target_batch)
+
+                    # Fold in any ExtraLoss regularizers (orthogonality,
+                    # gate sparsity, etc.).
+                    for extra in extra_losses:
+                        if (n_batches - 1) % extra.every != 0:
+                            continue
+                        contribution = extra(
+                            encoder=module.encoder,
+                            x_batch=x_batch,
+                            gate_mask=mask,
+                            k=k,
+                            epoch=epoch,
+                            batch_idx=n_batches - 1,
+                        )
+                        if contribution is not None:
+                            task_loss = task_loss + extra.weight * contribution
+
+                    # torch's autograd entry points have partial stubs.
+                    task_loss.backward()  # pyright: ignore[reportUnknownMemberType]
+
+                    if config.grad_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(params, config.grad_clip)
+                    optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+
+                    epoch_loss += float(task_loss.item()) * int(idx.shape[0])
+                except (RuntimeError, _LinAlgError):
+                    if not config.skip_failing_batches:
+                        raise
+                    optimizer.zero_grad()
             finally:
                 self.current_batch_indices = None
-
-            # Fold in any ExtraLoss regularizers (orthogonality, gate sparsity, etc.).
-            for extra in extra_losses:
-                if (n_batches - 1) % extra.every != 0:
-                    continue
-                contribution = extra(
-                    encoder=module.encoder,
-                    x_batch=x_batch,
-                    gate_mask=mask,
-                    k=k,
-                    epoch=epoch,
-                    batch_idx=n_batches - 1,
-                )
-                if contribution is not None:
-                    task_loss = task_loss + extra.weight * contribution
-
-            # torch's autograd entry points have partial stubs in this version.
-            task_loss.backward()  # pyright: ignore[reportUnknownMemberType]
-
-            if config.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(params, config.grad_clip)
-            optimizer.step()  # pyright: ignore[reportUnknownMemberType]
-
-            epoch_loss += float(task_loss.item()) * int(idx.shape[0])
 
         history.truncation_k.append(k_sum / max(n_batches, 1))
 
@@ -372,11 +395,22 @@ class MatryoshkaTrainer:
         if x_val is None or y_val is None:
             return 0.0, 0.0
 
+        # Mirror the per-batch guard from ``_train_one_epoch`` (Issue 3.4):
+        # validation can hit the same eigh-backward NaN paths. On failure
+        # surface a sentinel "worst possible" loss so early stopping treats
+        # it as a non-improving epoch instead of crashing on a NaN.
         with torch.no_grad():
-            output = module(x_val)
-            target_val = self.loss.target(y_val)
-            val_loss = float(self.loss.loss(output, target_val).item())
-            val_metric = self.loss.metric(output, target_val)
+            try:
+                output = module(x_val)
+                target_val = self.loss.target(y_val)
+                val_loss = float(self.loss.loss(output, target_val).item())
+                val_metric = self.loss.metric(output, target_val)
+            except (RuntimeError, _LinAlgError):
+                if not config.skip_failing_batches:
+                    raise
+                worst = float("inf") if not self.loss.higher_is_better else -float("inf")
+                val_loss = worst
+                val_metric = worst
         return val_loss, val_metric
 
     @staticmethod

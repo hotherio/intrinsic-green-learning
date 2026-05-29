@@ -164,6 +164,7 @@ class MatryoshkaConfig:
     log_every: int = 100
     verbose: bool = False
     sigma_max_diagnostic: bool = False
+    skip_failing_batches: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sampling", SamplingMode(self.sampling))
@@ -248,6 +249,7 @@ class IGLConfig:
                 "log_every": self.matryoshka.log_every,
                 "verbose": self.matryoshka.verbose,
                 "sigma_max_diagnostic": self.matryoshka.sigma_max_diagnostic,
+                "skip_failing_batches": self.matryoshka.skip_failing_batches,
             },
         }
 
@@ -402,6 +404,7 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         log_every=_typed_get(data, "log_every", 100),
         verbose=_typed_get(data, "verbose", False),
         sigma_max_diagnostic=_typed_get(data, "sigma_max_diagnostic", False),
+        skip_failing_batches=_typed_get(data, "skip_failing_batches", False),
     )
 
 

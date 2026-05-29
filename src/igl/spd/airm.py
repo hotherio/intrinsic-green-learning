@@ -139,8 +139,23 @@ class AIRMLoss:
         return y.float() if y.dim() > 1 else y.float().unsqueeze(-1)
 
     def _to_spd(self, vec: torch.Tensor) -> torch.Tensor:
-        """Lift a log-Eig vector back to an SPD matrix."""
+        """Lift a log-Eig vector back to an SPD matrix (no jitter — round-trip path)."""
         sym = unpack_sym_vec(vec, self.latent_dim)
+        return matrix_exp_sym(sym)
+
+    def _pred_to_spd(self, vec: torch.Tensor) -> torch.Tensor:
+        """Lift the predicted log-Eig vector back to an SPD matrix, jitter inside the exp.
+
+        Matches the EEG reference's discipline at
+        ``alex-eeg-igl/igl_recon_spd_orth.py:233-236``:
+        ``c_hat = matrix_exp_sym(unpack(pred) + jitter * I)``. Adding jitter
+        *after* ``matrix_exp_sym`` produces a measurably different
+        ``c_hat`` for EEG-scale eigenvalue spectra and breaks bit-exact
+        reproduction (see Issue 1.5b discovered post-v0.2.5).
+        """
+        sym = unpack_sym_vec(vec, self.latent_dim)
+        if self.jitter > 0:
+            sym = sym + self._jitter_eye(sym.device, sym.dtype)
         return matrix_exp_sym(sym)
 
     def _jitter_eye(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
@@ -158,6 +173,9 @@ class AIRMLoss:
         via ``unpack_sym_vec``. The training-time path is the bit-exact one;
         the val/eval path is the original round-trip (its small numerical
         noise only affects monitoring, not gradients).
+
+        On the predicted side, jitter is added to the symmetric matrix
+        *before* ``matrix_exp_sym`` (see :meth:`_pred_to_spd`).
         """
         idx = self.trainer.current_batch_indices if self.trainer is not None else None
         if self.covs is not None and idx is not None:
@@ -167,9 +185,7 @@ class AIRMLoss:
             c = self._to_spd(target)
             if self.jitter > 0:
                 c = c + self._jitter_eye(c.device, c.dtype)
-        c_hat = self._to_spd(pred)
-        if self.jitter > 0:
-            c_hat = c_hat + self._jitter_eye(c_hat.device, c_hat.dtype)
+        c_hat = self._pred_to_spd(pred)
         return airm_loss(c, c_hat, eps=self.eps, reduction="mean")
 
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:

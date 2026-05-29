@@ -8,6 +8,7 @@ diagnostic spelled out.
 
 from __future__ import annotations
 
+import math
 import warnings
 
 import numpy as np
@@ -424,3 +425,162 @@ def test_issue_4_1__recon_spd_fork_rng_false_mutates_global_torch_rng(
             config=_fast_config(epochs=2),
         ).fit(x, y)
     assert not torch.equal(state_before, torch.get_rng_state())
+
+
+# --- Issue 3.4: per-batch exception guard for AIRM eigh-NaN -------------------
+
+
+class _RaisingLoss:
+    """Synthetic ``LossStrategy`` that raises ``RuntimeError`` on a chosen call.
+
+    The first ``raise_on_calls`` invocations of :meth:`loss` raise; later
+    ones fall back to a plain MSE. Used to simulate the eigh-backward NaN
+    pattern that motivates Issue 3.4 without depending on ill-conditioned
+    SPD matrices.
+    """
+
+    higher_is_better: bool = False
+
+    def __init__(self, raise_on_calls: tuple[int, ...] = (1,)) -> None:
+        self._n_calls = 0
+        self._raise_on = set(raise_on_calls)
+        self.raised_count = 0
+
+    def target(self, y: torch.Tensor) -> torch.Tensor:
+        return y.float() if y.dim() > 1 else y.float().unsqueeze(-1)
+
+    def loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        self._n_calls += 1
+        if self._n_calls in self._raise_on:
+            self.raised_count += 1
+            raise RuntimeError("synthetic eigh-backward NaN")
+        return ((pred - target) ** 2).mean()
+
+    def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+        return float(self.loss(pred, target).item())
+
+    def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+        return self.metric(pred, target)
+
+
+def _toy_module() -> igl.IGLModule:
+    """Tiny IGLModule for the guard tests — no SPD, just enough to backprop."""
+    torch.manual_seed(0)
+    return igl.IGLModule(input_dim=4, max_dim=4, output_dim=4, n_anchors=4, n_scales=2)
+
+
+def _toy_xy() -> tuple[torch.Tensor, torch.Tensor]:
+    torch.manual_seed(0)
+    return torch.randn(40, 4), torch.randn(40, 4)
+
+
+def test_issue_3_4__matryoshka_config_default_skip_failing_batches_is_false() -> None:
+    assert MatryoshkaConfig().skip_failing_batches is False
+
+
+def test_issue_3_4__recon_spd_default_matryoshka_enables_skip() -> None:
+    """When IGLReconSPDClassifier builds its own MatryoshkaConfig, the flag is True."""
+    clf = IGLReconSPDClassifier(latent_dim=4)
+    assert clf._matryoshka_config().skip_failing_batches is True  # noqa: SLF001
+
+
+def test_issue_3_4__flag_off_propagates_runtime_error() -> None:
+    """Without the flag, a RuntimeError in the loss escapes the trainer."""
+    module = _toy_module()
+    x, y = _toy_xy()
+    loss = _RaisingLoss(raise_on_calls=(1,))
+    trainer = MatryoshkaTrainer(
+        loss=loss,
+        config=MatryoshkaConfig(
+            epochs=2,
+            batch_size=20,
+            inner_batch_size=40,
+            scheduler="none",
+            early_stop_patience=None,
+            verbose=False,
+            skip_failing_batches=False,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="synthetic eigh-backward NaN"):
+        trainer.fit(module, x, y)
+
+
+def test_issue_3_4__flag_on_skips_failing_batch_silently() -> None:
+    """With the flag set, the trainer skips the failing batch and continues."""
+    module = _toy_module()
+    x, y = _toy_xy()
+    # First batch raises, subsequent batches succeed → epoch should still run.
+    loss = _RaisingLoss(raise_on_calls=(1,))
+    trainer = MatryoshkaTrainer(
+        loss=loss,
+        config=MatryoshkaConfig(
+            epochs=2,
+            batch_size=20,
+            inner_batch_size=40,
+            scheduler="none",
+            early_stop_patience=None,
+            verbose=False,
+            skip_failing_batches=True,
+        ),
+    )
+    # No exception should escape.
+    history = trainer.fit(module, x, y)
+    assert loss.raised_count == 1
+    assert len(history.train_loss) == 2  # noqa: PLR2004
+    # The failing batch contributes nothing to the epoch loss accumulator,
+    # so the surviving batch's contribution determines train_loss[0].
+    assert math.isfinite(history.train_loss[0])
+
+
+def test_issue_3_4__flag_on_validation_returns_inf_on_failure() -> None:
+    """With the flag set, a validation failure surfaces as inf instead of crashing."""
+    module = _toy_module()
+    x, y = _toy_xy()
+    x_val, y_val = _toy_xy()
+    # Call ordering with batch_size=20 + n_samples=40 + x_val provided:
+    #   epoch 1 — train.loss calls 1, 2;  val.loss call 3
+    #   epoch 2 — train.loss calls 4, 5;  val.loss call 6
+    # Pick call 3 so the failure lands during validation of epoch 1.
+    loss = _RaisingLoss(raise_on_calls=(3,))
+    trainer = MatryoshkaTrainer(
+        loss=loss,
+        config=MatryoshkaConfig(
+            epochs=2,
+            batch_size=20,
+            inner_batch_size=40,
+            scheduler="none",
+            early_stop_patience=None,
+            verbose=False,
+            skip_failing_batches=True,
+        ),
+    )
+    history = trainer.fit(module, x, y, x_val=x_val, y_val=y_val)
+    assert loss.raised_count >= 1
+    # At least one epoch's val_loss is inf — the sentinel set by the guard.
+    assert any(v == float("inf") for v in history.val_loss)
+
+
+def test_issue_3_4__flag_on_does_not_corrupt_parameters() -> None:
+    """A failed batch leaves the encoder parameters unchanged (zero_grad'd)."""
+    module = _toy_module()
+    x, y = _toy_xy()
+    # Snapshot encoder params before training.
+    pre = {n: p.detach().clone() for n, p in module.encoder.named_parameters()}
+
+    # Every call raises → no parameter updates should happen.
+    loss = _RaisingLoss(raise_on_calls=tuple(range(1, 200)))
+    trainer = MatryoshkaTrainer(
+        loss=loss,
+        config=MatryoshkaConfig(
+            epochs=1,
+            batch_size=20,
+            inner_batch_size=40,
+            scheduler="none",
+            early_stop_patience=None,
+            verbose=False,
+            skip_failing_batches=True,
+        ),
+    )
+    trainer.fit(module, x, y)
+    for name, post in module.encoder.named_parameters():
+        torch.testing.assert_close(pre[name], post.detach(), rtol=0, atol=0)

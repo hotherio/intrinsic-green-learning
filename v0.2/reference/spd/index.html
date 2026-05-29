@@ -2367,6 +2367,8 @@ any external caller — the target is reconstructed from <code>target</code>
 via <code>unpack_sym_vec</code>. The training-time path is the bit-exact one;
 the val/eval path is the original round-trip (its small numerical
 noise only affects monitoring, not gradients).</p>
+<p>On the predicted side, jitter is added to the symmetric matrix
+<em>before</em> <code>matrix_exp_sym</code> (see :meth:<code>_pred_to_spd</code>).</p>
 
     </div>
 

@@ -35,7 +35,7 @@ import torch
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 
-from igl.config import EncoderConfig, IGLConfig, MatryoshkaConfig
+from igl.config import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig
 from igl.core.normalization import normalize_phi
 from igl.core.trainer import MatryoshkaTrainer
 from igl.exceptions import IGLConfigError, IGLNotFittedError
@@ -43,6 +43,7 @@ from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.nn.module import IGLModule
 from igl.spd.airm import AIRMLoss
 from igl.spd.orthogonality import OrthogonalityPenalty
+from igl.types import NormalizeModeLike
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -75,6 +76,24 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             penalty.
         encoder_hidden: Encoder ``hidden`` shorthand.
         encoder_depth: Encoder depth shorthand.
+        normalize_input: Whether the encoder wraps its input in a
+            ``BatchNorm1d(affine=False)``. Default ``False`` — log-Eig
+            tangent vectors have already been centred upstream, and a
+            second input-BN would strip the per-feature scale the Green's
+            kernel and the AIRM reconstruction depend on.
+        normalize: Φ-normalisation mode. ``None`` (default) defers to
+            ``config.kernel.normalize`` if a ``config`` is supplied, else
+            the package default :data:`igl.NormalizeMode.NW`.
+        validation_fraction: Fraction of the training tensor used for
+            validation. The 80/20 split (the default) is performed via
+            ``torch.randperm(N)`` so the RNG-consumption profile matches
+            the EEG reference trainer's split bit-for-bit.
+        fork_rng: When ``True`` (default), :meth:`fit` runs inside
+            ``torch.random.fork_rng()`` so the caller's global torch / numpy
+            RNG state is preserved. Set ``False`` to mutate the global RNG
+            instead — required for bit-exact reproduction of EEG headline
+            numbers that were produced with the reference trainer's bare
+            ``torch.manual_seed`` discipline.
         config: Optional :class:`igl.IGLConfig`. Explicit kwargs above
             override its values.
         random_state: Optional integer seed.
@@ -97,10 +116,14 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
     orthogonality_every: int
     encoder_hidden: int | tuple[int, ...] | None
     encoder_depth: int | None
+    normalize_input: bool
+    normalize: NormalizeModeLike | None
+    validation_fraction: float
+    fork_rng: bool
     config: IGLConfig | None
     random_state: int | None
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         latent_dim: int,
@@ -111,11 +134,19 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         orthogonality_every: int = 20,
         encoder_hidden: int | tuple[int, ...] | None = None,
         encoder_depth: int | None = None,
+        normalize_input: bool = False,
+        normalize: NormalizeModeLike | None = None,
+        validation_fraction: float = 0.2,
+        fork_rng: bool = True,
         config: IGLConfig | None = None,
         random_state: int | None = None,
     ) -> None:
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
+        if not 0.0 < validation_fraction < 1.0:
+            raise IGLConfigError(
+                f"validation_fraction must be in (0, 1), got {validation_fraction}",
+            )
         self.latent_dim = latent_dim
         self.max_dim = max_dim
         self.n_anchors = n_anchors
@@ -124,6 +155,10 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.orthogonality_every = orthogonality_every
         self.encoder_hidden = encoder_hidden
         self.encoder_depth = encoder_depth
+        self.normalize_input = normalize_input
+        self.normalize = normalize
+        self.validation_fraction = validation_fraction
+        self.fork_rng = fork_rng
         self.config = config
         self.random_state = random_state
 
@@ -142,29 +177,69 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         )
 
     def _matryoshka_config(self) -> MatryoshkaConfig:
-        return self.config.matryoshka if self.config is not None else MatryoshkaConfig()
+        """Resolve the trainer config.
+
+        When the user passes ``config=``, that config's ``matryoshka`` block
+        is honoured verbatim. When ``config`` is ``None``, a default block
+        is built with ``sigma_max_diagnostic=True`` so the encoder
+        Jacobian-diagnostic forwards run per epoch (matching the EEG
+        reference trainer's RNG and BN-buffer profile).
+        """
+        if self.config is not None:
+            return self.config.matryoshka
+        return MatryoshkaConfig(sigma_max_diagnostic=True)
+
+    def _resolve_normalize(self) -> NormalizeModeLike:
+        """Pick the Φ normaliser: explicit kwarg > config.kernel.normalize > package default."""
+        if self.normalize is not None:
+            return self.normalize
+        if self.config is not None:
+            return self.config.kernel.normalize
+        return KernelConfig().normalize
 
     @contextmanager
     def _local_rng(self) -> Generator[None]:
-        """Scope torch RNG mutations so the caller's global RNG state survives the fit.
+        """Scope torch RNG mutations to ``.fit`` per ``self.fork_rng``.
 
-        See :class:`igl.models._base._BaseIGLEstimator._local_rng` for the
-        rationale. Stage B (LogisticRegression) is deterministic given its
-        input, so no numpy-side equivalent is needed.
+        When ``self.fork_rng=True`` (default) the caller's global torch and
+        numpy RNG state survives. When ``self.fork_rng=False`` the global
+        state is mutated — required for bit-exact reproduction of EEG
+        results produced with bare ``torch.manual_seed``.
+
+        ``self.random_state=None`` short-circuits the seed call but still
+        forks (or doesn't) as requested, since the caller may have already
+        seeded.
         """
-        if self.random_state is None:
-            yield
-            return
-        with torch.random.fork_rng():  # pyright: ignore[reportUnknownMemberType]
-            torch.manual_seed(self.random_state)  # pyright: ignore[reportUnknownMemberType]
+        if self.fork_rng:
+            with torch.random.fork_rng():
+                if self.random_state is not None:
+                    torch.manual_seed(self.random_state)
+                    np.random.seed(self.random_state)
+                yield
+        else:
+            if self.random_state is not None:
+                torch.manual_seed(self.random_state)
+                np.random.seed(self.random_state)
             yield
 
-    def fit(self, x: NDArray[np.floating], y: NDArray[np.generic]) -> IGLReconSPDClassifier:
+    def fit(
+        self,
+        x: NDArray[np.floating],
+        y: NDArray[np.generic],
+        *,
+        covs: torch.Tensor | None = None,
+    ) -> IGLReconSPDClassifier:
         """Fit both stages.
 
         Args:
             x: Log-Eig vectors ``[N, d * (d + 1) / 2]``.
             y: Integer class labels ``[N]``.
+            covs: Optional raw SPD targets ``[N, d, d]`` aligned with ``x``.
+                When provided, AIRM uses ``covs[batch_indices] + jitter * I``
+                directly as the reconstruction target, bypassing the
+                log-Eig → matrix-exp round-trip and the ~1e-6 element-wise
+                noise it introduces. Required for bit-exact reproduction of
+                AIRM-recon results from the reference trainer.
         """
         expected_dim = _vec_dim_for(self.latent_dim)
         if x.shape[1] != expected_dim:
@@ -174,12 +249,16 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         n_classes = len(np.unique(y))
         if n_classes < _MIN_CLASSES:
             raise IGLConfigError(f"need >= {_MIN_CLASSES} classes in y, got {n_classes}")
+        if covs is not None and covs.shape[0] != x.shape[0]:
+            raise IGLConfigError(
+                f"covs has {covs.shape[0]} samples; expected {x.shape[0]} to match x",
+            )
 
         self.n_features_in_: int = x.shape[1]
         self.classes_: NDArray[np.generic] = np.unique(y)
 
         x_tensor = torch.as_tensor(np.asarray(x, dtype=np.float32))
-        loss = AIRMLoss(latent_dim=self.latent_dim)
+        n_samples = x_tensor.shape[0]
         extras: tuple[OrthogonalityPenalty, ...] = ()
         if self.orthogonality_weight > 0.0:
             extras = (
@@ -189,9 +268,12 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 ),
             )
 
-        # Scope torch RNG mutations to module construction + training.
+        resolved_normalize = self._resolve_normalize()
+
+        # Stage A: reconstruct the log-Eig vector via AIRM. All RNG mutations
+        # (module construction, the 80/20 split, batch perms inside the
+        # trainer) are scoped to this block per `self.fork_rng`.
         with self._local_rng():
-            # Stage A: reconstruct the log-Eig vector via AIRM.
             self.module_: IGLModule = IGLModule(
                 input_dim=expected_dim,
                 max_dim=self.max_dim,
@@ -199,20 +281,54 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 n_anchors=self.n_anchors,
                 n_scales=self.n_scales,
                 encoder_config=self._resolve_encoder_config(),
+                normalize_input=self.normalize_input,
+                normalize=resolved_normalize,
             )
-            trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
-            self.history_ = trainer.fit(self.module_, x_tensor, x_tensor, extra_losses=extras)
 
+            # 80/20 split — `torch.randperm(N)` matches the reference
+            # trainer's RNG-consumption profile (sklearn's `train_test_split`
+            # uses its own RNG and would desync every downstream draw).
+            n_val = max(1, int(round(n_samples * self.validation_fraction)))
+            perm = torch.randperm(n_samples)
+            val_idx, train_idx = perm[:n_val], perm[n_val:]
+            x_train = x_tensor[train_idx]
+            x_val = x_tensor[val_idx]
+            covs_train = covs[train_idx] if covs is not None else None
+
+            trainer_config = self._matryoshka_config()
+            trainer = MatryoshkaTrainer(loss=AIRMLoss(latent_dim=self.latent_dim), config=trainer_config)
+            # Wire the loss to the trainer so per-batch `current_batch_indices`
+            # can be read by AIRMLoss(covs=...). The trainer's `loss` attribute
+            # holds the strategy used during training.
+            trainer.loss = AIRMLoss(
+                latent_dim=self.latent_dim,
+                covs=covs_train,
+                trainer=trainer,
+            )
+            self.history_ = trainer.fit(
+                self.module_,
+                x_train,
+                x_train,
+                x_val=x_val,
+                y_val=x_val,
+                extra_losses=extras,
+            )
+
+        # Dimension-curve eval and Stage B operate on the FULL training
+        # tensor — matching the reference's behaviour after the encoder is
+        # trained.
+        eval_loss = AIRMLoss(latent_dim=self.latent_dim)
         self.dimension_curve_ = eval_dimension_curve(
             self.module_,
             x_tensor,
             x_tensor,
-            loss=loss,
-            source_l2=self._matryoshka_config().source_l2,
+            loss=eval_loss,
+            source_l2=trainer_config.source_l2,
         )
         self.effective_dimension_: int = detect_elbow(self.dimension_curve_)
 
-        # Stage B: fit LogisticRegression on the design matrix Φ.
+        # Stage B: fit LogisticRegression on the design matrix Φ over the
+        # full input (not just the train split).
         with torch.no_grad():
             phi = self._design_matrix(x_tensor).cpu().numpy()
         self.readout_: LogisticRegression = LogisticRegression(max_iter=1000)

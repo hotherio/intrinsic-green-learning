@@ -102,7 +102,7 @@ class KernelConfig:
     operator: OperatorName | tuple[OperatorName, ...] = OperatorName.GAUSSIAN
     sigma_log_range: tuple[float, float] = (-1.5, 1.5)
     anchor_init_std: float = 0.5
-    normalize: NormalizeModeLike = NormalizeMode.SOFTMAX
+    normalize: NormalizeModeLike = NormalizeMode.NW
     null_space: NullSpaceKindLike = NullSpaceKind.NONE
     polynomial_degree: int = 1
 
@@ -152,17 +152,18 @@ class MatryoshkaConfig:
     batch_size: int = 256
     inner_batch_size: int = 4096
     encoder_lr: float = 1e-3
-    weight_decay: float | None = 1e-4
+    weight_decay: float | None = None
     source_l2: float = 1e-3
     grad_clip: float = 1.0
     sampling: SamplingModeLike = SamplingMode.UNIFORM
     alpha: float = 1.0
-    scheduler: SchedulerTypeLike = SchedulerType.COSINE_WARM_RESTARTS
+    scheduler: SchedulerTypeLike = SchedulerType.NONE
     early_stop_patience: int | None = 100
     early_stop_min_epochs: int = 200
     noise_std: float = 0.0
     log_every: int = 100
     verbose: bool = False
+    sigma_max_diagnostic: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sampling", SamplingMode(self.sampling))
@@ -246,6 +247,7 @@ class IGLConfig:
                 "noise_std": self.matryoshka.noise_std,
                 "log_every": self.matryoshka.log_every,
                 "verbose": self.matryoshka.verbose,
+                "sigma_max_diagnostic": self.matryoshka.sigma_max_diagnostic,
             },
         }
 
@@ -388,17 +390,18 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         batch_size=_typed_get(data, "batch_size", 256),
         inner_batch_size=_typed_get(data, "inner_batch_size", 4096),
         encoder_lr=_typed_get(data, "encoder_lr", 1e-3),
-        weight_decay=cast("float | None", data.get("weight_decay", 1e-4)),
+        weight_decay=cast("float | None", data.get("weight_decay", None)),
         source_l2=_typed_get(data, "source_l2", 1e-3),
         grad_clip=_typed_get(data, "grad_clip", 1.0),
         sampling=cast(SamplingModeLike, data.get("sampling", SamplingMode.UNIFORM)),
         alpha=_typed_get(data, "alpha", 1.0),
-        scheduler=cast(SchedulerTypeLike, data.get("scheduler", SchedulerType.COSINE_WARM_RESTARTS)),
+        scheduler=cast(SchedulerTypeLike, data.get("scheduler", SchedulerType.NONE)),
         early_stop_patience=cast("int | None", data.get("early_stop_patience", 100)),
         early_stop_min_epochs=_typed_get(data, "early_stop_min_epochs", 200),
         noise_std=_typed_get(data, "noise_std", 0.0),
         log_every=_typed_get(data, "log_every", 100),
         verbose=_typed_get(data, "verbose", False),
+        sigma_max_diagnostic=_typed_get(data, "sigma_max_diagnostic", False),
     )
 
 

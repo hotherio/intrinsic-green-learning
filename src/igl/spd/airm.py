@@ -15,10 +15,17 @@ back to a symmetric matrix; ``matrix_exp_sym`` then sends it back onto the
 SPD manifold for the AIRM comparison.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import torch
 
 from igl.exceptions import IGLConfigError
 from igl.spd.linalg import matrix_exp_sym, matrix_log_sym, matrix_pow_sym, unpack_sym_vec
+
+if TYPE_CHECKING:
+    from igl.core.trainer import MatryoshkaTrainer
 
 
 def airm_loss(
@@ -74,6 +81,24 @@ class AIRMLoss:
     Args:
         latent_dim: Side length ``d`` of the underlying SPD matrices.
         eps: Eigenvalue clamp for matrix log/exp/power.
+        jitter: Tikhonov-style ridge added on both sides of the AIRM call
+            (``jitter * I`` to the predicted SPD after ``matrix_exp_sym`` and
+            to the target SPD). Real EEG covariances often span 6+ orders of
+            magnitude on their eigenvalue spectrum; without a small ridge
+            the ``eigh`` backward pass produces NaN gradients on
+            ill-conditioned batches. Default ``1e-5`` matches the reference
+            trainer's discipline. Set ``0.0`` to disable.
+        covs: Optional ``[N, d, d]`` raw SPD targets aligned with the
+            trainer's training tensor (``x_train``). When set together with a
+            ``trainer`` reference, :meth:`loss` slices ``covs`` by the
+            trainer's :attr:`current_batch_indices` and uses the raw
+            covariance as the AIRM target instead of round-tripping the
+            log-Eig vector through ``unpack_sym_vec → matrix_exp_sym``. This
+            avoids ~1e-6 round-trip noise per element that compounds to
+            measurable AUC drift over 1000 epochs.
+        trainer: The :class:`MatryoshkaTrainer` instance the loss is attached
+            to. Required when ``covs`` is set. Stored as a back-reference so
+            the loss can read ``trainer.current_batch_indices`` per batch.
 
     Attributes:
         higher_is_better: Always ``False`` — AIRM² is a distance.
@@ -82,12 +107,32 @@ class AIRMLoss:
     higher_is_better: bool = False
     latent_dim: int
     eps: float
+    jitter: float
+    covs: torch.Tensor | None
+    trainer: MatryoshkaTrainer | None
 
-    def __init__(self, *, latent_dim: int, eps: float = 1e-8) -> None:
+    def __init__(
+        self,
+        *,
+        latent_dim: int,
+        eps: float = 1e-8,
+        jitter: float = 1e-5,
+        covs: torch.Tensor | None = None,
+        trainer: MatryoshkaTrainer | None = None,
+    ) -> None:
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
+        if jitter < 0:
+            raise IGLConfigError(f"jitter must be >= 0, got {jitter}")
+        if covs is not None and trainer is None:
+            raise IGLConfigError(
+                "AIRMLoss(covs=...) requires a trainer reference so per-batch indices can be read",
+            )
         self.latent_dim = latent_dim
         self.eps = eps
+        self.jitter = jitter
+        self.covs = covs
+        self.trainer = trainer
 
     def target(self, y: torch.Tensor) -> torch.Tensor:
         """Pass-through: the log-Eig vector is already the lstsq target."""
@@ -98,10 +143,33 @@ class AIRMLoss:
         sym = unpack_sym_vec(vec, self.latent_dim)
         return matrix_exp_sym(sym)
 
+    def _jitter_eye(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        return self.jitter * torch.eye(self.latent_dim, device=device, dtype=dtype)
+
     def loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """AIRM² between the predicted SPD and the target SPD."""
-        c = self._to_spd(target)
+        """AIRM² between the predicted SPD and the target SPD.
+
+        When :attr:`covs` and :attr:`trainer` are set AND the trainer has
+        published a ``current_batch_indices`` tensor (i.e. we are inside the
+        trainer's training batch loop), the AIRM target is
+        ``covs[indices] + jitter * I`` (avoiding the log-Eig → matrix-exp
+        round-trip). Otherwise — validation pass, dimension-curve eval, or
+        any external caller — the target is reconstructed from ``target``
+        via ``unpack_sym_vec``. The training-time path is the bit-exact one;
+        the val/eval path is the original round-trip (its small numerical
+        noise only affects monitoring, not gradients).
+        """
+        idx = self.trainer.current_batch_indices if self.trainer is not None else None
+        if self.covs is not None and idx is not None:
+            raw = self.covs.to(pred.device).index_select(0, idx)
+            c = raw + self._jitter_eye(raw.device, raw.dtype) if self.jitter > 0 else raw
+        else:
+            c = self._to_spd(target)
+            if self.jitter > 0:
+                c = c + self._jitter_eye(c.device, c.dtype)
         c_hat = self._to_spd(pred)
+        if self.jitter > 0:
+            c_hat = c_hat + self._jitter_eye(c_hat.device, c_hat.dtype)
         return airm_loss(c, c_hat, eps=self.eps, reduction="mean")
 
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:

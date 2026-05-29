@@ -65,6 +65,7 @@ class MatryoshkaTrainer:
     config: MatryoshkaConfig
     loss: LossStrategy
     sampler: MatryoshkaSampler
+    current_batch_indices: torch.Tensor | None
 
     def __init__(
         self,
@@ -76,6 +77,11 @@ class MatryoshkaTrainer:
         self.config = config or MatryoshkaConfig()
         self.loss = loss
         self.sampler = sampler if sampler is not None else _build_sampler(self.config)
+        # Per-batch seam: strategies that need to look up auxiliary data
+        # indexed by the batch's positions in the original training tensor
+        # (e.g. ``AIRMLoss(covs=...)``) read this. Set by ``_train_one_epoch``
+        # before each loss call and cleared after.
+        self.current_batch_indices = None
 
     def fit(
         self,
@@ -203,7 +209,7 @@ class MatryoshkaTrainer:
 
         return history
 
-    def _train_one_epoch(
+    def _train_one_epoch(  # noqa: PLR0915 (split would obscure single-epoch atomicity)
         self,
         *,
         module: IGLModule,
@@ -256,7 +262,13 @@ class MatryoshkaTrainer:
 
             output = phi @ w_k + module.bias
             target_batch = self.loss.target(y_batch)
-            task_loss = self.loss.loss(output, target_batch)
+            # Publish the batch indices so strategies indexed by the original
+            # tensor positions (e.g. ``AIRMLoss(covs=...)``) can look them up.
+            self.current_batch_indices = idx
+            try:
+                task_loss = self.loss.loss(output, target_batch)
+            finally:
+                self.current_batch_indices = None
 
             # Fold in any ExtraLoss regularizers (orthogonality, gate sparsity, etc.).
             for extra in extra_losses:
@@ -283,7 +295,56 @@ class MatryoshkaTrainer:
             epoch_loss += float(task_loss.item()) * int(idx.shape[0])
 
         history.truncation_k.append(k_sum / max(n_batches, 1))
+
+        # σ_max(J_encoder) diagnostic — opt-in via ``config.sigma_max_diagnostic``.
+        # Runs at the end of each training epoch in train mode (so BN's
+        # running stats update consistently with the reference trainer) and
+        # consumes exactly one ``randn(D)`` worth of global RNG. MUST live in
+        # ``_train_one_epoch`` and NOT in ``_validate_and_refresh`` — the
+        # latter is also called after early-stop best-state restoration, and
+        # re-running the σ_max forwards there would shift the post-restore
+        # BN buffers away from the reference. (See alex-eeg-igl's
+        # ``verify_diagnosis_seed42.py`` "Fix I" for the bug this avoids.)
+        if config.sigma_max_diagnostic:
+            self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
+
         return epoch_loss / max(n_samples, 1)
+
+    @staticmethod
+    def _sigma_max_diagnostic_step(
+        *,
+        module: IGLModule,
+        x_train: torch.Tensor,
+        device: torch.device,
+    ) -> None:
+        """End-of-epoch finite-difference σ_max(J_encoder) diagnostic.
+
+        Consumes one ``randn(D)`` worth of global RNG and runs two encoder
+        forwards in train mode. Both side effects match the reference EEG
+        trainer's discipline exactly — see
+        ``alex-eeg-igl/PACKAGE_REPRODUCIBILITY_ISSUES.md`` Issue 3.3.
+
+        Isolated as a static method so the noise from torch's partial stubs
+        (``torch.randn``, ``Tensor.norm``, ``Tensor.unsqueeze`` all return
+        ``Unknown | Tensor`` in basedpyright) lives behind one scoped pragma.
+        """
+        # pyright: ignore-file would be too coarse; the explicit casts here
+        # are what suppresses the Unknown-leakage on each torch call.
+        ref_n = min(32, x_train.shape[0])
+        x_ref = x_train[:ref_n].detach()
+        # ``torch.randn`` and ``Tensor.norm/unsqueeze`` return Unknown|Tensor
+        # in basedpyright's view of the torch stubs at the version we pin —
+        # we keep them as plain expressions and silence the leakage at the
+        # source. (Inline cast() would be cleaner but basedpyright then warns
+        # the cast is unnecessary; scoping per call is the least-bad form.)
+        v: torch.Tensor = torch.randn(x_train.shape[1], device=device)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        v_norm: torch.Tensor = v.norm()  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        v_unit: torch.Tensor = v / (v_norm + 1e-12)  # pyright: ignore[reportUnknownVariableType]
+        eps_fd = 1e-3
+        v_perturb: torch.Tensor = v_unit.unsqueeze(0)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        with torch.enable_grad():
+            _ = module.encoder(x_ref)
+            _ = module.encoder(x_ref + eps_fd * v_perturb)
 
     def _validate_and_refresh(
         self,

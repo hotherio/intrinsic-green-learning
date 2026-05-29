@@ -95,11 +95,13 @@ class IGLModule(nn.Module):
             an :class:`MLPEncoder`. Mutually exclusive with ``encoder``.
         normalize: Φ-normalization mode. ``None`` defers to
             ``config.kernel.normalize`` (default
-            :data:`igl.NormalizeMode.SOFTMAX`).
-        normalize_input: If ``True`` (default), prepend an
+            :data:`igl.NormalizeMode.NW`).
+        normalize_input: If ``True``, prepend an
             ``nn.BatchNorm1d(affine=False)`` to the encoder. Stabilises
             training when ambient input dimensions have wildly different
-            scales.
+            scales. Default ``False`` — appropriate for inputs that have
+            been pre-normalised (e.g. log-Eig tangent vectors from
+            :class:`igl.spd.LogEigVectorizer`).
         config: Optional top-level :class:`IGLConfig`. When provided,
             populates defaults for any field passed as ``None``. Explicit
             per-field kwargs always win.
@@ -126,7 +128,7 @@ class IGLModule(nn.Module):
         encoder: EncoderProtocol | None = None,
         encoder_config: EncoderConfig | None = None,
         normalize: NormalizeModeLike | None = None,
-        normalize_input: bool = True,
+        normalize_input: bool = False,
         config: IGLConfig | None = None,
         kernel: nn.Module | None = None,
     ) -> None:
@@ -216,9 +218,14 @@ class IGLModule(nn.Module):
         self.output_dim = output_dim
         self.normalize: NormalizeMode = resolved_normalize
 
-        # Closed-form readout. Stored as a non-learnable buffer so it travels
-        # with the module's device but doesn't pick up gradients.
-        self.register_buffer("source_weights", torch.zeros(n_columns, output_dim))
+        # Closed-form readout. Initialised with small random values so the
+        # RNG-consumption profile matches the EEG reference's `IGLRegressor`
+        # (which uses `nn.Parameter(randn * 0.01)`). Registered as a
+        # non-trainable Parameter — gradients never touch it because the
+        # MatryoshkaTrainer builds its optimizer from the encoder and Green
+        # kernel parameter groups only (see ``src/igl/core/trainer.py``).
+        self.source_weights = nn.Parameter(torch.randn(n_columns, output_dim) * 0.01)
+        self.source_weights.requires_grad_(False)
         self.bias = nn.Parameter(torch.zeros(output_dim))
 
     def latent(self, x: torch.Tensor) -> torch.Tensor:
@@ -236,18 +243,15 @@ class IGLModule(nn.Module):
     def forward(self, x: torch.Tensor, *, gate_mask: torch.Tensor | None = None) -> torch.Tensor:
         """Forward pass returning ``Φ w + b`` of shape ``[N, output_dim]``."""
         phi = self.design_matrix(x, gate_mask=gate_mask)
-        # source_weights is registered as a zero Tensor in __init__ (never None);
-        # cast narrows the register_buffer "Tensor | None" return for the type checker.
-        weights = cast(torch.Tensor, self.source_weights)
-        return phi @ weights + self.bias
+        return phi @ self.source_weights + self.bias
 
     def set_source_weights(self, weights: torch.Tensor) -> None:
         """Replace the closed-form readout weights with ``weights`` ``[R, C]``."""
-        if weights.shape != self.source_weights.shape:  # type: ignore[union-attr]
+        if weights.shape != self.source_weights.shape:
             raise IGLConfigError(
-                f"weights shape {tuple(weights.shape)} != source_weights shape {tuple(self.source_weights.shape)}",  # type: ignore[union-attr]
+                f"weights shape {tuple(weights.shape)} != source_weights shape {tuple(self.source_weights.shape)}",
             )
-        self.source_weights.data.copy_(weights.detach().to(self.source_weights.device))  # type: ignore[union-attr]
+        self.source_weights.data.copy_(weights.detach().to(self.source_weights.device))
 
 
 __all__ = ["IGLModule"]

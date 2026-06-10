@@ -9,7 +9,7 @@
       
       
       
-        <link rel="prev" href="../nn/">
+        <link rel="prev" href="../preprocessing/">
       
       
         <link rel="next" href="../spectral/">
@@ -534,6 +534,8 @@
       
         
       
+        
+      
     
     
       
@@ -760,6 +762,27 @@
   
   <span class="md-ellipsis">
     igl.nn
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../preprocessing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    igl.preprocessing
   </span>
   
 
@@ -1017,6 +1040,24 @@
   <a href="#igl.spd.orthogonality.init_encoder_orthogonal_" class="md-nav__link">
     <span class="md-ellipsis">
       init_encoder_orthogonal_
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preconditioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preconditioning
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.spd.preconditioning.precondition" class="md-nav__link">
+    <span class="md-ellipsis">
+      precondition
     </span>
   </a>
   
@@ -2770,6 +2811,148 @@ flows back to the encoder parameters so the penalty actually updates them.</p>
 
     </div>
 
+</div><h2 id="preconditioning">Preconditioning</h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.spd.preconditioning.precondition" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">preconditioning</span><span class="o">.</span><span class="n">precondition</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">PreconditionMode</span><span class="o">.</span><span class="n">TIKHONOV</span><span class="p">,</span> <span class="n">epsilon</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Apply SPD-side preconditioning to a batch of covariance matrices.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>c</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>[..., d, d]</code> batched SPD matrices. The last two dims must be
+the matrix dimensions; any leading dims are batched.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mode</code>
+            </td>
+            <td>
+                  <code><span title="igl.types.PreconditionModeLike">PreconditionModeLike</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which preconditioner to apply. Strings are accepted via the
+:class:<code>PreconditionModeLike</code> alias and coerced through the
+enum at entry.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="igl.types.PreconditionMode.TIKHONOV">TIKHONOV</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>epsilon</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Ridge magnitude for the Tikhonov branches. Ignored for
+<code>NONE</code> / <code>TRACE</code>. Default <code>1e-6</code> is the value
+characterised in the memo as universally safe.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-06</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>[..., d, d]</code> preconditioned SPD matrices, on the same device</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>and dtype as <code>c</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For an unknown <code>mode</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
 </div><h2 id="reconstruction-classifier">Reconstruction classifier</h2>
 
 
@@ -3019,6 +3202,48 @@ numbers that were produced with the reference trainer's bare
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>precondition</code>
+            </td>
+            <td>
+                  <code><span title="igl.types.PreconditionModeLike">PreconditionModeLike</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>SPD-side preconditioning applied to every input
+covariance before AIRM. Default <code>"tikhonov"</code>: bit-identical
+to <code>"none"</code> at <code>d ≤ 64</code> (the encoder BatchNorm absorbs the
+constant offset) and rescues <code>torch.linalg.eigh</code> from LAPACK
+error 8481 at <code>d ≥ 128</code>. See
+:class:<code>igl.PreconditionMode</code> for the full mode catalogue and
+<code>alex-eeg-igl/MAINTAINER_MEMO_lwf_tikh_rules.md</code> for the
+empirical justification.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="igl.types.PreconditionMode.TIKHONOV">TIKHONOV</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>precondition_epsilon</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Ridge magnitude for the Tikhonov branches
+of <code>precondition</code>. Default <code>1e-6</code> is the value
+characterised in the memo as universally safe across the
+tested datasets.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-06</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>config</code>
             </td>
             <td>
@@ -3126,6 +3351,29 @@ wrappers — measured in AIRM-curve-score space.</p>
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.spd.reconstruction.IGLReconSPDClassifier.precondition_mode_">precondition_mode_</span></code></td>
+            <td>
+                  <code><span title="effective_dimension_">effective_dimension_</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The resolved :class:<code>PreconditionMode</code> actually
+applied at fit time (round-trips through pickle).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.spd.reconstruction.IGLReconSPDClassifier.precondition_epsilon_">precondition_epsilon_</span></code></td>
+            <td>
+                  <code><span title="effective_dimension_">effective_dimension_</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The ridge value actually used at fit time.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -3181,7 +3429,14 @@ wrappers — measured in AIRM-curve-score space.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Log-Eig vectors <code>[N, d * (d + 1) / 2]</code>.</p>
+                <p>Either log-Eig vectors <code>[N, d * (d + 1) / 2]</code> (the
+original API) or raw SPD matrices <code>[N, d, d]</code>. When <code>x</code>
+is SPD-shaped, it is vectorized internally via
+:class:<code>igl.spd.LogEigVectorizer</code> and <em>also</em> reused as the
+AIRM target (<code>covs</code> defaults to <code>x</code> in that case).
+This makes the wrapper drop-in compatible with sklearn
+pipelines that emit SPDs upstream (e.g.
+:func:<code>igl.make_igl_airm</code>).</p>
               </div>
             </td>
             <td>
@@ -3218,7 +3473,8 @@ When provided, AIRM uses <code>covs[batch_indices] + jitter * I</code>
 directly as the reconstruction target, bypassing the
 log-Eig → matrix-exp round-trip and the ~1e-6 element-wise
 noise it introduces. Required for bit-exact reproduction of
-AIRM-recon results from the reference trainer.</p>
+AIRM-recon results from the reference trainer. Ignored
+when <code>x</code> is SPD-shaped (then <code>x</code> itself is the target).</p>
               </div>
             </td>
             <td>
@@ -3243,7 +3499,7 @@ AIRM-recon results from the reference trainer.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Predict class labels.</p>
+        <p>Predict class labels. Accepts log-Eig vectors or raw SPDs.</p>
 
     </div>
 

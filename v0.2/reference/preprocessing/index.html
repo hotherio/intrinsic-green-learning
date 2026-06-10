@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../kernels/">
+        <link rel="prev" href="../nn/">
       
       
-        <link rel="next" href="../models/">
+        <link rel="next" href="../spd/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>igl.matryoshka - Intrinsic Green Learning</title>
+        <title>igl.preprocessing - Intrinsic Green Learning</title>
       
     
     
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#iglmatryoshka" class="md-skip">
+        <a href="#iglpreprocessing" class="md-skip">
           Skip to content
         </a>
       
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              igl.matryoshka
+              igl.preprocessing
             
           </span>
         </div>
@@ -691,30 +691,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    igl.matryoshka
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../matryoshka/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -723,62 +703,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.sampler.UniformSampler" class="md-nav__link">
-    <span class="md-ellipsis">
-      UniformSampler
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.sampler.PowerLawSampler" class="md-nav__link">
-    <span class="md-ellipsis">
-      PowerLawSampler
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.dimension_curve.eval_dimension_curve" class="md-nav__link">
-    <span class="md-ellipsis">
-      eval_dimension_curve
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.dimension_curve.detect_elbow" class="md-nav__link">
-    <span class="md-ellipsis">
-      detect_elbow
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -851,10 +775,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../preprocessing/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    igl.preprocessing
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -863,6 +807,77 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#auto-covariances" class="md-nav__link">
+    <span class="md-ellipsis">
+      Auto covariances
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.preprocessing.covariances.AutoCovariances" class="md-nav__link">
+    <span class="md-ellipsis">
+      AutoCovariances
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AutoCovariances">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.preprocessing.covariances.AutoCovariances.fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      fit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.preprocessing.covariances.AutoCovariances.transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      transform
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.preprocessing.covariances.CovarianceEstimator" class="md-nav__link">
+    <span class="md-ellipsis">
+      CovarianceEstimator
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1261,73 +1276,43 @@
                   
 
 
-<h1 id="iglmatryoshka"><code>igl.matryoshka</code></h1>
-<p>Truncation samplers and post-fit dimension-curve helpers.</p>
+<h1 id="iglpreprocessing"><code>igl.preprocessing</code></h1>
+<p>Sklearn-compatible preprocessing transformers for EEG / SPD-valued
+data. Subpackage gated behind the <code>[eeg]</code> extra (which ships
+<code>pyriemann</code>); plain installs will raise
+<a class="autorefs autorefs-internal" href="../exceptions/#igl.exceptions.IGLDependencyError"><code>IGLDependencyError</code></a> on import.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip install intrinsic-green-learning[eeg]
+</code></pre></div>
+<h2 id="auto-covariances">Auto covariances</h2>
 
 
 <div class="doc doc-object doc-class">
 
 
 
-<h2 id="igl.matryoshka.sampler.UniformSampler" class="doc doc-heading">
-            <code>igl.matryoshka.sampler.UniformSampler</code>
+<h2 id="igl.preprocessing.covariances.AutoCovariances" class="doc doc-heading">
+            <code>igl.preprocessing.covariances.AutoCovariances</code>
 
 
 </h2>
 
 
     <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="sklearn.base.BaseEstimator">BaseEstimator</span></code>, <code><span title="sklearn.base.TransformerMixin">TransformerMixin</span></code></p>
 
 
-        <p>Uniform sampler: <code>k ~ Uniform{1, …, d_max}</code>.</p>
-<p>The simplest Matryoshka sampling strategy, and the default. It gives equal
-weight to all truncation levels and lets the encoder discover the true
-intrinsic dimension without prior bias.</p>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.matryoshka.sampler.PowerLawSampler" class="doc doc-heading">
-            <code>igl.matryoshka.sampler.PowerLawSampler</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-        <p>Power-law sampler: <code>P(k) ∝ k^{-α}</code>.</p>
-<p>Useful when prior knowledge suggests the effective dimension is small —
-biases sampling toward lower truncation levels so the encoder is more
-aggressively forced to compress.</p>
+        <p>Choose Ledoit-Wolf or sample covariance automatically.</p>
+<p>Heuristic derived empirically on MOABB motor-imagery datasets at 128 Hz
+(see <code>alex-eeg-igl</code> §6.5): per-trial sample covariance is statistically
+rank-marginal when the trial has fewer than ~500 time samples, so LWF
+shrinkage helps; above that threshold sample covariance is well-
+estimated and unshrunk covariance preserves discriminative spectrum
+structure that LWF would flatten.</p>
+<p>Decision is made once at :meth:<code>fit</code> time based on the training
+batch's last dimension, and applied consistently to every subsequent
+:meth:<code>transform</code> call. Mixing trial lengths within a pipeline is
+unsupported (standard sklearn convention).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1343,340 +1328,168 @@ aggressively forced to compress.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>alpha</code>
+                <code>T_threshold</code>
             </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Exponent (must be positive). Larger <code>alpha</code> puts more mass on
-small <code>k</code>. Default <code>1.0</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>1.0</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="igl.matryoshka.dimension_curve.eval_dimension_curve" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">matryoshka</span><span class="o">.</span><span class="n">dimension_curve</span><span class="o">.</span><span class="n">eval_dimension_curve</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_val</span><span class="p">,</span> <span class="n">y_val</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">source_l2</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span></code>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-        <p>Evaluate the trained module at every truncation level <code>k</code>.</p>
-<p>For each <code>k</code>, freshly solves the readout weights via lstsq using only the
-first <code>k</code> latent dimensions, then computes the validation metric. Returns
-a <code>{k: metric}</code> mapping. The mapping iterates <code>k = 1, 2, …, d_max</code> in
-insertion order.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>module</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.nn.module.IGLModule" href="../nn/#igl.nn.module.IGLModule">IGLModule</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Trained :class:<code>IGLModule</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>x_val</code>
-            </td>
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Validation inputs <code>[N, D]</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>y_val</code>
-            </td>
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Validation targets.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>loss</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.types.LossStrategy" href="../types/#igl.types.LossStrategy">LossStrategy</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Loss strategy used to compute the per-<code>k</code> metric.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>source_l2</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Tikhonov regularisation forwarded to
-:func:<code>igl.direct_solve_weights</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.001</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A dict mapping <code>k → curve_score</code> where <code>curve_score</code> is whatever</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The curve score is always lower-is-better so :func:<code>detect_elbow</code></p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>can locate the knee.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="igl.matryoshka.dimension_curve.detect_elbow" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">matryoshka</span><span class="o">.</span><span class="n">dimension_curve</span><span class="o">.</span><span class="n">detect_elbow</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span></code>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-        <p>Locate the elbow of a dimension/loss curve in log-space.</p>
-<p>Operates on <code>log(loss)</code> so a 5× loss reduction has the same log-delta
-whether it occurs at <code>loss=0.1</code> or <code>loss=0.001</code>. Returns the largest
-<code>k</code> whose log-reduction exceeds <code>max_log_delta / ratio</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>curve</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>{k: loss}</code> mapping (from :func:<code>eval_dimension_curve</code>).
-Must contain at least one entry.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>ratio</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A reduction must be at least <code>max_log_delta / ratio</code> to count
-as substantial. Default <code>2.0</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>2.0</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The estimated intrinsic dimension <code>d_eff</code>.</p>
+                <p>Trial length below which LWF is selected. The
+empirical 500 default was tuned at 128 Hz on EEG motor
+imagery; modalities at other sampling rates may need to
+override. See the memo's "Out of scope" section.</p>
               </div>
+            </td>
+            <td>
+                  <code><span title="igl.preprocessing.covariances._DEFAULT_T_THRESHOLD">_DEFAULT_T_THRESHOLD</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>force</code>
+            </td>
+            <td>
+                  <code><span title="igl.preprocessing.covariances.CovarianceEstimatorLike">CovarianceEstimatorLike</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Override the heuristic. <code>"auto"</code> (default) applies the
+heuristic; <code>"lwf"</code> / <code>"cov"</code> act as plain
+:class:<code>pyriemann.estimation.Covariances</code> passthrough.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="igl.preprocessing.covariances.CovarianceEstimator.AUTO">AUTO</span></code>
             </td>
           </tr>
       </tbody>
     </table>
 
 
-<p><span class="doc-section-title">Raises:</span></p>
+<p><span class="doc-section-title">Attributes:</span></p>
     <table>
       <thead>
         <tr>
+          <th>Name</th>
           <th>Type</th>
           <th>Description</th>
         </tr>
       </thead>
       <tbody>
           <tr class="doc-section-item">
+            <td><code><span title="igl.preprocessing.covariances.AutoCovariances.estimator_">estimator_</span></code></td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>curve</code> is empty or <code>ratio &lt;= 0</code>.</p>
+                <p>The pyriemann estimator name (<code>"lwf"</code> or <code>"cov"</code>)
+actually selected at fit time.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.preprocessing.covariances.AutoCovariances.fit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pick the estimator from <code>x.shape[-1]</code> and fit the inner <code>Covariances</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.preprocessing.covariances.AutoCovariances.transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">transform</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Compute the SPD batch from raw signals via the fitted estimator.</p>
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.preprocessing.covariances.CovarianceEstimator" class="doc doc-heading">
+            <code>igl.preprocessing.covariances.CovarianceEstimator</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-external" title="enum.StrEnum" href="https://docs.python.org/3/library/enum.html#enum.StrEnum">StrEnum</a></code></p>
+
+
+        <p>Pyriemann estimator identifier accepted by :class:<code>AutoCovariances</code>.</p>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 

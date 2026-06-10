@@ -539,6 +539,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="SPD / covariance-valued data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommended-eeg-path-make_igl_airm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommended EEG path: make_igl_airm
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -607,6 +622,8 @@
       
         
           
+        
+      
         
       
         
@@ -858,6 +875,27 @@
   
   <span class="md-ellipsis">
     igl.nn
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/preprocessing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    igl.preprocessing
   </span>
   
 
@@ -1376,33 +1414,57 @@ flatly:</p>
 <a class="autorefs autorefs-internal" href="../reference/spd/#igl.spd.orthogonality.OrthogonalityPenalty"><code>OrthogonalityPenalty</code></a> into the stage-A
 training loop via the trainer's
 <a class="autorefs autorefs-internal" href="../reference/types/#igl.types.ExtraLoss"><code>ExtraLoss</code></a> seam.</p>
+<h3 id="recommended-eeg-path-make_igl_airm">Recommended EEG path: <code>make_igl_airm</code></h3>
+<p>When the input is raw signal <code>[N, channels, time]</code> rather than
+SPDs already, the [<code>make_igl_airm</code>][igl.make_igl_airm] factory
+composes the recommended defaults from the maintainer memo into a
+single sklearn pipeline:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">igl</span>  <span class="c1"># requires: pip install intrinsic-green-learning[eeg]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">pipe</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">make_igl_airm</span><span class="p">(</span><span class="n">latent_dim</span><span class="o">=</span><span class="mi">22</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">pipe</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_raw</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</code></pre></div>
+<p><code>make_igl_airm</code> chains:</p>
+<ol>
+<li><a class="autorefs autorefs-internal" href="../reference/preprocessing/#igl.preprocessing.covariances.AutoCovariances"><code>AutoCovariances</code></a> — Ledoit-Wolf
+   for trial length <code>T &lt; 500</code>, sample covariance otherwise. Threshold
+   picked at fit time and frozen.</li>
+<li><a class="autorefs autorefs-internal" href="../reference/spd/#igl.spd.reconstruction.IGLReconSPDClassifier"><code>IGLReconSPDClassifier</code></a> with
+   Tikhonov ε = 10⁻⁶ preconditioning. Bit-near-identical to no
+   preconditioning at <code>d ≤ 64</code> (with a BatchNorm encoder) and
+   rescues <code>torch.linalg.eigh</code> from LAPACK error 8481 at <code>d ≥ 128</code>.</li>
+</ol>
+<p>Override either default through <code>**kwargs</code> — e.g. <code>precondition="none"</code>
+disables preconditioning, <code>precondition="tikhonov+trace"</code> adds trace
+normalisation on top. See the
+[<code>PreconditionMode</code>][igl.PreconditionMode] enum for the full set.</p>
 <h2 id="custom-training-loops">Custom training loops</h2>
 <p>If you need finer control than the sklearn surface, compose the
 building blocks directly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">igl</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">module</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">IGLModule</span><span class="p">(</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">input_dim</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">max_dim</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">output_dim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">config</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">IGLConfig</span><span class="p">(</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">encoder</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">EncoderConfig</span><span class="p">(</span><span class="n">hidden</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">)),</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="n">kernel</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">KernelConfig</span><span class="p">(</span><span class="n">n_anchors</span><span class="o">=</span><span class="mi">64</span><span class="p">),</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="p">),</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">)</span>
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">MatryoshkaTrainer</span><span class="p">(</span>
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">loss</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">config</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">MatryoshkaConfig</span><span class="p">(</span><span class="n">epochs</span><span class="o">=</span><span class="mi">500</span><span class="p">),</span>
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="p">)</span>
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
-<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">x_t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
-<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">y_t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">y_np</span><span class="p">)</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
-<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="n">history</span> <span class="o">=</span> <span class="n">trainer</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span><span class="p">)</span>
-<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="n">curve</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">eval_dimension_curve</span><span class="p">(</span>
-<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    <span class="n">module</span><span class="p">,</span> <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
-<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="p">)</span>
-<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;d_eff =&quot;</span><span class="p">,</span> <span class="n">igl</span><span class="o">.</span><span class="n">detect_elbow</span><span class="p">(</span><span class="n">curve</span><span class="p">))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">igl</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">module</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">IGLModule</span><span class="p">(</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">input_dim</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">max_dim</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">output_dim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">config</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">IGLConfig</span><span class="p">(</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="n">encoder</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">EncoderConfig</span><span class="p">(</span><span class="n">hidden</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">)),</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="n">kernel</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">KernelConfig</span><span class="p">(</span><span class="n">n_anchors</span><span class="o">=</span><span class="mi">64</span><span class="p">),</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="p">),</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">)</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">MatryoshkaTrainer</span><span class="p">(</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">loss</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">config</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">MatryoshkaConfig</span><span class="p">(</span><span class="n">epochs</span><span class="o">=</span><span class="mi">500</span><span class="p">),</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="p">)</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">x_t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">y_t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">y_np</span><span class="p">)</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="n">history</span> <span class="o">=</span> <span class="n">trainer</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span><span class="p">)</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="n">curve</span> <span class="o">=</span> <span class="n">igl</span><span class="o">.</span><span class="n">eval_dimension_curve</span><span class="p">(</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="n">module</span><span class="p">,</span> <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span><span class="p">,</span> <span class="n">loss</span><span class="o">=</span><span class="n">igl</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">n_classes</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="p">)</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;d_eff =&quot;</span><span class="p">,</span> <span class="n">igl</span><span class="o">.</span><span class="n">detect_elbow</span><span class="p">(</span><span class="n">curve</span><span class="p">))</span>
 </code></pre></div>
 <p>You can drop in a custom <a class="autorefs autorefs-internal" href="../reference/types/#igl.types.LossStrategy"><code>LossStrategy</code></a> (e.g.
 <a class="autorefs autorefs-internal" href="../reference/spd/#igl.spd.airm.AIRMLoss"><code>igl.spd.AIRMLoss</code></a>) and one or more
@@ -1410,14 +1472,14 @@ building blocks directly:</p>
 <code>trainer.fit(..., extra_losses=[...])</code>.</p>
 <h2 id="plotting">Plotting</h2>
 <p>With the <code>[viz]</code> extra installed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">igl.viz</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_dimension_curve</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">ax</span> <span class="o">=</span> <span class="n">plot_dimension_curve</span><span class="p">(</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">clf</span><span class="o">.</span><span class="n">dimension_curve_</span><span class="p">,</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">elbow</span><span class="o">=</span><span class="n">clf</span><span class="o">.</span><span class="n">effective_dimension_</span><span class="p">,</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;moons → classifier&quot;</span><span class="p">,</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="p">)</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">ax</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s2">&quot;curve.png&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">igl.viz</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_dimension_curve</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">ax</span> <span class="o">=</span> <span class="n">plot_dimension_curve</span><span class="p">(</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">clf</span><span class="o">.</span><span class="n">dimension_curve_</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">elbow</span><span class="o">=</span><span class="n">clf</span><span class="o">.</span><span class="n">effective_dimension_</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;moons → classifier&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">)</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">ax</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s2">&quot;curve.png&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="next-steps">Next steps</h2>
 <ul>

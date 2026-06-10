@@ -73,6 +73,13 @@ Riemannian extension for SPD-valued data. Not flattened into the top-level
       show_root_heading: true
       show_source: false
 
+## Preconditioning
+
+::: igl.spd.preconditioning.precondition
+    options:
+      show_root_heading: true
+      show_source: false
+
 ## Reconstruction classifier
 
 ::: igl.spd.reconstruction.IGLReconSPDClassifier

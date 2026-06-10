@@ -97,6 +97,32 @@ NormalizeModeLiteral = Literal["none", "softmax", "l2", "nw"]
 type NormalizeModeLike = NormalizeMode | NormalizeModeLiteral
 
 
+class PreconditionMode(StrEnum):
+    """SPD-side preconditioning applied to input covariances before AIRM.
+
+    - ``NONE``: passthrough (legacy behaviour).
+    - ``TIKHONOV``: ``C + epsilon * I``. Default. Bit-identical to ``NONE``
+      at ``d ≤ 64`` (BatchNorm absorbs the constant offset) and rescues
+      ``torch.linalg.eigh`` from LAPACK error 8481 at ``d ≥ 128``. See
+      ``alex-eeg-igl/report/third_summary_report.tex`` §3.
+    - ``TRACE``: per-matrix trace-normalisation ``C / trace(C) * d``.
+      Exposed for completeness; *not* recommended as a global default —
+      drops AUC by up to 0.05 on small-d datasets.
+    - ``TIKHONOV_TRACE``: trace then tikhonov. Exposed; not recommended.
+    """
+
+    NONE = "none"
+    TIKHONOV = "tikhonov"
+    TRACE = "trace"
+    TIKHONOV_TRACE = "tikhonov+trace"
+
+
+PreconditionModeLiteral = Literal["none", "tikhonov", "trace", "tikhonov+trace"]
+"""Literal companion of :class:`PreconditionMode`."""
+
+type PreconditionModeLike = PreconditionMode | PreconditionModeLiteral
+
+
 class NormType(StrEnum):
     """Normalization layer inserted after each hidden ``Linear`` of an MLP encoder."""
 
@@ -385,6 +411,9 @@ __all__ = [
     "OperatorName",
     "OperatorNameLike",
     "OperatorNameLiteral",
+    "PreconditionMode",
+    "PreconditionModeLike",
+    "PreconditionModeLiteral",
     "SamplingMode",
     "SamplingModeLike",
     "SamplingModeLiteral",

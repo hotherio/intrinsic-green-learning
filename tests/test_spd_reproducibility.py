@@ -17,7 +17,15 @@ import torch
 from torch import nn
 
 import igl
-from igl import IGLConfig, IGLConfigError, KernelConfig, MatryoshkaConfig, NormalizeMode
+from igl import (
+    EncoderConfig,
+    IGLConfig,
+    IGLConfigError,
+    KernelConfig,
+    MatryoshkaConfig,
+    NormalizeMode,
+    PreconditionMode,
+)
 from igl.core.trainer import MatryoshkaTrainer
 from igl.data import make_spd_dataset
 from igl.nn.module import IGLModule
@@ -39,10 +47,10 @@ def spd_xy() -> tuple[np.ndarray, np.ndarray, torch.Tensor]:
     return np.asarray(vec, dtype=np.float64), y_t.numpy(), spd
 
 
-def _fast_config(epochs: int = 6) -> IGLConfig:
+def _fast_config(epochs: int = 6, *, encoder: EncoderConfig | None = None) -> IGLConfig:
     """Tiny config for fast integration runs in the test suite."""
-    return IGLConfig(
-        matryoshka=MatryoshkaConfig(
+    kwargs: dict[str, object] = {
+        "matryoshka": MatryoshkaConfig(
             epochs=epochs,
             batch_size=16,
             inner_batch_size=64,
@@ -50,7 +58,123 @@ def _fast_config(epochs: int = 6) -> IGLConfig:
             early_stop_patience=None,
             verbose=False,
         ),
+    }
+    if encoder is not None:
+        kwargs["encoder"] = encoder
+    return IGLConfig(**kwargs)  # type: ignore[arg-type]
+
+
+# --- Issue 5: Tikhonov preconditioning default ------------------------------
+
+
+def test_issue_5__tikhonov_default_is_no_op_on_well_conditioned_spd(
+    spd_xy: tuple[np.ndarray, np.ndarray, torch.Tensor],
+) -> None:
+    """Tikhonov at ε=1e-6 is a no-op on well-conditioned SPD when the
+    encoder uses BatchNorm — the constant ε·I offset is absorbed by the
+    affine renormalisation (memo §3, d ≤ 64). Test data has min eigenvalue
+    ≫ 10⁻⁶ so the spectrum perturbation is below float32 noise.
+    """
+    x, y, raw = spd_xy
+    # BatchNorm encoder — required for the memo's bit-near-identity claim;
+    # LayerNorm normalises per-sample and does not absorb a global offset.
+    enc = EncoderConfig(norm="batch")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        clf_none = IGLReconSPDClassifier(
+            latent_dim=4,
+            max_dim=4,
+            n_anchors=8,
+            n_scales=2,
+            precondition="none",
+            random_state=0,
+            config=_fast_config(epochs=3, encoder=enc),
+        ).fit(x, y, covs=raw)
+        clf_tik = IGLReconSPDClassifier(
+            latent_dim=4,
+            max_dim=4,
+            n_anchors=8,
+            n_scales=2,
+            precondition="tikhonov",
+            precondition_epsilon=1e-6,
+            random_state=0,
+            config=_fast_config(epochs=3, encoder=enc),
+        ).fit(x, y, covs=raw)
+
+    tik_params = dict(clf_tik.module_.encoder.named_parameters())
+    for name, p_none in clf_none.module_.encoder.named_parameters():
+        assert torch.allclose(p_none, tik_params[name], rtol=0, atol=1e-2), name
+
+
+def test_issue_5__recon_spd_default_precondition_is_tikhonov() -> None:
+    """``precondition`` defaults to PreconditionMode.TIKHONOV on the SPD wrapper."""
+    clf = IGLReconSPDClassifier(latent_dim=4)
+    assert PreconditionMode(clf.precondition) is PreconditionMode.TIKHONOV
+    assert clf.precondition_epsilon == pytest.approx(1e-6)
+
+
+def test_issue_5__fitted_attrs_round_trip_through_pickle(
+    spd_xy: tuple[np.ndarray, np.ndarray, torch.Tensor],
+) -> None:
+    """``precondition_mode_`` / ``precondition_epsilon_`` survive pickle."""
+    import pickle  # noqa: PLC0415
+
+    x, y, _ = spd_xy
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        clf = IGLReconSPDClassifier(
+            latent_dim=4,
+            max_dim=4,
+            n_anchors=8,
+            n_scales=2,
+            precondition="tikhonov",
+            precondition_epsilon=2e-5,
+            random_state=0,
+            config=_fast_config(epochs=2),
+        ).fit(x, y)
+
+    rt = pickle.loads(pickle.dumps(clf))
+    assert rt.precondition_mode_ is PreconditionMode.TIKHONOV
+    assert rt.precondition_epsilon_ == pytest.approx(2e-5)
+
+
+def test_issue_5__rejects_negative_epsilon() -> None:
+    with pytest.raises(IGLConfigError, match="precondition_epsilon"):
+        IGLReconSPDClassifier(latent_dim=4, precondition_epsilon=-1.0)
+
+
+def test_issue_5__make_igl_airm_factory_runs() -> None:
+    """Smoke test the make_igl_airm factory end-to-end with the [eeg] extra."""
+    pytest.importorskip("pyriemann")
+    rng = np.random.default_rng(0)
+    n, d, t = 10, 4, 100
+    x_raw = rng.standard_normal((n, d, t)).astype(np.float64)
+    y = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+
+    pipe = igl.make_igl_airm(
+        latent_dim=d,
+        max_dim=d,
+        n_anchors=4,
+        n_scales=2,
+        config=igl.IGLConfig(
+            matryoshka=igl.MatryoshkaConfig(
+                epochs=2,
+                batch_size=4,
+                inner_batch_size=8,
+                scheduler="none",
+                early_stop_patience=None,
+                verbose=False,
+            ),
+        ),
+        random_state=0,
     )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        pipe.fit(x_raw, y)
+
+    autocov_step, clf_step = pipe.steps[0][1], pipe.steps[1][1]
+    assert autocov_step.estimator_ == "lwf"  # T=100 < 500
+    assert clf_step.precondition_mode_ is PreconditionMode.TIKHONOV
 
 
 # --- Issue 1.1 + 2.1: normalize_input default + wrapper kwarg ----------------

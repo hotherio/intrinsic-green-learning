@@ -42,17 +42,33 @@ from igl.exceptions import IGLConfigError, IGLNotFittedError
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.nn.module import IGLModule
 from igl.spd.airm import AIRMLoss
+from igl.spd.log_eig import LogEigVectorizer
 from igl.spd.orthogonality import OrthogonalityPenalty
-from igl.types import NormalizeModeLike
+from igl.spd.preconditioning import precondition
+from igl.types import NormalizeModeLike, PreconditionMode, PreconditionModeLike
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 _MIN_CLASSES = 2
+_SPD_NDIM = 3
 
 
 def _vec_dim_for(latent_dim: int) -> int:
     return latent_dim * (latent_dim + 1) // 2
+
+
+def _looks_like_spd_batch(x: NDArray[np.floating]) -> bool:
+    """``True`` iff ``x`` has shape ``[N, d, d]`` (square last two axes).
+
+    Lets :meth:`IGLReconSPDClassifier.fit` / :meth:`.predict` accept either
+    log-Eig vectors (the original 2-D API) or raw SPD matrices (so the
+    sklearn pipeline built by :func:`igl.make_igl_airm` works without an
+    explicit :class:`LogEigVectorizer` step). The square-shape check is
+    sufficient: the input pipeline never returns ``[N, d1, d2]`` with
+    ``d1 != d2``.
+    """
+    return x.ndim == _SPD_NDIM and x.shape[-1] == x.shape[-2]
 
 
 class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
@@ -94,6 +110,18 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             instead — required for bit-exact reproduction of EEG headline
             numbers that were produced with the reference trainer's bare
             ``torch.manual_seed`` discipline.
+        precondition: SPD-side preconditioning applied to every input
+            covariance before AIRM. Default ``"tikhonov"``: bit-identical
+            to ``"none"`` at ``d ≤ 64`` (the encoder BatchNorm absorbs the
+            constant offset) and rescues ``torch.linalg.eigh`` from LAPACK
+            error 8481 at ``d ≥ 128``. See
+            :class:`igl.PreconditionMode` for the full mode catalogue and
+            ``alex-eeg-igl/MAINTAINER_MEMO_lwf_tikh_rules.md`` for the
+            empirical justification.
+        precondition_epsilon: Ridge magnitude for the Tikhonov branches
+            of ``precondition``. Default ``1e-6`` is the value
+            characterised in the memo as universally safe across the
+            tested datasets.
         config: Optional :class:`igl.IGLConfig`. Explicit kwargs above
             override its values.
         random_state: Optional integer seed.
@@ -106,6 +134,9 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         readout_: The fitted :class:`sklearn.linear_model.LogisticRegression`.
         dimension_curve_, effective_dimension_: Same as the Euclidean
             wrappers — measured in AIRM-curve-score space.
+        precondition_mode_: The resolved :class:`PreconditionMode` actually
+            applied at fit time (round-trips through pickle).
+        precondition_epsilon_: The ridge value actually used at fit time.
     """
 
     latent_dim: int
@@ -120,6 +151,8 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
     normalize: NormalizeModeLike | None
     validation_fraction: float
     fork_rng: bool
+    precondition: PreconditionModeLike
+    precondition_epsilon: float
     config: IGLConfig | None
     random_state: int | None
 
@@ -138,6 +171,8 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         normalize: NormalizeModeLike | None = None,
         validation_fraction: float = 0.2,
         fork_rng: bool = True,
+        precondition: PreconditionModeLike = PreconditionMode.TIKHONOV,
+        precondition_epsilon: float = 1e-6,
         config: IGLConfig | None = None,
         random_state: int | None = None,
     ) -> None:
@@ -146,6 +181,10 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         if not 0.0 < validation_fraction < 1.0:
             raise IGLConfigError(
                 f"validation_fraction must be in (0, 1), got {validation_fraction}",
+            )
+        if precondition_epsilon < 0:
+            raise IGLConfigError(
+                f"precondition_epsilon must be >= 0, got {precondition_epsilon}",
             )
         self.latent_dim = latent_dim
         self.max_dim = max_dim
@@ -159,8 +198,14 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.normalize = normalize
         self.validation_fraction = validation_fraction
         self.fork_rng = fork_rng
+        self.precondition = precondition
+        self.precondition_epsilon = precondition_epsilon
         self.config = config
         self.random_state = random_state
+
+    def _precondition(self, c: torch.Tensor) -> torch.Tensor:
+        """Apply the configured SPD preconditioning to a ``covs`` tensor."""
+        return precondition(c, mode=self.precondition, epsilon=self.precondition_epsilon)
 
     def _resolve_encoder_config(self) -> EncoderConfig:
         base = self.config.encoder if self.config is not None else EncoderConfig()
@@ -241,15 +286,34 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         """Fit both stages.
 
         Args:
-            x: Log-Eig vectors ``[N, d * (d + 1) / 2]``.
+            x: Either log-Eig vectors ``[N, d * (d + 1) / 2]`` (the
+                original API) or raw SPD matrices ``[N, d, d]``. When ``x``
+                is SPD-shaped, it is vectorized internally via
+                :class:`igl.spd.LogEigVectorizer` and *also* reused as the
+                AIRM target (``covs`` defaults to ``x`` in that case).
+                This makes the wrapper drop-in compatible with sklearn
+                pipelines that emit SPDs upstream (e.g.
+                :func:`igl.make_igl_airm`).
             y: Integer class labels ``[N]``.
             covs: Optional raw SPD targets ``[N, d, d]`` aligned with ``x``.
                 When provided, AIRM uses ``covs[batch_indices] + jitter * I``
                 directly as the reconstruction target, bypassing the
                 log-Eig → matrix-exp round-trip and the ~1e-6 element-wise
                 noise it introduces. Required for bit-exact reproduction of
-                AIRM-recon results from the reference trainer.
+                AIRM-recon results from the reference trainer. Ignored
+                when ``x`` is SPD-shaped (then ``x`` itself is the target).
         """
+        if _looks_like_spd_batch(x):
+            # Sklearn-pipeline path: vectorize SPDs internally and reuse
+            # them as the AIRM target. Cache the fitted vectorizer so
+            # ``.predict`` can re-apply the exact same √2 scaling.
+            self.log_eig_: LogEigVectorizer = LogEigVectorizer().fit(x)
+            if covs is None:
+                # float32 matches the encoder/AIRM contract; the existing
+                # explicit-covs API uses float32 too (see test fixtures).
+                covs = torch.as_tensor(np.asarray(x, dtype=np.float32))
+            x = self.log_eig_.transform(x)
+
         expected_dim = _vec_dim_for(self.latent_dim)
         if x.shape[1] != expected_dim:
             raise IGLConfigError(
@@ -266,8 +330,20 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.n_features_in_: int = x.shape[1]
         self.classes_: NDArray[np.generic] = np.unique(y)
 
+        # Resolve and freeze the precondition contract so it round-trips
+        # through pickle (sklearn convention — fitted-state attributes end
+        # in an underscore).
+        self.precondition_mode_: PreconditionMode = PreconditionMode(self.precondition)
+        self.precondition_epsilon_: float = self.precondition_epsilon
+
         x_tensor = torch.as_tensor(np.asarray(x, dtype=np.float32))
         n_samples = x_tensor.shape[0]
+
+        # Apply SPD-side preconditioning once, up front. Affects the AIRM
+        # target only — the predicted side still flows through the
+        # encoder/Green-kernel/log-Eig pipeline unchanged.
+        if covs is not None:
+            covs = self._precondition(covs)
         extras: tuple[OrthogonalityPenalty, ...] = ()
         if self.orthogonality_weight > 0.0:
             extras = (
@@ -359,18 +435,36 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 "IGLReconSPDClassifier is not fitted yet; call .fit(X, y) first.",
             )
 
+    def _vectorize_if_spd(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Mirror ``.fit``'s SPD-input handling on the predict path.
+
+        Re-uses the :class:`LogEigVectorizer` fitted in ``.fit`` so the √2
+        upper-triangle scaling matches bit-exactly.
+        """
+        if _looks_like_spd_batch(x):
+            if not hasattr(self, "log_eig_"):
+                raise IGLConfigError(
+                    "x is SPD-shaped but the wrapper was fitted on log-Eig "
+                    "vectors. Either pass log-Eig vectors here or refit with "
+                    "SPD-shaped inputs.",
+                )
+            return self.log_eig_.transform(x)
+        return x
+
     def predict(self, x: NDArray[np.floating]) -> NDArray[np.generic]:
-        """Predict class labels."""
+        """Predict class labels. Accepts log-Eig vectors or raw SPDs."""
         self._check_fitted()
+        x_vec = self._vectorize_if_spd(x)
         with torch.no_grad():
-            phi = self._design_matrix(torch.as_tensor(np.asarray(x, dtype=np.float32))).cpu().numpy()
+            phi = self._design_matrix(torch.as_tensor(np.asarray(x_vec, dtype=np.float32))).cpu().numpy()
         return cast("NDArray[np.generic]", self.readout_.predict(phi))
 
     def predict_proba(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
         """Class probabilities via the readout's :meth:`predict_proba`."""
         self._check_fitted()
+        x_vec = self._vectorize_if_spd(x)
         with torch.no_grad():
-            phi = self._design_matrix(torch.as_tensor(np.asarray(x, dtype=np.float32))).cpu().numpy()
+            phi = self._design_matrix(torch.as_tensor(np.asarray(x_vec, dtype=np.float32))).cpu().numpy()
         return np.asarray(self.readout_.predict_proba(phi), dtype=np.float64)
 
 

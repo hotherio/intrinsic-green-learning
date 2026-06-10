@@ -19,6 +19,7 @@ nav:
     - 'igl.models': 'reference/models.md'
     - 'igl.metrics': 'reference/metrics.md'
     - 'igl.nn': 'reference/nn.md'
+    - 'igl.preprocessing': 'reference/preprocessing.md'
     - 'igl.spd': 'reference/spd.md'
     - 'igl.spectral': 'reference/spectral.md'
     - 'igl.data': 'reference/data.md'

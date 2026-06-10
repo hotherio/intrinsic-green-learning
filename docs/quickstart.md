@@ -139,6 +139,35 @@ The `orthogonality_weight` argument plugs an
 training loop via the trainer's
 [`ExtraLoss`][igl.types.ExtraLoss] seam.
 
+### Recommended EEG path: `make_igl_airm`
+
+When the input is raw signal `[N, channels, time]` rather than
+SPDs already, the [`make_igl_airm`][igl.make_igl_airm] factory
+composes the recommended defaults from the maintainer memo into a
+single sklearn pipeline:
+
+```python
+import igl  # requires: pip install intrinsic-green-learning[eeg]
+
+pipe = igl.make_igl_airm(latent_dim=22)
+pipe.fit(X_raw, y)
+```
+
+`make_igl_airm` chains:
+
+1. [`AutoCovariances`][igl.preprocessing.AutoCovariances] — Ledoit-Wolf
+   for trial length `T < 500`, sample covariance otherwise. Threshold
+   picked at fit time and frozen.
+2. [`IGLReconSPDClassifier`][igl.spd.IGLReconSPDClassifier] with
+   Tikhonov ε = 10⁻⁶ preconditioning. Bit-near-identical to no
+   preconditioning at `d ≤ 64` (with a BatchNorm encoder) and
+   rescues `torch.linalg.eigh` from LAPACK error 8481 at `d ≥ 128`.
+
+Override either default through `**kwargs` — e.g. `precondition="none"`
+disables preconditioning, `precondition="tikhonov+trace"` adds trace
+normalisation on top. See the
+[`PreconditionMode`][igl.PreconditionMode] enum for the full set.
+
 ## Custom training loops
 
 If you need finer control than the sklearn surface, compose the

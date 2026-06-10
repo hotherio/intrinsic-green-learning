@@ -147,6 +147,22 @@ clf = IGLReconSPDClassifier(
 print(clf.effective_dimension_)
 ```
 
+For EEG (raw signals → covariances → AIRM), the `make_igl_airm`
+factory (in the `[eeg]` extra) composes Ledoit-Wolf vs sample-cov
+auto-selection with Tikhonov-preconditioned IGL-AIRM into a single
+sklearn pipeline:
+
+```python
+import igl  # requires: pip install intrinsic-green-learning[eeg]
+
+pipe = igl.make_igl_airm(latent_dim=22)
+pipe.fit(X_raw, y)   # X_raw: [N, channels, time]
+```
+
+Tikhonov ε = 10⁻⁶ is applied to every input SPD by default — bit-near
+identical to no preconditioning at d ≤ 64 (with a BatchNorm encoder)
+and rescues `torch.linalg.eigh` from LAPACK error 8481 at d ≥ 128.
+
 ### Custom training loop
 
 If sklearn's surface is too high-level, use the bare PyTorch entry

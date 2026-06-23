@@ -58,6 +58,24 @@ def direct_solve_weights(
         (e.g. catastrophic conditioning), the function emits a
         :class:`RuntimeWarning` and returns a zero matrix of the right shape.
     """
+    # Non-finite INPUT guard. A diverged encoder feeds NaN/Inf into phi; the
+    # lstsq/SVD backends then crash with an opaque LinAlgError ("svd: input
+    # matrix contained non-finite values") at whichever call site hit it first
+    # (the per-batch solve and the validation refresh are both outside the
+    # trainer's skip_failing_batches guard). Mirror the existing non-finite
+    # *output* behaviour: warn and return zeros, so training fails through the
+    # clean IGLConvergenceError path instead of an opaque crash. No-op on
+    # healthy runs (inputs are finite), so the validated path is bit-identical.
+    n_cols = y.shape[1] if y.dim() > 1 else 1
+    if not (torch.isfinite(phi).all() and torch.isfinite(y).all()):
+        warnings.warn(
+            "direct_solve_weights received non-finite inputs (diverged training); "
+            "returning zero weights.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return torch.zeros(phi.shape[1], n_cols, dtype=torch.float32, device=phi.device)
+
     # On CUDA, keep the whole solve on-device (cuSOLVER) to avoid a per-call
     # host round-trip — under GPU training this is called once per minibatch.
     # On CPU/MPS, pin to CPU exactly as before: lstsq is unreliable on MPS, and

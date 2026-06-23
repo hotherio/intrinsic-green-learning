@@ -389,8 +389,17 @@ class MatryoshkaTrainer:
             phi_full = module.green(z_full)
             phi_full = normalize_phi(phi_full, module.normalize)
             target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
-            w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
-            module.set_source_weights(w_full)
+            # Guard a diverged encoder: a non-finite phi/target means training
+            # has blown up, and direct_solve_weights would crash *inside* its
+            # lstsq/SVD backend with an opaque torch LinAlgError (e.g. "svd: the
+            # input matrix contained non-finite values"). Skip the refresh and
+            # keep the last good source weights — the trainer's non-finite-loss
+            # check then raises a clean, catchable IGLConvergenceError on the
+            # next epoch instead of crashing. Bit-identical on healthy runs
+            # (the finiteness check passes, the same solve runs).
+            if torch.isfinite(phi_full).all() and torch.isfinite(target_full).all():
+                w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
+                module.set_source_weights(w_full)
 
         if x_val is None or y_val is None:
             return 0.0, 0.0

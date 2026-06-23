@@ -41,6 +41,7 @@ from igl.core.trainer import MatryoshkaTrainer
 from igl.exceptions import IGLConfigError, IGLNotFittedError
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.nn.module import IGLModule
+from igl.core.loss import MSELoss
 from igl.spd.airm import AIRMLoss
 from igl.spd.log_eig import LogEigVectorizer
 from igl.spd.orthogonality import OrthogonalityPenalty
@@ -156,6 +157,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
     config: IGLConfig | None
     random_state: int | None
     device: str
+    recon_loss: str
 
     def __init__(  # noqa: PLR0913
         self,
@@ -177,6 +179,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         config: IGLConfig | None = None,
         random_state: int | None = None,
         device: str = "cpu",
+        recon_loss: str = "airm",
     ) -> None:
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
@@ -205,6 +208,11 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.config = config
         self.random_state = random_state
         self.device = device
+        if recon_loss not in ("airm", "log_euclidean"):
+            raise IGLConfigError(
+                f"recon_loss must be 'airm' or 'log_euclidean', got {recon_loss!r}",
+            )
+        self.recon_loss = recon_loss
 
     def _precondition(self, c: torch.Tensor) -> torch.Tensor:
         """Apply the configured SPD preconditioning to a ``covs`` tensor."""
@@ -397,14 +405,23 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
 
             trainer_config = self._matryoshka_config()
             trainer = MatryoshkaTrainer(loss=AIRMLoss(latent_dim=self.latent_dim), config=trainer_config)
-            # Wire the loss to the trainer so per-batch `current_batch_indices`
-            # can be read by AIRMLoss(covs=...). The trainer's `loss` attribute
-            # holds the strategy used during training.
-            trainer.loss = AIRMLoss(
-                latent_dim=self.latent_dim,
-                covs=covs_train,
-                trainer=trainer,
-            )
+            if self.recon_loss == "log_euclidean":
+                # Log-Euclidean reconstruction: ||pred - LogEig(C)||^2. Because the
+                # √2-scaled LogEig map is a Frobenius isometry, MSE on the log-Eig
+                # vectors *is* the squared Log-Euclidean distance — and it needs ZERO
+                # eigendecompositions per step (no matrix_exp/log/pow). A faster but
+                # non-affine-invariant surrogate for AIRM; quantify score parity
+                # before using for headline results.
+                trainer.loss = MSELoss()
+            else:
+                # Wire the loss to the trainer so per-batch `current_batch_indices`
+                # can be read by AIRMLoss(covs=...). The trainer's `loss` attribute
+                # holds the strategy used during training.
+                trainer.loss = AIRMLoss(
+                    latent_dim=self.latent_dim,
+                    covs=covs_train,
+                    trainer=trainer,
+                )
             self.history_ = trainer.fit(
                 self.module_,
                 x_train,
@@ -417,7 +434,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         # Dimension-curve eval and Stage B operate on the FULL training
         # tensor — matching the reference's behaviour after the encoder is
         # trained.
-        eval_loss = AIRMLoss(latent_dim=self.latent_dim)
+        eval_loss = MSELoss() if self.recon_loss == "log_euclidean" else AIRMLoss(latent_dim=self.latent_dim)
         self.dimension_curve_ = eval_dimension_curve(
             self.module_,
             x_tensor,

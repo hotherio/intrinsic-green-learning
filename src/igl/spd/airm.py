@@ -34,6 +34,7 @@ def airm_loss(
     *,
     eps: float = 1e-8,
     reduction: str = "mean",
+    c_inv_half: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Affine-Invariant Riemannian Metric² between batched SPD matrices.
 
@@ -43,6 +44,12 @@ def airm_loss(
         eps: Eigenvalue clamp forwarded to matrix log / power routines.
         reduction: One of ``"mean"`` (default), ``"sum"``, ``"none"``.
             ``"none"`` returns the per-sample AIRM² as a ``[B]`` tensor.
+        c_inv_half: Optional precomputed ``C^{-1/2}`` aligned with ``c``. When
+            ``c`` is a constant (the data covariance), ``C^{-1/2}`` is constant
+            too, so a caller may hoist this eigendecomposition out of the
+            training loop and pass it here — bit-identical to computing it
+            inline (per-matrix ``eigh`` is independent of batching), but skips
+            one of the three per-batch ``eigh`` calls.
 
     Returns:
         Scalar (mean/sum) or per-sample AIRM² values.
@@ -50,7 +57,8 @@ def airm_loss(
     Raises:
         IGLConfigError: For an unknown ``reduction`` value.
     """
-    c_inv_half = matrix_pow_sym(c, -0.5, eps=eps)
+    if c_inv_half is None:
+        c_inv_half = matrix_pow_sym(c, -0.5, eps=eps)
     a = c_inv_half @ c_hat @ c_inv_half
     log_a = matrix_log_sym(a, eps=eps)
     sq_per_sample = (log_a**2).sum(dim=(-1, -2))
@@ -133,6 +141,10 @@ class AIRMLoss:
         self.jitter = jitter
         self.covs = covs
         self.trainer = trainer
+        # Lazily-filled cache of C^{-1/2} for the (constant) data covariances,
+        # so the training path skips one of three per-batch eigh calls. Reset
+        # whenever covs is relocated to a new device.
+        self._cov_inv_half: torch.Tensor | None = None
 
     def target(self, y: torch.Tensor) -> torch.Tensor:
         """Pass-through: the log-Eig vector is already the lstsq target."""
@@ -179,12 +191,33 @@ class AIRMLoss:
         """
         idx = self.trainer.current_batch_indices if self.trainer is not None else None
         if self.covs is not None and idx is not None:
-            raw = self.covs.to(pred.device).index_select(0, idx)
+            # Cache the covs on the prediction device ONCE. The previous
+            # ``self.covs.to(pred.device)`` re-uploaded the full ``[N, d, d]``
+            # tensor host→device every minibatch under CUDA; hoisting the move
+            # makes it a one-time transfer. No-op on CPU (same device), so the
+            # CPU path is bit-identical.
+            if self.covs.device != pred.device:
+                self.covs = self.covs.to(pred.device)
+                self._cov_inv_half = None
+            raw = self.covs.index_select(0, idx)
             c = raw + self._jitter_eye(raw.device, raw.dtype) if self.jitter > 0 else raw
-        else:
-            c = self._to_spd(target)
-            if self.jitter > 0:
-                c = c + self._jitter_eye(c.device, c.dtype)
+            # C = covs + jitter*I is constant across epochs, so C^{-1/2} is too.
+            # Precompute it once for all N samples and index per batch — skips
+            # one of the three per-batch eigh. Bit-identical to inline
+            # matrix_pow_sym(c, -0.5): per-matrix eigh is independent of batching.
+            if self._cov_inv_half is None:
+                c_full = (
+                    self.covs + self._jitter_eye(self.covs.device, self.covs.dtype)
+                    if self.jitter > 0
+                    else self.covs
+                )
+                self._cov_inv_half = matrix_pow_sym(c_full, -0.5, eps=self.eps)
+            c_inv_half = self._cov_inv_half.index_select(0, idx)
+            c_hat = self._pred_to_spd(pred)
+            return airm_loss(c, c_hat, eps=self.eps, reduction="mean", c_inv_half=c_inv_half)
+        c = self._to_spd(target)
+        if self.jitter > 0:
+            c = c + self._jitter_eye(c.device, c.dtype)
         c_hat = self._pred_to_spd(pred)
         return airm_loss(c, c_hat, eps=self.eps, reduction="mean")
 

@@ -57,7 +57,22 @@ def direct_solve_weights(
     y_aug = torch.cat([y_cpu, torch.zeros(n_anchors, y_cpu.shape[1], dtype=y_cpu.dtype)], dim=0)
 
     # torch.linalg.lstsq has no stubs; cast the solution back to Tensor.
-    weights = cast(torch.Tensor, torch.linalg.lstsq(phi_aug, y_aug).solution)  # pyright: ignore[reportUnknownMemberType]
+    try:
+        weights = cast(torch.Tensor, torch.linalg.lstsq(phi_aug, y_aug).solution)  # pyright: ignore[reportUnknownMemberType]
+    except RuntimeError:
+        # ``torch.linalg.lstsq`` is unreliable not only on MPS but also on the
+        # linux x86 CPU (MKL) build, which raises an INTERNAL ASSERT ("Argument 4
+        # has illegal value") for wide right-hand sides -- i.e. a large number of
+        # target columns relative to the system size, as happens for SPD targets
+        # at d >= 64 (D = d(d+1)/2). Fall back to a float64 truncated-SVD
+        # pseudoinverse of the stacked system. ``phi_aug`` has full column rank
+        # (the appended ``sqrt(l2_eff) I`` guarantees it), so this is the same
+        # unique minimum-norm solution a working ``lstsq`` returns, on any backend.
+        phi_aug_f64 = phi_aug.double()
+        u, s, vh = torch.linalg.svd(phi_aug_f64, full_matrices=False)
+        tol = s.max() * max(phi_aug_f64.shape) * torch.finfo(s.dtype).eps
+        s_inv = torch.where(s > tol, s.reciprocal(), torch.zeros_like(s))
+        weights = (vh.mT @ (s_inv.unsqueeze(-1) * (u.mT @ y_aug.double()))).to(phi_aug.dtype)
 
     if not torch.isfinite(weights).all():
         warnings.warn(

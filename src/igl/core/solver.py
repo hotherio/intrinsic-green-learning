@@ -28,7 +28,11 @@ def _svd_pinv_solve(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     always does — this is exactly the solution a working ``lstsq`` returns.
     """
     a64 = a.double()
-    u, s, vh = torch.linalg.svd(a64, full_matrices=False)
+    # torch.linalg.svd has no stubs; cast the result to recover known types.
+    u, s, vh = cast(
+        "tuple[torch.Tensor, torch.Tensor, torch.Tensor]",
+        torch.linalg.svd(a64, full_matrices=False),  # pyright: ignore[reportUnknownMemberType]
+    )
     tol = s.max() * max(a64.shape) * torch.finfo(s.dtype).eps
     s_inv = torch.where(s > tol, s.reciprocal(), torch.zeros_like(s))
     return (vh.mT @ (s_inv.unsqueeze(-1) * (u.mT @ b.double()))).to(a.dtype)

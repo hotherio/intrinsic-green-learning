@@ -179,7 +179,14 @@ class AIRMLoss:
         """
         idx = self.trainer.current_batch_indices if self.trainer is not None else None
         if self.covs is not None and idx is not None:
-            raw = self.covs.to(pred.device).index_select(0, idx)
+            # Cache the covs on the prediction device ONCE. The previous
+            # ``self.covs.to(pred.device)`` re-uploaded the full ``[N, d, d]``
+            # tensor host→device every minibatch under CUDA; hoisting the move
+            # makes it a one-time transfer. No-op on CPU (same device), so the
+            # CPU path is bit-identical.
+            if self.covs.device != pred.device:
+                self.covs = self.covs.to(pred.device)
+            raw = self.covs.index_select(0, idx)
             c = raw + self._jitter_eye(raw.device, raw.dtype) if self.jitter > 0 else raw
         else:
             c = self._to_spd(target)

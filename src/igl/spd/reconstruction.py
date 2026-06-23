@@ -155,6 +155,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
     precondition_epsilon: float
     config: IGLConfig | None
     random_state: int | None
+    device: str
 
     def __init__(  # noqa: PLR0913
         self,
@@ -175,6 +176,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         precondition_epsilon: float = 1e-6,
         config: IGLConfig | None = None,
         random_state: int | None = None,
+        device: str = "cpu",
     ) -> None:
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
@@ -202,6 +204,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         self.precondition_epsilon = precondition_epsilon
         self.config = config
         self.random_state = random_state
+        self.device = device
 
     def _precondition(self, c: torch.Tensor) -> torch.Tensor:
         """Apply the configured SPD preconditioning to a ``covs`` tensor."""
@@ -369,6 +372,14 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 normalize_input=self.normalize_input,
                 normalize=resolved_normalize,
             )
+            # Move to the target device AFTER construction so the parameter
+            # init (which consumes torch RNG inside ``IGLModule``) stays on CPU
+            # and bit-identical across devices — only the storage moves. The
+            # trainer reads ``next(module.parameters()).device`` and relocates
+            # ``x_train``/``x_val`` accordingly; ``AIRMLoss`` relocates ``covs``
+            # on first batch; ``eval_dimension_curve``/``_design_matrix`` move
+            # their inputs to the module device.
+            self.module_ = self.module_.to(torch.device(self.device))
 
             # 80/20 split — ``torch.randperm(N)`` matches the reference
             # trainer's RNG-consumption profile (sklearn's ``train_test_split``
@@ -425,6 +436,9 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         return self
 
     def _design_matrix(self, x: torch.Tensor) -> torch.Tensor:
+        # Relocate the input to wherever the module lives (a no-op on CPU, so
+        # the CPU path stays bit-identical). Callers `.cpu()` the result.
+        x = x.to(next(self.module_.parameters()).device)
         z = self.module_.encoder(x)
         phi = self.module_.green(z)
         return normalize_phi(phi, self.module_.normalize)

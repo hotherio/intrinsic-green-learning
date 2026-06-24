@@ -18,9 +18,13 @@ from igl.preprocessing.covariances import (
     CovarianceEstimatorLike,
     CovarianceEstimatorLiteral,
 )
+from igl.preprocessing.dim_reduce import ConditionalDimReduce
+from igl.preprocessing.regularization import ConditionalTikhonov
 
 __all__ = [
     "AutoCovariances",
+    "ConditionalDimReduce",
+    "ConditionalTikhonov",
     "CovarianceEstimator",
     "CovarianceEstimatorLike",
     "CovarianceEstimatorLiteral",

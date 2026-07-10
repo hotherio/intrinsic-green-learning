@@ -3038,7 +3038,9 @@ controls the dimensionality of the reconstruction target
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Matryoshka maximum latent dimension for the IGL encoder.</p>
+                <p>Matryoshka maximum latent dimension for the IGL encoder.
+When a <code>config</code> is supplied, its <code>max_dim</code> must either match
+this value or be left at its default (which then inherits it).</p>
               </div>
             </td>
             <td>
@@ -3050,15 +3052,16 @@ controls the dimensionality of the reconstruction target
                 <code>n_anchors</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Anchor count for the Green kernel.</p>
+                <p>Anchor count for the Green kernel. <code>None</code> (default)
+defers to <code>config.kernel.n_anchors</code> (default <code>64</code>).</p>
               </div>
             </td>
             <td>
-                  <code>64</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -3066,15 +3069,16 @@ controls the dimensionality of the reconstruction target
                 <code>n_scales</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Scale count for the Green kernel.</p>
+                <p>Scale count for the Green kernel. <code>None</code> (default)
+defers to <code>config.kernel.n_scales</code> (default <code>4</code>).</p>
               </div>
             </td>
             <td>
-                  <code>4</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -3272,8 +3276,12 @@ tested datasets.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional :class:<code>igl.IGLConfig</code>. Explicit kwargs above
-override its values.</p>
+                <p>Optional :class:<code>igl.IGLConfig</code>. Its <code>kernel</code> block is
+forwarded to the Green kernel, so <code>null_space</code>,
+<code>polynomial_degree</code>, <code>sigma_log_range</code> and
+<code>anchor_init_std</code> all take effect here. Explicit kwargs above
+override its values. <code>config.max_dim</code> must either match
+<code>max_dim</code> or be left at its default.</p>
               </div>
             </td>
             <td>

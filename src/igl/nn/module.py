@@ -31,6 +31,7 @@ from igl.core.encoder import build_mlp_encoder
 from igl.core.kernel import GreenKernel
 from igl.core.normalization import normalize_phi
 from igl.exceptions import IGLConfigError
+from igl.spectral.null_space import build_null_space
 from igl.types import EncoderProtocol, NormalizeMode, NormalizeModeLike, OperatorName, OperatorNameLike
 
 
@@ -193,11 +194,23 @@ class IGLModule(nn.Module):
             self.encoder = inner_encoder
 
         if kernel is None:
+            # `null_space`, `polynomial_degree`, `sigma_log_range` and
+            # `anchor_init_std` have no per-field kwarg override, so they come
+            # straight off the config. `KernelConfig()`'s defaults match
+            # GreenKernel's own, keeping this branch a no-op for callers who
+            # pass no config at all.
             self.green: nn.Module = GreenKernel(
                 latent_dim=max_dim,
                 n_anchors=resolved_anchors,
                 n_scales=resolved_scales,
                 operator=resolved_operator,
+                sigma_log_range=kernel_cfg.sigma_log_range,
+                anchor_init_std=kernel_cfg.anchor_init_std,
+                null_space=build_null_space(
+                    kernel_cfg.null_space,
+                    latent_dim=max_dim,
+                    degree=kernel_cfg.polynomial_degree,
+                ),
             )
         else:
             # Pre-built kernel (e.g. SpectralKernel). It must expose

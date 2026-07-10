@@ -9,6 +9,7 @@ import pytest
 import torch
 
 import igl
+import igl.data
 from igl import (
     GreenKernel,
     IGLClassifier,
@@ -19,6 +20,7 @@ from igl import (
     MatryoshkaConfig,
     SpectralConfig,
 )
+from igl.spd import IGLReconSPDClassifier, LogEigVectorizer
 from igl.spectral import (
     ConstantNullSpace,
     FourierCosineBasis,
@@ -129,10 +131,10 @@ def test_igl_module_explicit_kernel_overrides_config_null_space() -> None:
 def test_igl_module_default_config_is_rng_and_shape_identical() -> None:
     """Forwarding ``KernelConfig()`` defaults must be a strict no-op.
 
-    ``IGLReconSPDClassifier`` builds ``IGLModule`` with neither ``config=`` nor
-    ``kernel=``, so it relies on the self-built branch. If forwarding the config
-    defaults moved a single torch RNG draw, the EEG bit-exact reproducibility
-    contract in ``test_spd_reproducibility.py`` would silently break.
+    ``IGLReconSPDClassifier`` forwards its ``config`` to ``IGLModule`` (issue
+    #53). If forwarding a *default* kernel block moved a single torch RNG draw,
+    the EEG bit-exact reproducibility contract in
+    ``test_spd_reproducibility.py`` would silently break.
     """
 
     def state(**kwargs: object) -> dict[str, torch.Tensor]:
@@ -145,6 +147,103 @@ def test_igl_module_default_config_is_rng_and_shape_identical() -> None:
     assert bare.keys() == with_default_config.keys()
     for name, tensor in bare.items():
         assert torch.equal(tensor, with_default_config[name]), name
+
+
+# --- Issue #53: the AIRM path must honour config.kernel ------------------------
+#
+# v0.6.1 taught IGLModule to read KernelConfig, but IGLReconSPDClassifier built
+# its module without `config=`, so null_space never took effect on the AIRM path.
+
+
+def _spd_xy(d: int = 4, n: int = 40) -> tuple[np.ndarray, np.ndarray]:
+    spd, y = igl.data.make_spd_dataset(n, d=d, n_classes=2, seed=0)
+    x = LogEigVectorizer().fit(spd.float().numpy()).transform(spd.float().numpy())
+    return np.asarray(x), y.numpy()
+
+
+def _tiny_matryoshka() -> MatryoshkaConfig:
+    return MatryoshkaConfig(
+        epochs=1,
+        batch_size=8,
+        inner_batch_size=16,
+        scheduler="none",
+        early_stop_patience=None,
+        verbose=False,
+    )
+
+
+def _fit_recon(d: int = 4, **kwargs: object) -> IGLReconSPDClassifier:
+    x, y = _spd_xy(d)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        return IGLReconSPDClassifier(latent_dim=d, max_dim=d, random_state=0, **kwargs).fit(x, y)  # type: ignore[arg-type]
+
+
+def _kernel_cfg(d: int, **kernel_kwargs: object) -> IGLConfig:
+    return IGLConfig(
+        max_dim=d,
+        kernel=KernelConfig(n_anchors=8, n_scales=2, **kernel_kwargs),  # type: ignore[arg-type]
+        matryoshka=_tiny_matryoshka(),
+    )
+
+
+def test_recon_spd_config_null_space_polynomial_widens_phi() -> None:
+    """The reported reproducer: 8 anchors + (1 + max_dim) null columns."""
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=_kernel_cfg(4, null_space="polynomial"))
+    assert clf.module_.green.output_dim == 8 + 1 + 4
+    assert isinstance(clf.module_.green._null_space, PolynomialNullSpace)  # noqa: SLF001
+
+
+def test_recon_spd_config_null_space_constant() -> None:
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=_kernel_cfg(4, null_space="constant"))
+    assert clf.module_.green.output_dim == 8 + 1
+    assert isinstance(clf.module_.green._null_space, ConstantNullSpace)  # noqa: SLF001
+
+
+def test_recon_spd_config_null_space_none_is_default() -> None:
+    """`NONE` remains the default — enabling the augmentation stays opt-in."""
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=_kernel_cfg(4))
+    assert clf.module_.green.output_dim == 8
+    assert clf.module_.green._null_space is None  # noqa: SLF001
+
+
+def test_recon_spd_config_default_max_dim_is_realigned() -> None:
+    """An untouched ``IGLConfig.max_dim`` (16) must not clash with ``max_dim=4``.
+
+    Guards the trap in the naive ``config=self.config`` one-liner.
+    """
+    cfg = IGLConfig(matryoshka=_tiny_matryoshka())  # max_dim left at its default
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=cfg)
+    assert clf.module_.max_dim == 4
+
+
+def test_recon_spd_rejects_conflicting_explicit_max_dim() -> None:
+    """A deliberately-set, conflicting ``config.max_dim`` is a user error."""
+    cfg = IGLConfig(max_dim=8, matryoshka=_tiny_matryoshka())
+    with pytest.raises(IGLConfigError, match="conflicts with max_dim"):
+        _fit_recon(4, config=cfg)
+
+
+def test_recon_spd_config_kernel_n_anchors_now_honoured() -> None:
+    """With ``n_anchors`` left ``None``, ``config.kernel.n_anchors`` reaches the kernel."""
+    clf = _fit_recon(4, config=_kernel_cfg(4))  # KernelConfig(n_anchors=8)
+    assert clf.module_.green.n_anchors == 8
+
+
+def test_recon_spd_explicit_n_anchors_still_wins_over_config() -> None:
+    cfg = IGLConfig(max_dim=4, kernel=KernelConfig(n_anchors=32, n_scales=2), matryoshka=_tiny_matryoshka())
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=cfg)
+    assert clf.module_.green.n_anchors == 8
+
+
+def test_recon_spd_null_space_survives_matryoshka() -> None:
+    """Fit end-to-end with a polynomial null space: Φ width is constant across k."""
+    clf = _fit_recon(4, n_anchors=8, n_scales=2, config=_kernel_cfg(4, null_space="polynomial"))
+    width = clf.module_.green.output_dim
+    assert clf.module_.source_weights.shape[0] == width
+    # The dimension curve must score every truncation level 1..max_dim.
+    assert sorted(clf.dimension_curve_) == [1, 2, 3, 4]
+    assert 1 <= clf.effective_dimension_ <= 4
 
 
 def test_classifier_with_spectral_config() -> None:

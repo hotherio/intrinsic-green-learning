@@ -65,6 +65,88 @@ def test_igl_module_rejects_kernel_without_output_dim() -> None:
         IGLModule(input_dim=4, max_dim=3, output_dim=2, kernel=_BadKernel())
 
 
+# --- Config path: IGLModule must honour every KernelConfig field ---------------
+#
+# When no `kernel=` is passed, IGLModule builds its own GreenKernel. That branch
+# used to drop null_space, polynomial_degree, sigma_log_range and
+# anchor_init_std silently (issue #50).
+
+
+def _config_module(**kernel_kwargs: object) -> IGLModule:
+    """Build an IGLModule through the `config=` path only (no `kernel=`)."""
+    cfg = IGLConfig(max_dim=4, kernel=KernelConfig(n_anchors=8, n_scales=2, **kernel_kwargs))  # type: ignore[arg-type]
+    return IGLModule(input_dim=3, max_dim=4, output_dim=1, config=cfg)
+
+
+def test_igl_module_config_null_space_polynomial_widens_design_matrix() -> None:
+    """The reproducer from issue #50: 8 anchors + (1 + max_dim) null columns."""
+    module = _config_module(null_space="polynomial", polynomial_degree=1)
+    assert module.design_matrix(torch.randn(64, 3)).shape[1] == 8 + 1 + 4
+
+
+def test_igl_module_config_null_space_degree_2() -> None:
+    """Degree 2 contributes ``1 + 2 * max_dim`` columns."""
+    module = _config_module(null_space="polynomial", polynomial_degree=2)
+    assert module.green.output_dim == 8 + 1 + 2 * 4
+
+
+def test_igl_module_config_null_space_constant() -> None:
+    """The constant null space contributes exactly one DC column."""
+    module = _config_module(null_space="constant")
+    assert module.green.output_dim == 8 + 1
+
+
+def test_igl_module_config_null_space_none_is_the_default() -> None:
+    """`NONE` stays the default and adds no columns — guards the SPD contract."""
+    assert KernelConfig().null_space is igl.NullSpaceKind.NONE
+    assert _config_module().green.output_dim == 8
+
+
+def test_igl_module_config_forwards_sigma_log_range() -> None:
+    module = _config_module(sigma_log_range=(-9.0, -8.0))
+    log_sigma = module.green.log_sigma.detach()
+    assert float(log_sigma.min()) >= -9.0
+    assert float(log_sigma.max()) <= -8.0
+
+
+def test_igl_module_config_forwards_anchor_init_std() -> None:
+    torch.manual_seed(0)
+    wide = _config_module(anchor_init_std=50.0).green.anchor_positions.detach()
+    torch.manual_seed(0)
+    narrow = _config_module(anchor_init_std=0.5).green.anchor_positions.detach()
+    # Same seed, same draws — the config value only rescales them.
+    torch.testing.assert_close(wide, narrow * 100.0, rtol=1e-5, atol=1e-4)
+
+
+def test_igl_module_explicit_kernel_overrides_config_null_space() -> None:
+    """A pre-built `kernel=` wins over `config.kernel.null_space`."""
+    gk = GreenKernel(latent_dim=4, n_anchors=10, n_scales=2, null_space=ConstantNullSpace())
+    cfg = IGLConfig(max_dim=4, kernel=KernelConfig(n_anchors=8, n_scales=2, null_space="polynomial"))
+    module = IGLModule(input_dim=3, max_dim=4, output_dim=1, config=cfg, kernel=gk)
+    assert module.green.output_dim == 10 + 1  # the kernel's, not the config's
+
+
+def test_igl_module_default_config_is_rng_and_shape_identical() -> None:
+    """Forwarding ``KernelConfig()`` defaults must be a strict no-op.
+
+    ``IGLReconSPDClassifier`` builds ``IGLModule`` with neither ``config=`` nor
+    ``kernel=``, so it relies on the self-built branch. If forwarding the config
+    defaults moved a single torch RNG draw, the EEG bit-exact reproducibility
+    contract in ``test_spd_reproducibility.py`` would silently break.
+    """
+
+    def state(**kwargs: object) -> dict[str, torch.Tensor]:
+        torch.manual_seed(1234)
+        return IGLModule(input_dim=6, max_dim=8, output_dim=3, **kwargs).state_dict()  # type: ignore[arg-type]
+
+    bare = state()
+    with_default_config = state(config=IGLConfig(max_dim=8))
+
+    assert bare.keys() == with_default_config.keys()
+    for name, tensor in bare.items():
+        assert torch.equal(tensor, with_default_config[name]), name
+
+
 def test_classifier_with_spectral_config() -> None:
     torch.manual_seed(0)
     np.random.seed(0)

@@ -64,6 +64,48 @@ def _fast_config(epochs: int = 6, *, encoder: EncoderConfig | None = None) -> IG
     return IGLConfig(**kwargs)  # type: ignore[arg-type]
 
 
+# --- Issue 6: forwarding config.kernel must not move the RNG -----------------
+
+
+def test_issue_6__default_kernel_config_is_rng_identical(
+    spd_xy: tuple[np.ndarray, np.ndarray, torch.Tensor],
+) -> None:
+    """Passing a config with a *default* kernel block must be a strict no-op.
+
+    ``IGLReconSPDClassifier`` now forwards its ``config`` to ``IGLModule`` so
+    ``config.kernel.null_space`` takes effect (issue #53). ``KernelConfig()``'s
+    defaults are identical to ``GreenKernel``'s own, so a caller who supplies a
+    config for its ``matryoshka``/``encoder`` blocks alone must still get the
+    exact same module — otherwise every EEG bit-exact number in this file moves.
+    """
+    x, y, _ = spd_xy
+
+    def fitted_state(config: IGLConfig | None) -> dict[str, torch.Tensor]:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            clf = IGLReconSPDClassifier(
+                latent_dim=4,
+                max_dim=4,
+                n_anchors=8,
+                n_scales=2,
+                random_state=0,
+                config=config,
+            ).fit(x, y)
+        return clf.module_.state_dict()
+
+    # `config=None` builds MatryoshkaConfig(sigma_max_diagnostic=True,
+    # skip_failing_batches=True); mirror it so only the kernel path differs.
+    mirrored = IGLConfig(
+        matryoshka=MatryoshkaConfig(sigma_max_diagnostic=True, skip_failing_batches=True),
+    )
+    bare = fitted_state(None)
+    with_config = fitted_state(mirrored)
+
+    assert bare.keys() == with_config.keys()
+    for name, tensor in bare.items():
+        assert torch.equal(tensor, with_config[name]), name
+
+
 # --- Issue 5: Tikhonov preconditioning default ------------------------------
 
 

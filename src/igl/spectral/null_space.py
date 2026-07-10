@@ -6,9 +6,12 @@ have non-trivial kernels: functions $\\xi$ with $L\\xi = 0$. The Green's
 kernel cannot reach those modes — its expansion divides by
 eigenvalues, and the zero eigenvalues' contributions vanish in the
 limit. The fix the paper adopts is to **augment** the design matrix
-$\\Phi$ with explicit columns evaluating each null-mode basis function;
-their coefficients are fitted by lstsq with no Tikhonov shrinkage, so
-the null-space component is data-driven.
+$\\Phi$ with explicit columns evaluating each null-mode basis function,
+so the null-space component is carried directly by the design matrix
+rather than reached through the kernel expansion. Their coefficients are
+then fitted alongside the anchor coefficients by
+:func:`igl.direct_solve_weights`, which applies its ridge uniformly to
+every column of $\\Phi$ — null-space columns are not exempted.
 
 This module ships three null-space bases:
 

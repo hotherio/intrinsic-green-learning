@@ -26,6 +26,7 @@ Optional ``orthogonality_weight > 0`` plugs an
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
@@ -36,12 +37,12 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 
 from igl.config import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig
+from igl.core.loss import MSELoss
 from igl.core.normalization import normalize_phi
 from igl.core.trainer import MatryoshkaTrainer
 from igl.exceptions import IGLConfigError, IGLNotFittedError
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
 from igl.nn.module import IGLModule
-from igl.core.loss import MSELoss
 from igl.spd.airm import AIRMLoss
 from igl.spd.log_eig import LogEigVectorizer
 from igl.spd.orthogonality import OrthogonalityPenalty
@@ -53,6 +54,17 @@ if TYPE_CHECKING:
 
 _MIN_CLASSES = 2
 _SPD_NDIM = 3
+
+
+def _iglconfig_default_max_dim() -> int:
+    """``IGLConfig.max_dim``'s declared default, read off the dataclass.
+
+    Used to tell an untouched ``max_dim`` apart from one the caller set
+    deliberately. Derived rather than hardcoded so it cannot drift out of
+    sync with :class:`igl.IGLConfig`.
+    """
+    field = next(f for f in dataclasses.fields(IGLConfig) if f.name == "max_dim")
+    return cast("int", field.default)
 
 
 def _vec_dim_for(latent_dim: int) -> int:
@@ -85,8 +97,12 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             controls the dimensionality of the reconstruction target
             ``D = d * (d + 1) / 2``.
         max_dim: Matryoshka maximum latent dimension for the IGL encoder.
-        n_anchors: Anchor count for the Green kernel.
-        n_scales: Scale count for the Green kernel.
+            When a ``config`` is supplied, its ``max_dim`` must either match
+            this value or be left at its default (which then inherits it).
+        n_anchors: Anchor count for the Green kernel. ``None`` (default)
+            defers to ``config.kernel.n_anchors`` (default ``64``).
+        n_scales: Scale count for the Green kernel. ``None`` (default)
+            defers to ``config.kernel.n_scales`` (default ``4``).
         orthogonality_weight: When ``> 0``, an
             :class:`igl.spd.OrthogonalityPenalty` is added to stage-A training.
         orthogonality_every: Frequency (in batches) of the orthogonality
@@ -123,8 +139,12 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             of ``precondition``. Default ``1e-6`` is the value
             characterised in the memo as universally safe across the
             tested datasets.
-        config: Optional :class:`igl.IGLConfig`. Explicit kwargs above
-            override its values.
+        config: Optional :class:`igl.IGLConfig`. Its ``kernel`` block is
+            forwarded to the Green kernel, so ``null_space``,
+            ``polynomial_degree``, ``sigma_log_range`` and
+            ``anchor_init_std`` all take effect here. Explicit kwargs above
+            override its values. ``config.max_dim`` must either match
+            ``max_dim`` or be left at its default.
         random_state: Optional integer seed.
 
     Attributes:
@@ -142,8 +162,8 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
 
     latent_dim: int
     max_dim: int
-    n_anchors: int
-    n_scales: int
+    n_anchors: int | None
+    n_scales: int | None
     orthogonality_weight: float
     orthogonality_every: int
     encoder_hidden: int | tuple[int, ...] | None
@@ -164,8 +184,8 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         *,
         latent_dim: int,
         max_dim: int = 16,
-        n_anchors: int = 64,
-        n_scales: int = 4,
+        n_anchors: int | None = None,
+        n_scales: int | None = None,
         orthogonality_weight: float = 0.0,
         orthogonality_every: int = 20,
         encoder_hidden: int | tuple[int, ...] | None = None,
@@ -261,6 +281,28 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
         if self.config is not None:
             return self.config.kernel.normalize
         return KernelConfig().normalize
+
+    def _resolve_module_config(self) -> IGLConfig | None:
+        """Align ``config.max_dim`` with this estimator's ``max_dim``.
+
+        :class:`IGLModule` cross-validates the two and raises when they
+        disagree. Callers routinely leave ``IGLConfig.max_dim`` at its
+        default while setting the estimator's ``max_dim``, so an untouched
+        default is realigned silently. A *deliberately* set value that
+        contradicts ``max_dim`` is a user error and raises.
+
+        Returning the config (rather than ``None``) is what lets
+        ``config.kernel``'s ``null_space``, ``polynomial_degree``,
+        ``sigma_log_range`` and ``anchor_init_std`` reach the Green kernel.
+        """
+        if self.config is None:
+            return None
+        if self.config.max_dim not in (self.max_dim, _iglconfig_default_max_dim()):
+            raise IGLConfigError(
+                f"config.max_dim ({self.config.max_dim}) conflicts with max_dim ({self.max_dim}); "
+                f"leave config.max_dim at its default to inherit max_dim",
+            )
+        return dataclasses.replace(self.config, max_dim=self.max_dim)
 
     @contextmanager
     def _local_rng(self) -> Generator[None]:
@@ -379,6 +421,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
                 encoder_config=self._resolve_encoder_config(),
                 normalize_input=self.normalize_input,
                 normalize=resolved_normalize,
+                config=self._resolve_module_config(),
             )
             # Move to the target device AFTER construction so the parameter
             # init (which consumes torch RNG inside ``IGLModule``) stays on CPU

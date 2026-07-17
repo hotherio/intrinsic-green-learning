@@ -65,3 +65,8 @@ Public Protocols, ``enum.StrEnum`` classes, and Literal companions.
     options:
       show_root_heading: true
       show_source: false
+
+::: igl.PrefixForward
+    options:
+      show_root_heading: true
+      show_source: false

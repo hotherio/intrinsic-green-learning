@@ -13,6 +13,7 @@ The trainer is agnostic to the task — pass any :class:`igl.types.LossStrategy`
 """
 
 import logging
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import cast
@@ -28,7 +29,7 @@ from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
-from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, SchedulerType
+from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, PrefixForward, SamplingMode, SchedulerType
 
 # ``torch._C._LinAlgError`` is the canonical exception raised by torch's
 # linear-algebra backends (e.g. eigh when the input refuses to factor).
@@ -39,6 +40,9 @@ from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, 
 _LinAlgError: type[Exception] = torch._C._LinAlgError  # noqa: SLF001  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue, reportUnknownVariableType, reportUnknownMemberType]
 
 _LOGGER = logging.getLogger("igl")
+
+_MIN_TREND_WINDOW = 2
+_TREND_RELATIVE_TOLERANCE = 0.01
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -76,6 +80,12 @@ class TrainingHistory:
     best_metric: float | None = None
     stopped_epoch: int | None = None
     early_stopped: bool = False
+    stop_reason: str | None = None
+
+    @property
+    def converged(self) -> bool:
+        """Whether training ended on a validation plateau (the healthy stop)."""
+        return self.stop_reason == "plateau"
 
 
 def _build_sampler(config: MatryoshkaConfig) -> MatryoshkaSampler:
@@ -117,9 +127,9 @@ class MatryoshkaTrainer:
         # before each loss call and cleared after.
         self.current_batch_indices = None
 
-    def fit(
+    def fit(  # noqa: PLR0912, PLR0915 (the epoch loop reads as one unit; splitting obscures it)
         self,
-        module: IGLModule,
+        module: IGLModule | PrefixForward,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         *,
@@ -164,7 +174,10 @@ class MatryoshkaTrainer:
         d_max = module.max_dim
         n_samples = x_train.shape[0]
 
-        params: list[nn.Parameter] = list(module.encoder.parameters()) + list(module.green.parameters()) + [module.bias]
+        if isinstance(module, IGLModule):
+            params: list[nn.Parameter] = list(module.encoder.parameters()) + list(module.green.parameters()) + [module.bias]
+        else:
+            params = list(module.parameters())
         optimizer = (
             AdamW(params, lr=config.encoder_lr, weight_decay=config.weight_decay)
             if config.weight_decay is not None
@@ -241,7 +254,18 @@ class MatryoshkaTrainer:
             ):
                 history.stopped_epoch = epoch + 1
                 history.early_stopped = True
+                history.stop_reason = self._classify_stop(history)
+                if history.stop_reason == "improving_at_stop":
+                    warnings.warn(
+                        "early stopping fired while the validation trend was still improving; "
+                        "consider a larger early_stop_patience",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                 break
+
+        if history.stop_reason is None:
+            history.stop_reason = "max_epochs"
 
         if use_early_stop and best_state is not None:
             self._restore(module, best_state)
@@ -295,10 +319,10 @@ class MatryoshkaTrainer:
                 "n/a" if stats.best_epoch is None else stats.best_epoch,
             )
 
-    def _train_one_epoch(  # noqa: PLR0915 (split would obscure single-epoch atomicity)
+    def _train_one_epoch(  # noqa: PLR0915, PLR0912 (split would obscure single-epoch atomicity)
         self,
         *,
-        module: IGLModule,
+        module: IGLModule | PrefixForward,
         optimizer: AdamW,
         params: Sequence[nn.Parameter],
         x_train: torch.Tensor,
@@ -332,21 +356,26 @@ class MatryoshkaTrainer:
             mask = torch.zeros(d_max, device=device)
             mask[:k] = 1.0
 
-            z = module.encoder(x_batch)
-            z_trunc = z * mask.unsqueeze(0)
-            phi = module.green(z_trunc, gate_mask=mask)
-            phi = normalize_phi(phi, module.normalize)
+            if isinstance(module, IGLModule):
+                z = module.encoder(x_batch)
+                z_trunc = z * mask.unsqueeze(0)
+                phi = module.green(z_trunc, gate_mask=mask)
+                phi = normalize_phi(phi, module.normalize)
 
-            with torch.no_grad():
-                lstsq_n = min(config.inner_batch_size, n_samples)
-                lstsq_idx = torch.randperm(n_samples, device=device)[:lstsq_n]
-                z_lstsq = module.encoder(x_train[lstsq_idx]) * mask.unsqueeze(0)
-                phi_lstsq = module.green(z_lstsq, gate_mask=mask)
-                phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
-                target_lstsq = self.loss.target(y_train[lstsq_idx]) - module.bias.detach()
-                w_k = direct_solve_weights(phi_lstsq, target_lstsq, l2=config.source_l2).to(device)
+                with torch.no_grad():
+                    lstsq_n = min(config.inner_batch_size, n_samples)
+                    lstsq_idx = torch.randperm(n_samples, device=device)[:lstsq_n]
+                    z_lstsq = module.encoder(x_train[lstsq_idx]) * mask.unsqueeze(0)
+                    phi_lstsq = module.green(z_lstsq, gate_mask=mask)
+                    phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
+                    target_lstsq = self.loss.target(y_train[lstsq_idx]) - module.bias.detach()
+                    w_k = direct_solve_weights(phi_lstsq, target_lstsq, l2=config.source_l2).to(device)
 
-            output = phi @ w_k + module.bias
+                output = phi @ w_k + module.bias
+            else:
+                # PrefixForward path: no inner solve; plain gradient descent
+                # through the prefix-masked forward.
+                output = module(x_batch, gate_mask=mask)
             target_batch = self.loss.target(y_batch)
             # Publish the batch indices so strategies indexed by the original
             # tensor positions (e.g. ``AIRMLoss(covs=...)``) can look them up.
@@ -367,6 +396,8 @@ class MatryoshkaTrainer:
                     # Fold in any ExtraLoss regularizers (orthogonality,
                     # gate sparsity, etc.).
                     for extra in extra_losses:
+                        if not isinstance(module, IGLModule):
+                            break  # ExtraLoss regularizers are defined on the VP decomposition
                         if (n_batches - 1) % extra.every != 0:
                             continue
                         contribution = extra(
@@ -406,7 +437,7 @@ class MatryoshkaTrainer:
         # re-running the σ_max forwards there would shift the post-restore
         # BN buffers away from the reference. (See alex-eeg-igl's
         # ``verify_diagnosis_seed42.py`` "Fix I" for the bug this avoids.)
-        if config.sigma_max_diagnostic:
+        if config.sigma_max_diagnostic and isinstance(module, IGLModule):
             self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
 
         return epoch_loss / max(n_samples, 1)
@@ -450,7 +481,7 @@ class MatryoshkaTrainer:
     def _validate_and_refresh(
         self,
         *,
-        module: IGLModule,
+        module: IGLModule | PrefixForward,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         x_val: torch.Tensor | None,
@@ -460,24 +491,8 @@ class MatryoshkaTrainer:
         device = next(module.parameters()).device
         module.eval()
 
-        with torch.no_grad():
-            inner_n = min(config.inner_batch_size, x_train.shape[0])
-            inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
-            z_full = module.encoder(x_train[inner_idx])
-            phi_full = module.green(z_full)
-            phi_full = normalize_phi(phi_full, module.normalize)
-            target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
-            # Guard a diverged encoder: a non-finite phi/target means training
-            # has blown up, and direct_solve_weights would crash *inside* its
-            # lstsq/SVD backend with an opaque torch LinAlgError (e.g. "svd: the
-            # input matrix contained non-finite values"). Skip the refresh and
-            # keep the last good source weights — the trainer's non-finite-loss
-            # check then raises a clean, catchable IGLConvergenceError on the
-            # next epoch instead of crashing. Bit-identical on healthy runs
-            # (the finiteness check passes, the same solve runs).
-            if torch.isfinite(phi_full).all() and torch.isfinite(target_full).all():
-                w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
-                module.set_source_weights(w_full)
+        if isinstance(module, IGLModule):
+            self._refresh_source_weights(module, x_train, y_train, device=device)
 
         if x_val is None or y_val is None:
             return 0.0, 0.0
@@ -500,22 +515,63 @@ class MatryoshkaTrainer:
                 val_metric = worst
         return val_loss, val_metric
 
-    @staticmethod
-    def _snapshot(module: IGLModule) -> dict[str, object]:
-        return {
-            "encoder": {k: v.detach().cpu().clone() for k, v in module.encoder.state_dict().items()},
-            "green": {k: v.detach().cpu().clone() for k, v in module.green.state_dict().items()},
-            "bias": module.bias.detach().cpu().clone(),
-        }
+    def _refresh_source_weights(
+        self, module: IGLModule, x_train: torch.Tensor, y_train: torch.Tensor, *, device: torch.device
+    ) -> None:
+        config = self.config
+        with torch.no_grad():
+            inner_n = min(config.inner_batch_size, x_train.shape[0])
+            inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
+            z_full = module.encoder(x_train[inner_idx])
+            phi_full = module.green(z_full)
+            phi_full = normalize_phi(phi_full, module.normalize)
+            target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
+            # Guard a diverged encoder: a non-finite phi/target means training
+            # has blown up, and direct_solve_weights would crash *inside* its
+            # lstsq/SVD backend with an opaque torch LinAlgError. Skip the
+            # refresh and keep the last good source weights — the trainer's
+            # non-finite-loss check then raises a clean IGLConvergenceError on
+            # the next epoch instead of crashing. Bit-identical on healthy runs.
+            if torch.isfinite(phi_full).all() and torch.isfinite(target_full).all():
+                w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
+                module.set_source_weights(w_full)
+
+    def _classify_stop(self, history: TrainingHistory) -> str:
+        """Distinguish a validation plateau from a stop that fired mid-improvement."""
+        patience = self.config.early_stop_patience or 0
+        series = history.val_metric if history.val_metric else history.val_loss
+        if patience < _MIN_TREND_WINDOW or len(series) < patience:
+            return "plateau"
+        window = series[-patience:]
+        start, end = window[0], window[-1]
+        if start == 0:
+            return "plateau"
+        relative_change = (end - start) / abs(start)
+        threshold = _TREND_RELATIVE_TOLERANCE
+        improving = relative_change > threshold if self.loss.higher_is_better else relative_change < -threshold
+        return "improving_at_stop" if improving else "plateau"
 
     @staticmethod
-    def _restore(module: IGLModule, snapshot: dict[str, object]) -> None:
-        encoder_state = cast(dict[str, torch.Tensor], snapshot["encoder"])
-        green_state = cast(dict[str, torch.Tensor], snapshot["green"])
-        bias = cast(torch.Tensor, snapshot["bias"])
-        module.encoder.load_state_dict(encoder_state)
-        module.green.load_state_dict(green_state)
-        module.bias.data.copy_(bias.to(module.bias.device))
+    def _snapshot(module: IGLModule | PrefixForward) -> dict[str, object]:
+        if isinstance(module, IGLModule):
+            return {
+                "encoder": {k: v.detach().cpu().clone() for k, v in module.encoder.state_dict().items()},
+                "green": {k: v.detach().cpu().clone() for k, v in module.green.state_dict().items()},
+                "bias": module.bias.detach().cpu().clone(),
+            }
+        return {"state": {k: v.detach().cpu().clone() for k, v in module.state_dict().items()}}
+
+    @staticmethod
+    def _restore(module: IGLModule | PrefixForward, snapshot: dict[str, object]) -> None:
+        if isinstance(module, IGLModule):
+            encoder_state = cast(dict[str, torch.Tensor], snapshot["encoder"])
+            green_state = cast(dict[str, torch.Tensor], snapshot["green"])
+            bias = cast(torch.Tensor, snapshot["bias"])
+            module.encoder.load_state_dict(encoder_state)
+            module.green.load_state_dict(green_state)
+            module.bias.data.copy_(bias.to(module.bias.device))
+            return
+        module.load_state_dict(cast(dict[str, torch.Tensor], snapshot["state"]))
 
 
 __all__ = ["MatryoshkaTrainer", "TrainingHistory"]

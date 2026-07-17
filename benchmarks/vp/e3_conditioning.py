@@ -118,7 +118,10 @@ def part_b(*, smoke: bool) -> dict[str, Any]:
     set_seed(123)
     n, d, vocab = (1024, 32, 200) if smoke else (4096, 64, 1000)
     states = torch.randn(n, d) @ torch.diag(torch.logspace(0, -2, d))  # anisotropic "hidden states"
-    head = torch.randn(vocab, d) / sqrt(d)
+    # An iid-gaussian head concentrates to a near-isotropic metric (kappa_G ~ 2-3),
+    # which cannot discriminate whitening arms; real LLM unembeddings are strongly
+    # anisotropic, so the synthetic head gets a matching log-spaced column scaling.
+    head = (torch.randn(vocab, d) / sqrt(d)) * torch.logspace(0, -1.5, d).unsqueeze(0)
     metrics: dict[str, torch.Tensor | None] = {
         "raw": None,
         "logit": logit_metric(head),
@@ -129,30 +132,41 @@ def part_b(*, smoke: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"n": n, "d": d, "vocab": vocab, "metrics": {}}
     for name, metric in metrics.items():
         whitener = TargetWhitener(metric).fit(states)
-        y = whitener.transform(states)
+        y = whitener.transform(states).double()  # float64 isolates the whitening effect from the fp32 floor
+        phi64 = phi.double()
         w_star = torch.linalg.lstsq(
-            torch.cat([phi.double(), sqrt(effective_l2(phi, 1e-3)) * torch.eye(phi.shape[1], dtype=torch.float64)]),
-            torch.cat([y.double(), torch.zeros(phi.shape[1], y.shape[1], dtype=torch.float64)]),
-        ).solution.float()
-        reference = _envelope_grad(phi, y, w_star)
+            torch.cat([phi64, sqrt(effective_l2(phi, 1e-3)) * torch.eye(phi.shape[1], dtype=torch.float64)]),
+            torch.cat([y, torch.zeros(phi.shape[1], y.shape[1], dtype=torch.float64)]),
+        ).solution
+        reference = _envelope_grad(phi64, y, w_star)
         kappa_metric = None
         if metric is not None:
             eigs = torch.linalg.eigvalsh(metric.double())
             kappa_metric = float(eigs[-1] / eigs[0].clamp_min(1e-30))
         errors: dict[str, float] = {}
+        errors_aggregate: dict[str, float] = {}
         tol_for_target = None
+        tol_for_target_aggregate = None
         for tol in GRAD_TOLS:
-            solved = block_cg(phi, y, l2=1e-3, tol=tol, max_iter=100_000)
-            grad = _envelope_grad(phi, y, solved.w)
-            err = float((grad - reference).norm() / reference.norm().clamp_min(1e-30))
-            errors[f"{tol:g}"] = err
-            if tol_for_target is None and err <= GRAD_ERROR_TARGET:
-                tol_for_target = tol
+            for aggregate in (False, True):
+                solved = block_cg(phi64, y, l2=1e-3, tol=tol, max_iter=100_000, aggregate_stop=aggregate)
+                grad = _envelope_grad(phi64, y, solved.w)
+                err = float((grad - reference).norm() / reference.norm().clamp_min(1e-30))
+                if aggregate:
+                    errors_aggregate[f"{tol:g}"] = err
+                    if tol_for_target_aggregate is None and err <= GRAD_ERROR_TARGET:
+                        tol_for_target_aggregate = tol
+                else:
+                    errors[f"{tol:g}"] = err
+                    if tol_for_target is None and err <= GRAD_ERROR_TARGET:
+                        tol_for_target = tol
         result["metrics"][name] = {
             "kappa_metric": kappa_metric,
             "target_dynamic_range": float(y.std(dim=0).max() / y.std(dim=0).min().clamp_min(1e-30)),
             "grad_error_by_tol": errors,
+            "grad_error_by_tol_aggregate_stop": errors_aggregate,
             "tol_for_1e-3_grad_error": tol_for_target,
+            "tol_for_1e-3_grad_error_aggregate_stop": tol_for_target_aggregate,
         }
         print(f"metric={name:7s} kappa_G={kappa_metric} tol_for_1e-3={tol_for_target} errors={errors}", flush=True)
     return result
@@ -161,11 +175,13 @@ def part_b(*, smoke: bool) -> dict[str, Any]:
 def verdicts(rows_a: list[dict[str, Any]], b: dict[str, Any]) -> dict[str, Any]:
     e3a = all(row["cg_iterations"] <= 2.0 * max(row["cg_iters_predicted"], 1.0) for row in rows_a if row["cg_converged"])
 
-    def tol_of(name: str) -> float | None:
-        return b["metrics"][name]["tol_for_1e-3_grad_error"]
+    def tol_of(name: str, key: str = "tol_for_1e-3_grad_error") -> float | None:
+        return b["metrics"][name][key] if b else None
 
     ordering = None
     raw_tol, fisher_tol, damped_tol = tol_of("raw"), tol_of("fisher"), tol_of("damped")
+    agg = "tol_for_1e-3_grad_error_aggregate_stop"
+    raw_agg, fisher_agg = tol_of("raw", agg), tol_of("fisher", agg)
     if raw_tol is not None and fisher_tol is not None:
         ordering = fisher_tol <= raw_tol
     e3c = None
@@ -175,6 +191,8 @@ def verdicts(rows_a: list[dict[str, Any]], b: dict[str, Any]) -> dict[str, Any]:
         e3c = recovered >= 0.5 * gap
     return {
         "E3a_cg_iters_within_2x_prediction": e3a,
+        "E3b_per_column_stop_tol_raw_vs_fisher": (raw_tol, fisher_tol),
+        "E3b_aggregate_stop_tol_raw_vs_fisher": (raw_agg, fisher_agg),
         "E3b_fisher_needs_tighter_tol": ordering,
         "E3b_tol_raw": raw_tol,
         "E3b_tol_fisher": fisher_tol,
@@ -186,13 +204,20 @@ def verdicts(rows_a: list[dict[str, Any]], b: dict[str, Any]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--only", choices=["a", "b", "all"], default="all")
     args = parser.parse_args()
     state = machine_state(gate=not args.smoke)
     start = time.time()
-    rows_a = part_a(smoke=args.smoke)
-    b = part_b(smoke=args.smoke)
+    if args.only == "b":
+        from pathlib import Path
+
+        prior = sorted(Path("results/benchmarks/vp/e3_conditioning").glob("*/result.json"))[-1]
+        rows_a = json.loads(prior.read_text())["part_a_kernel_conditioning"]
+    else:
+        rows_a = part_a(smoke=args.smoke)
+    b = part_b(smoke=args.smoke) if args.only != "a" else {}
     payload = {
-        "config": {"l2_grid": L2_GRID, "cg_tol": CG_TOL, "grad_tols": GRAD_TOLS, "smoke": args.smoke},
+        "config": {"l2_grid": L2_GRID, "cg_tol": CG_TOL, "grad_tols": GRAD_TOLS, "smoke": args.smoke, "only": args.only},
         "part_a_kernel_conditioning": rows_a,
         "part_b_tolerance_transfer": b,
         "verdicts": verdicts(rows_a, b),

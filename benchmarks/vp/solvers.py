@@ -89,6 +89,7 @@ def block_cg(
     x0: torch.Tensor | None = None,
     matrix_free: bool = False,
     preconditioner: Callable[[torch.Tensor], torch.Tensor] | None = None,
+    aggregate_stop: bool = False,
 ) -> SolveResult:
     """CG on the normal equations, all right-hand sides advanced in lockstep.
 
@@ -96,6 +97,10 @@ def block_cg(
     vectorized; converged columns are frozen. ``x0`` warm-starts (the
     outer-loop reuse pattern); ``matrix_free`` applies ``phi.T @ (phi @ v)``
     without forming the Gram matrix, so peak memory stays ``O(p * D)``.
+    ``aggregate_stop`` replaces the per-column relative test with a single
+    Frobenius-relative test over all right-hand sides — the stopping rule
+    under which large-scale columns dominate and target whitening becomes
+    tolerance-hungry (the E3 tolerance-transfer demonstration).
     """
     lam = effective_l2(phi, l2)
     if matrix_free:
@@ -117,9 +122,13 @@ def block_cg(
     rz = (r * z).sum(dim=0)
     b_norm = b.norm(dim=0).clamp_min(1e-30)
     limit = max_iter if max_iter is not None else 20 * phi.shape[1]
+    b_frob = b.norm().clamp_min(1e-30)
     iterations = 0
     while iterations < limit:
-        active = r.norm(dim=0) / b_norm > tol
+        if aggregate_stop:
+            active = torch.full((b.shape[1],), bool(r.norm() / b_frob > tol), dtype=torch.bool)
+        else:
+            active = r.norm(dim=0) / b_norm > tol
         if not bool(active.any()):
             break
         iterations += 1
@@ -133,7 +142,7 @@ def block_cg(
         beta = rz_new / rz.clamp_min(1e-30)
         rz = rz_new
         p = z + beta * p
-    converged = bool((r.norm(dim=0) / b_norm <= tol).all())
+    converged = bool(r.norm() / b_frob <= tol) if aggregate_stop else bool((r.norm(dim=0) / b_norm <= tol).all())
     return SolveResult(w=w, iterations=iterations, residual=_normal_residual(phi, y, w, lam), converged=converged)
 
 

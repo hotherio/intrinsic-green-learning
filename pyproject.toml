@@ -1,6 +1,6 @@
 [project]
 name = "intrinsic-green-learning"
-version = "0.11.0"
+version = "0.12.0"
 description = "Intrinsic Green Learning: task-conditioned intrinsic-dimensionality discovery via a learned encoder and a multi-scale Green's-function kernel."
 readme = "README.md"
 license = "MIT"

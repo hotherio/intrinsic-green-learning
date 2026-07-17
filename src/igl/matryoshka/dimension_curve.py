@@ -15,14 +15,14 @@ from igl.core.normalization import normalize_phi
 from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError
 from igl.nn.module import IGLModule
-from igl.types import DimensionCurve, LossStrategy
+from igl.types import DimensionCurve, LossStrategy, PrefixForward
 
 _MIN_CURVE_POINTS = 2
 
 
 @torch.no_grad()
 def eval_dimension_curve(
-    module: IGLModule,
+    module: IGLModule | PrefixForward,
     x_val: torch.Tensor,
     y_val: torch.Tensor,
     *,
@@ -58,9 +58,17 @@ def eval_dimension_curve(
     target = loss.target(y_val)
 
     d_max = module.max_dim
-    z_full = module.encoder(x_val)
-
     results: dict[int, float] = {}
+
+    if not isinstance(module, IGLModule):
+        # PrefixForward path: no readout refit; score the masked forward.
+        for k in range(1, d_max + 1):
+            mask = torch.zeros(d_max, device=device)
+            mask[:k] = 1.0
+            results[k] = loss.curve_score(module(x_val, gate_mask=mask), target)
+        return results
+
+    z_full = module.encoder(x_val)
     for k in range(1, d_max + 1):
         mask = torch.zeros(d_max, device=device)
         mask[:k] = 1.0

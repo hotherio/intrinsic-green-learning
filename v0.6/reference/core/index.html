@@ -12,7 +12,7 @@
         <link rel="prev" href="../exceptions/">
       
       
-        <link rel="next" href="../kernels/">
+        <link rel="next" href="../device/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -536,6 +536,8 @@
       
         
       
+        
+      
     
     
       
@@ -959,6 +961,27 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    igl.device
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -2184,7 +2207,7 @@ Used by Matryoshka random truncation during training. Passing
 
 
 <h2 id="igl.core.solver.direct_solve_weights" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">solver</span><span class="o">.</span><span class="n">direct_solve_weights</span><span class="p">(</span><span class="n">phi</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">l2</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">solver</span><span class="o">.</span><span class="n">direct_solve_weights</span><span class="p">(</span><span class="n">phi</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">l2</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">on_nonfinite</span><span class="o">=</span><span class="s1">&#39;warn&#39;</span><span class="p">)</span></code>
 
 </h2>
 
@@ -2257,6 +2280,28 @@ even when Φ is rank-deficient.</p>
                   <code>0.001</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>on_nonfinite</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" title="typing.Literal" href="https://docs.python.org/3/library/typing.html#typing.Literal">Literal</a>[&#39;warn&#39;, &#39;raise&#39;]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Policy when inputs or the solution are non-finite.
+<code>"warn"</code> (default) emits a :class:<code>RuntimeWarning</code> and returns a
+zero matrix — the right behaviour inside training, where the
+trainer's convergence guards take over. <code>"raise"</code> raises
+:class:<code>igl.exceptions.IGLConvergenceError</code> instead — the right
+behaviour at evaluation time, where a silent zero readout would
+poison downstream metrics.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;warn&#39;</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2276,27 +2321,31 @@ even when Φ is rank-deficient.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>w</code> of shape <code>[R, C]</code>. If the solve produces non-finite entries</p>
+                <p><code>w</code> of shape <code>[R, C]</code>.</p>
               </div>
             </td>
           </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConvergenceError" href="../exceptions/#igl.exceptions.IGLConvergenceError">IGLConvergenceError</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>(e.g. catastrophic conditioning), the function emits a</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
+                <p>When non-finite values are encountered and
+<code>on_nonfinite="raise"</code>.</p>
               </div>
             </td>
           </tr>
@@ -2793,7 +2842,7 @@ one is built from <code>config.sampling</code> and <code>config.alpha</code>.</p
 
 
 <h3 id="igl.core.trainer.MatryoshkaTrainer.fit" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">x_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">y_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_losses</span><span class="o">=</span><span class="p">())</span></code>
+            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">x_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">y_val</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_losses</span><span class="o">=</span><span class="p">(),</span> <span class="n">on_epoch</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -2912,6 +2961,24 @@ the task loss before backprop.</p>
             </td>
             <td>
                   <code>()</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>on_epoch</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a>[[<span title="igl.core.trainer.EpochStats">EpochStats</span>], None] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional callback invoked once per epoch with an
+:class:<code>EpochStats</code> snapshot, after validation and
+early-stopping bookkeeping. Independent of <code>config.verbose</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>

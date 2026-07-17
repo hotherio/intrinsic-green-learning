@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../metrics/">
+        <link rel="prev" href="../core/">
       
       
-        <link rel="next" href="../preprocessing/">
+        <link rel="next" href="../kernels/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>igl.nn - Intrinsic Green Learning</title>
+        <title>igl.device - Intrinsic Green Learning</title>
       
     
     
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#iglnn" class="md-skip">
+        <a href="#device" class="md-skip">
           Skip to content
         </a>
       
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              igl.nn
+              igl.device
             
           </span>
         </div>
@@ -672,10 +672,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../device/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    igl.device
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -684,6 +704,35 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#igl.get_device" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_device
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -777,30 +826,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    igl.nn
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../nn/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -809,77 +838,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#igl.nn.module.IGLModule" class="md-nav__link">
-    <span class="md-ellipsis">
-      IGLModule
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="IGLModule">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#igl.nn.module.IGLModule.design_matrix" class="md-nav__link">
-    <span class="md-ellipsis">
-      design_matrix
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#igl.nn.module.IGLModule.forward" class="md-nav__link">
-    <span class="md-ellipsis">
-      forward
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#igl.nn.module.IGLModule.latent" class="md-nav__link">
-    <span class="md-ellipsis">
-      latent
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#igl.nn.module.IGLModule.set_source_weights" class="md-nav__link">
-    <span class="md-ellipsis">
-      set_source_weights
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1299,245 +1257,27 @@
                   
 
 
-<h1 id="iglnn"><code>igl.nn</code></h1>
-<p>Bare PyTorch entry point for custom training loops.</p>
+<h1 id="device">Device</h1>
 
 
-<div class="doc doc-object doc-class">
+<div class="doc doc-object doc-function">
 
 
-
-<h2 id="igl.nn.module.IGLModule" class="doc doc-heading">
-            <code>igl.nn.module.IGLModule</code>
-
+<h2 id="igl.get_device" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">get_device</span><span class="p">()</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+
+        <p>Return the best available torch device.</p>
+<p>Preference order: Apple <code>mps</code>, then <code>cuda</code>, then <code>cpu</code>. The
+closed-form solver always runs on CPU regardless (<code>torch.linalg.lstsq</code>
+is unreliable on MPS); tensors round-trip transparently.</p>
 
 
-        <p>End-to-end IGL model: <code>x → z → Φ → Φ w + b</code>.</p>
-<p>The readout weights <code>source_weights</code> are <em>not</em> learned by gradient
-descent — they are refreshed in closed form by
-:func:<code>igl.direct_solve_weights</code> (called by :class:<code>MatryoshkaTrainer</code>).
-The bias is a learnable parameter; the encoder and Green-kernel
-parameters are too — only the readout is closed-form.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_dim</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Ambient input dimension <code>D</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>max_dim</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Latent dimension <code>d_max</code>. Always wins over
-<code>config.max_dim</code> if both are explicit (raises on mismatch).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_dim</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Output dimension (<code>C</code> classes or regression outputs).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_anchors</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of anchors <code>R</code> in the Green kernel. <code>None</code>
-defers to <code>config.kernel.n_anchors</code> (or
-:class:<code>KernelConfig</code>'s default of <code>64</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_scales</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of kernel scales <code>K</code>. <code>None</code> defers to
-<code>config.kernel.n_scales</code> (default <code>4</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>operator</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.OperatorNameLike">OperatorNameLike</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Single operator name. <code>None</code> defers to
-<code>config.kernel.operator</code> (default
-:data:<code>igl.OperatorName.GAUSSIAN</code>). For multi-operator setups
-(e.g. <code>("gaussian", "helmholtz")</code>), build the kernel via
-:class:<code>KernelConfig</code> and pass through <code>config</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>encoder</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.types.EncoderProtocol" href="../types/#igl.types.EncoderProtocol">EncoderProtocol</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional pre-built encoder satisfying
-:class:<code>igl.types.EncoderProtocol</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>encoder_config</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.config.EncoderConfig" href="../config/#igl.config.EncoderConfig">EncoderConfig</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional :class:<code>EncoderConfig</code> from which to build
-an :class:<code>MLPEncoder</code>. Mutually exclusive with <code>encoder</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>normalize</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.NormalizeModeLike">NormalizeModeLike</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Φ-normalization mode. <code>None</code> defers to
-<code>config.kernel.normalize</code> (default
-:data:<code>igl.NormalizeMode.NW</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>normalize_input</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If <code>True</code>, prepend an
-<code>nn.BatchNorm1d(affine=False)</code> to the encoder. Stabilises
-training when ambient input dimensions have wildly different
-scales. Default <code>False</code> — appropriate for inputs that have
-been pre-normalised (e.g. log-Eig tangent vectors from
-:class:<code>igl.spd.LogEigVectorizer</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>config</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.config.IGLConfig" href="../config/#igl.config.IGLConfig">IGLConfig</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional top-level :class:<code>IGLConfig</code>. When provided,
-populates defaults for any field passed as <code>None</code>. Explicit
-per-field kwargs always win.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
+    <p><span class="doc-section-title">Returns:</span></p>
     <table>
       <thead>
         <tr>
@@ -1548,108 +1288,16 @@ per-field kwargs always win.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+                  <code><span title="torch.device">device</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For dimension mismatches, conflicting parameters,
-non-positive dimensions, or an explicit <code>max_dim</code> that
-contradicts <code>config.max_dim</code>.</p>
+                <p>The selected :class:<code>torch.device</code>.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="igl.nn.module.IGLModule.design_matrix" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">design_matrix</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Compute the normalised design matrix Φ from raw input <code>x</code>.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="igl.nn.module.IGLModule.forward" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Forward pass returning <code>Φ w + b</code> of shape <code>[N, output_dim]</code>.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="igl.nn.module.IGLModule.latent" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">latent</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return the latent encoding <code>z = Encoder(x)</code>.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="igl.nn.module.IGLModule.set_source_weights" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">set_source_weights</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span></code>
-
-</h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Replace the closed-form readout weights with <code>weights</code> <code>[R, C]</code>.</p>
-
-    </div>
-
-</div>
-
-
-
-  </div>
 
     </div>
 

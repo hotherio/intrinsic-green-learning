@@ -15,6 +15,7 @@ nav:
     - 'igl.exceptions': 'reference/exceptions.md'
     - 'igl.core': 'reference/core.md'
     - 'igl.device': 'reference/device.md'
+    - 'igl.io': 'reference/io.md'
     - 'igl.kernels': 'reference/kernels.md'
     - 'igl.matryoshka': 'reference/matryoshka.md'
     - 'igl.models': 'reference/models.md'

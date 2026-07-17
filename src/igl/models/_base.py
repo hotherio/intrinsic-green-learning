@@ -25,7 +25,7 @@ from numpy.typing import NDArray
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import StandardScaler
 
-from igl.config import EncoderConfig, IGLConfig, MatryoshkaConfig
+from igl.config import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig
 from igl.core.trainer import MatryoshkaTrainer, TrainingHistory
 from igl.exceptions import IGLNotFittedError
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
@@ -198,6 +198,32 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
 
     def _matryoshka_config(self) -> MatryoshkaConfig:
         return self.config.matryoshka if self.config is not None else MatryoshkaConfig()
+
+    def _resolved_config(self) -> IGLConfig:
+        """Fold ctor kwarg overrides into a self-contained :class:`IGLConfig`.
+
+        The result fully describes the module architecture, so a checkpoint
+        written by :func:`igl.save` can rebuild it without the estimator's
+        kwargs.
+        """
+        base_kernel = self.config.kernel if self.config is not None else KernelConfig()
+        kernel = KernelConfig(
+            n_anchors=self.n_anchors if self.n_anchors is not None else base_kernel.n_anchors,
+            n_scales=self.n_scales if self.n_scales is not None else base_kernel.n_scales,
+            operator=self.operator if self.operator is not None else base_kernel.operator,  # pyright: ignore[reportArgumentType]
+            sigma_log_range=base_kernel.sigma_log_range,
+            anchor_init_std=base_kernel.anchor_init_std,
+            normalize=self.normalize if self.normalize is not None else base_kernel.normalize,  # pyright: ignore[reportArgumentType]
+            null_space=base_kernel.null_space,
+            polynomial_degree=base_kernel.polynomial_degree,
+        )
+        return IGLConfig(
+            max_dim=self.max_dim,
+            encoder=self._resolve_encoder_config(),
+            kernel=kernel,
+            matryoshka=self._matryoshka_config(),
+            spectral=self.config.spectral if self.config is not None else None,
+        )
 
     # ---- public sklearn-compatible surface ----
 

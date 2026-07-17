@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../seeding/">
+        <link rel="prev" href="../io/">
       
       
-        <link rel="next" href="../matryoshka/">
+        <link rel="next" href="../kernels/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>igl.kernels - Intrinsic Green Learning</title>
+        <title>igl.seeding - Intrinsic Green Learning</title>
       
     
     
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#iglkernels" class="md-skip">
+        <a href="#seeding" class="md-skip">
           Skip to content
         </a>
       
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              igl.kernels
+              igl.seeding
             
           </span>
         </div>
@@ -720,27 +720,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../seeding/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    igl.seeding
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -757,7 +736,7 @@
           
   
   <span class="md-ellipsis">
-    igl.kernels
+    igl.seeding
   </span>
   
 
@@ -768,7 +747,7 @@
         
   
   <span class="md-ellipsis">
-    igl.kernels
+    igl.seeding
   </span>
   
 
@@ -790,45 +769,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#igl.kernels._registry.Operator" class="md-nav__link">
+  <a href="#igl.seed_everything" class="md-nav__link">
     <span class="md-ellipsis">
-      Operator
+      seed_everything
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#igl.kernels._registry.register_operator" class="md-nav__link">
+  <a href="#igl.fit_seeds" class="md-nav__link">
     <span class="md-ellipsis">
-      register_operator
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.kernels._registry.get_operator" class="md-nav__link">
-    <span class="md-ellipsis">
-      get_operator
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.kernels._registry.list_operators" class="md-nav__link">
-    <span class="md-ellipsis">
-      list_operators
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#bundled-operators" class="md-nav__link">
-    <span class="md-ellipsis">
-      Bundled operators
+      fit_seeds
     </span>
   </a>
   
@@ -838,6 +790,27 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kernels/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    igl.kernels
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -1362,117 +1335,21 @@
                   
 
 
-<h1 id="iglkernels"><code>igl.kernels</code></h1>
-<p>The bundled Green's-function operator zoo and the registration API.</p>
+<h1 id="seeding">Seeding</h1>
 
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.kernels._registry.Operator" class="doc doc-heading">
-            <code>igl.kernels._registry.Operator</code>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-        <p>A registered kernel operator.</p>
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="igl.kernels._registry.Operator.name">name</span></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Stable identifier used in configs and serialization.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="igl.kernels._registry.Operator.fn">fn</span></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.types.OperatorFn" href="../types/#igl.types.OperatorFn">OperatorFn</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Callable implementing :class:<code>igl.types.OperatorFn</code>.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="igl.kernels._registry.Operator.is_oscillatory">is_oscillatory</span></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>True</code> if the kernel can take negative values
-(e.g. <code>helmholtz</code>, <code>gabor</code>, <code>mexican_hat</code>); the kernel layer
-uses this to decide whether sign tracking is needed.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
 
 <div class="doc doc-object doc-function">
 
 
-<h2 id="igl.kernels._registry.register_operator" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">register_operator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_oscillatory</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+<h2 id="igl.seed_everything" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">seed_everything</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-        <p>Register a kernel operator under <code>name</code>.</p>
+        <p>Seed python, numpy, and torch global RNGs in one call.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1488,73 +1365,18 @@ uses this to decide whether sign tracking is needed.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>name</code>
+                <code>seed</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Stable identifier (must be unique).</p>
+                <p>The seed applied to all three generators.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>fn</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.types.OperatorFn" href="../types/#igl.types.OperatorFn">OperatorFn</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Callable matching :class:<code>igl.types.OperatorFn</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>is_oscillatory</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether the kernel can take negative values.</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If <code>name</code> is already registered.</p>
-              </div>
             </td>
           </tr>
       </tbody>
@@ -1567,18 +1389,98 @@ uses this to decide whether sign tracking is needed.</p>
 <div class="doc doc-object doc-function">
 
 
-<h2 id="igl.kernels._registry.get_operator" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+<h2 id="igl.fit_seeds" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">fit_seeds</span><span class="p">(</span><span class="n">factory</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">seeds</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-        <p>Return the operator registered under <code>name</code>.</p>
+        <p>Fit one estimator per seed and aggregate the headline read-outs.</p>
 
 
-<p><span class="doc-section-title">Raises:</span></p>
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>factory</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a>[[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a>], <span title="igl.seeding.fit_seeds[EstimatorT]">fit_seeds[EstimatorT]</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Builds a fresh estimator for a given seed (typically
+<code>lambda seed: IGLRegressor(..., random_state=seed)</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>x</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Training inputs, forwarded to <code>fit</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>y</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional training targets, forwarded to <code>fit</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>seeds</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" title="collections.abc.Sequence" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence">Sequence</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The seed list — e.g. a project's canonical seed protocol.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
     <table>
       <thead>
         <tr>
@@ -1589,11 +1491,41 @@ uses this to decide whether sign tracking is needed.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>name</code> is not registered.</p>
+                <p>A dict with <code>"seeds"</code>, <code>"estimators"</code> (the fitted instances),</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>and <code>"aggregate"</code>: for each numeric read-out found on the fitted</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>estimators (<code>effective_dimension_</code>, the final validation metric),</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#object">object</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>its mean, std, median, and IQR across seeds.</p>
               </div>
             </td>
           </tr>
@@ -1603,85 +1535,6 @@ uses this to decide whether sign tracking is needed.</p>
     </div>
 
 </div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="igl.kernels._registry.list_operators" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">list_operators</span><span class="p">()</span></code>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-        <p>Return the sorted list of registered operator names.</p>
-
-    </div>
-
-</div><h2 id="bundled-operators">Bundled operators</h2>
-<p>All nine operators are registered eagerly when <code>igl.kernels</code> is imported.
-Each one is a tiny module under <code>src/igl/kernels/</code>; the module names match
-the operator names exported via :func:<code>list_operators</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Oscillatory</th>
-<th>Form</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>gaussian</code></td>
-<td>no</td>
-<td><code>exp(-d² / (2σ²))</code></td>
-</tr>
-<tr>
-<td><code>laplacian</code></td>
-<td>no</td>
-<td><code>exp(-|d| / σ)</code></td>
-</tr>
-<tr>
-<td><code>cauchy</code></td>
-<td>no</td>
-<td><code>1 / (1 + d²/σ²)</code></td>
-</tr>
-<tr>
-<td><code>yukawa</code></td>
-<td>no</td>
-<td><code>exp(-|d|/σ)</code> (Laplacian shape, separate identity)</td>
-</tr>
-<tr>
-<td><code>multiquadric</code></td>
-<td>no</td>
-<td><code>1 / sqrt(1 + d²/σ²)</code></td>
-</tr>
-<tr>
-<td><code>helmholtz</code></td>
-<td>yes</td>
-<td><code>exp(-|d|/σ) · cos(π d / σ)</code></td>
-</tr>
-<tr>
-<td><code>gabor</code></td>
-<td>yes</td>
-<td><code>exp(-d²/(2σ²)) · cos(π d / σ)</code></td>
-</tr>
-<tr>
-<td><code>mexican_hat</code></td>
-<td>yes</td>
-<td><code>(1 - d²/σ²) · exp(-d²/(2σ²))</code></td>
-</tr>
-<tr>
-<td><code>soft_box</code></td>
-<td>no</td>
-<td>smooth indicator of <code>[-σ, σ]</code></td>
-</tr>
-</tbody>
-</table>
-<p>To register your own operator, supply a callable matching
-<a class="autorefs autorefs-internal" href="../types/#igl.types.OperatorFn"><code>OperatorFn</code></a> (returns <code>(log_abs, sign)</code>) and pass
-<code>is_oscillatory=True</code> if the function can take negative values.</p>
 
 
 

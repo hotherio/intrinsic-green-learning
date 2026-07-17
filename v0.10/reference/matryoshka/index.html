@@ -542,6 +542,8 @@
       
         
       
+        
+      
     
     
       
@@ -721,6 +723,27 @@
   
   
     <li class="md-nav__item">
+      <a href="../seeding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    igl.seeding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../kernels/" class="md-nav__link">
         
   
@@ -818,6 +841,33 @@
   <a href="#igl.matryoshka.dimension_curve.detect_elbow" class="md-nav__link">
     <span class="md-ellipsis">
       detect_elbow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.greedy_knockout" class="md-nav__link">
+    <span class="md-ellipsis">
+      greedy_knockout
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.KnockoutResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      KnockoutResult
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.detect_knockout_knee" class="md-nav__link">
+    <span class="md-ellipsis">
+      detect_knockout_knee
     </span>
   </a>
   
@@ -1490,7 +1540,7 @@ insertion order.</p>
                 <code>module</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.nn.module.IGLModule" href="../nn/#igl.nn.module.IGLModule">IGLModule</a></code>
+                  <code><a class="autorefs autorefs-internal" title="igl.nn.module.IGLModule" href="../nn/#igl.nn.module.IGLModule">IGLModule</a> | <a class="autorefs autorefs-internal" title="igl.types.PrefixForward" href="../types/#igl.PrefixForward">PrefixForward</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1741,6 +1791,355 @@ as substantial. Default <code>2.0</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>If <code>curve</code> is empty or <code>ratio &lt;= 0</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.greedy_knockout" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">greedy_knockout</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_val</span><span class="p">,</span> <span class="n">y_val</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">source_l2</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Delete coordinates greedily, least-harmful first, refitting each time.</p>
+<p>Scores use :meth:<code>LossStrategy.curve_score</code> (always lower-is-better:
+error rate for classification, MSE for regression), so the certificate
+is task-scored rather than reconstruction-scored.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>module</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.nn.module.IGLModule" href="../nn/#igl.nn.module.IGLModule">IGLModule</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Trained :class:<code>IGLModule</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>x_val</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Validation inputs <code>[N, D]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>y_val</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Validation targets.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>loss</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.types.LossStrategy" href="../types/#igl.types.LossStrategy">LossStrategy</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Loss strategy providing targets and the curve score.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>source_l2</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tikhonov regularisation for the per-step readout refit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.001</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ratio</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Knee threshold forwarded to :func:<code>detect_knockout_knee</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>2.0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>A</code></td>            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.matryoshka.knockout.KnockoutResult" href="#igl.KnockoutResult">KnockoutResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+<td></td>            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.matryoshka.knockout.KnockoutResult" href="#igl.KnockoutResult">KnockoutResult</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>and the certified knee.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.KnockoutResult" class="doc doc-heading">
+            <code>igl.KnockoutResult</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>Outcome of :func:<code>greedy_knockout</code>.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.KnockoutResult.curve">curve</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>{n_active: curve_score}</code> for each greedy step, from
+<code>max_dim</code> active coordinates down to 1.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.KnockoutResult.removal_order">removal_order</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#list">list</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Coordinate indices in the order they were removed.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.KnockoutResult.knee">knee</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The certified dimension, per :func:<code>detect_knockout_knee</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.detect_knockout_knee" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">detect_knockout_knee</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Locate the smallest number of active coordinates before the score blows up.</p>
+<p>Walking from few to many active coordinates, the knee is the first count
+whose score is within <code>ratio</code> of the best score over the curve. A
+single-point curve returns 1 only when it genuinely holds the best score
+— the detector never fires unconditionally at <code>n = 1</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>curve</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a>, <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>{n_active: curve_score}</code> (lower is better).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ratio</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Blow-up threshold relative to the best score.</p>
+              </div>
+            </td>
+            <td>
+                  <code>2.0</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The certified dimension.</p>
               </div>
             </td>
           </tr>

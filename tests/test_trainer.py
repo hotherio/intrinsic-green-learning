@@ -1,10 +1,13 @@
 """Tests for :class:`igl.MatryoshkaTrainer` and :class:`igl.TrainingHistory`."""
 
+import logging
+
 import pytest
 import torch
 
 from igl import (
     CrossEntropyLoss,
+    EpochStats,
     IGLConvergenceError,
     IGLModule,
     MatryoshkaConfig,
@@ -227,3 +230,47 @@ def test_trainer_cosine_warm_restarts_scheduler_runs() -> None:
     )
     history = trainer.fit(module, x_train, y_train, x_val=x_val, y_val=y_val)
     assert len(history.train_loss) == 3
+
+
+def test_trainer_verbose_logs_epochs(caplog: pytest.LogCaptureFixture) -> None:
+    x_train, y_train, _, _ = _moons_data()
+    module = IGLModule(input_dim=12, max_dim=4, output_dim=2, n_anchors=8, n_scales=2)
+    config = MatryoshkaConfig(epochs=3, batch_size=64, verbose=True, log_every=1, early_stop_patience=None)
+    trainer = MatryoshkaTrainer(loss=CrossEntropyLoss(n_classes=2), config=config)
+    with caplog.at_level(logging.INFO, logger="igl"):
+        trainer.fit(module, x_train, y_train)
+    epochs_logged = [r for r in caplog.records if r.name == "igl" and "train_loss=" in r.getMessage()]
+    assert len(epochs_logged) == 3
+
+
+def test_trainer_silent_by_default(caplog: pytest.LogCaptureFixture) -> None:
+    x_train, y_train, _, _ = _moons_data()
+    module = IGLModule(input_dim=12, max_dim=4, output_dim=2, n_anchors=8, n_scales=2)
+    config = MatryoshkaConfig(epochs=2, batch_size=64, early_stop_patience=None)
+    trainer = MatryoshkaTrainer(loss=CrossEntropyLoss(n_classes=2), config=config)
+    with caplog.at_level(logging.INFO, logger="igl"):
+        trainer.fit(module, x_train, y_train)
+    assert not [r for r in caplog.records if r.name == "igl"]
+
+
+def test_trainer_on_epoch_callback_receives_stats() -> None:
+    x_train, y_train, _, _ = _moons_data()
+    module = IGLModule(input_dim=12, max_dim=4, output_dim=2, n_anchors=8, n_scales=2)
+    config = MatryoshkaConfig(epochs=3, batch_size=64, early_stop_patience=None)
+    trainer = MatryoshkaTrainer(loss=CrossEntropyLoss(n_classes=2), config=config)
+    seen: list[EpochStats] = []
+    trainer.fit(module, x_train, y_train, on_epoch=seen.append)
+    assert [s.epoch for s in seen] == [0, 1, 2]
+    assert all(isinstance(s.train_loss, float) for s in seen)
+    assert all(s.val_loss is None for s in seen)
+
+
+def test_trainer_on_epoch_callback_sees_validation_and_best_epoch() -> None:
+    x_train, y_train, x_val, y_val = _moons_data()
+    module = IGLModule(input_dim=12, max_dim=4, output_dim=2, n_anchors=8, n_scales=2)
+    config = MatryoshkaConfig(epochs=3, batch_size=64, early_stop_patience=100, early_stop_min_epochs=1)
+    trainer = MatryoshkaTrainer(loss=CrossEntropyLoss(n_classes=2), config=config)
+    seen: list[EpochStats] = []
+    trainer.fit(module, x_train, y_train, x_val=x_val, y_val=y_val, on_epoch=seen.append)
+    assert all(s.val_loss is not None and s.val_metric is not None for s in seen)
+    assert seen[-1].best_epoch is not None

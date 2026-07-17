@@ -12,7 +12,8 @@ Per training step:
 The trainer is agnostic to the task — pass any :class:`igl.types.LossStrategy`.
 """
 
-from collections.abc import Sequence
+import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -36,6 +37,31 @@ from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, SamplingMode, 
 # once at module level behind a scoped pragma so the per-batch guards stay
 # readable.
 _LinAlgError: type[Exception] = torch._C._LinAlgError  # noqa: SLF001  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue, reportUnknownVariableType, reportUnknownMemberType]
+
+_LOGGER = logging.getLogger("igl")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EpochStats:
+    """Per-epoch snapshot passed to the ``on_epoch`` callback of :meth:`MatryoshkaTrainer.fit`.
+
+    Attributes:
+        epoch: Zero-based epoch index.
+        train_loss: Mean training loss of the epoch.
+        val_loss: Validation loss, or ``None`` when no validation split was given.
+        val_metric: Validation metric, or ``None`` when no validation split was given.
+        best_epoch: Best epoch seen so far under early stopping, or ``None`` when
+            early stopping is inactive or no improvement has been recorded yet.
+        truncation_k: Truncation level sampled for the last step of the epoch,
+            or ``None`` before any step ran.
+    """
+
+    epoch: int
+    train_loss: float
+    val_loss: float | None
+    val_metric: float | None
+    best_epoch: int | None
+    truncation_k: float | None
 
 
 @dataclass(slots=True)
@@ -100,6 +126,7 @@ class MatryoshkaTrainer:
         x_val: torch.Tensor | None = None,
         y_val: torch.Tensor | None = None,
         extra_losses: Sequence[ExtraLoss] = (),
+        on_epoch: Callable[[EpochStats], None] | None = None,
     ) -> TrainingHistory:
         """Fit ``module`` on the training tensors and return the history.
 
@@ -114,6 +141,9 @@ class MatryoshkaTrainer:
                 per batch (subject to its ``every`` frequency); the returned
                 tensor is multiplied by the extra's ``weight`` and added to
                 the task loss before backprop.
+            on_epoch: Optional callback invoked once per epoch with an
+                :class:`EpochStats` snapshot, after validation and
+                early-stopping bookkeeping. Independent of ``config.verbose``.
 
         Returns:
             A :class:`TrainingHistory` instance.
@@ -193,14 +223,25 @@ class MatryoshkaTrainer:
                     best_state = self._snapshot(module)
                 else:
                     epochs_since_improvement += 1
-                if (
-                    epoch + 1 >= config.early_stop_min_epochs
-                    and config.early_stop_patience is not None
-                    and epochs_since_improvement >= config.early_stop_patience
-                ):
-                    history.stopped_epoch = epoch + 1
-                    history.early_stopped = True
-                    break
+
+            self._emit_epoch(
+                on_epoch=on_epoch,
+                epoch=epoch,
+                epoch_loss=epoch_loss,
+                val_loss=val_loss if x_val is not None else None,
+                val_metric=val_metric if x_val is not None else None,
+                best_epoch=best_epoch if use_early_stop and best_epoch >= 0 else None,
+                history=history,
+            )
+
+            if use_early_stop and (
+                epoch + 1 >= config.early_stop_min_epochs
+                and config.early_stop_patience is not None
+                and epochs_since_improvement >= config.early_stop_patience
+            ):
+                history.stopped_epoch = epoch + 1
+                history.early_stopped = True
+                break
 
         if use_early_stop and best_state is not None:
             self._restore(module, best_state)
@@ -216,6 +257,43 @@ class MatryoshkaTrainer:
             )
 
         return history
+
+    def _emit_epoch(
+        self,
+        *,
+        on_epoch: Callable[[EpochStats], None] | None,
+        epoch: int,
+        epoch_loss: float,
+        val_loss: float | None,
+        val_metric: float | None,
+        best_epoch: int | None,
+        history: TrainingHistory,
+    ) -> None:
+        """Invoke the ``on_epoch`` callback and, when ``config.verbose``, log the epoch."""
+        config = self.config
+        wants_log = config.verbose and epoch % config.log_every == 0
+        if on_epoch is None and not wants_log:
+            return
+        stats = EpochStats(
+            epoch=epoch,
+            train_loss=epoch_loss,
+            val_loss=val_loss,
+            val_metric=val_metric,
+            best_epoch=best_epoch,
+            truncation_k=history.truncation_k[-1] if history.truncation_k else None,
+        )
+        if on_epoch is not None:
+            on_epoch(stats)
+        if wants_log:
+            _LOGGER.info(
+                "epoch %d: train_loss=%.6f val_loss=%s val_metric=%s k=%s best_epoch=%s",
+                stats.epoch,
+                stats.train_loss,
+                "n/a" if stats.val_loss is None else f"{stats.val_loss:.6f}",
+                "n/a" if stats.val_metric is None else f"{stats.val_metric:.6f}",
+                "n/a" if stats.truncation_k is None else f"{stats.truncation_k:g}",
+                "n/a" if stats.best_epoch is None else stats.best_epoch,
+            )
 
     def _train_one_epoch(  # noqa: PLR0915 (split would obscure single-epoch atomicity)
         self,

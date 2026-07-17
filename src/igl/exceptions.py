@@ -58,10 +58,15 @@ class IGLNotFittedError(IGLError):
     """Raised when a model method is called before :meth:`fit`."""
 
 
+class IGLSerializationError(IGLError):
+    """Raised when a checkpoint cannot be written or read."""
+
+
 __all__ = [
     "IGLConfigError",
     "IGLConvergenceError",
     "IGLDependencyError",
     "IGLError",
     "IGLNotFittedError",
+    "IGLSerializationError",
 ]

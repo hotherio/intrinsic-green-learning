@@ -226,6 +226,7 @@ class IGLModule(nn.Module):
         # (built-in GreenKernel declares it; user kernels are validated above).
         n_columns = int(cast(_HasOutputDim, self.green).output_dim)
 
+        self.normalize_input = normalize_input
         self.input_dim = input_dim
         self.max_dim = max_dim
         self.output_dim = output_dim

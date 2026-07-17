@@ -28,7 +28,9 @@ from igl.exceptions import (
     IGLDependencyError,
     IGLError,
     IGLNotFittedError,
+    IGLSerializationError,
 )
+from igl.io import load, read_provenance, save
 from igl.kernels._registry import (
     Operator,
     get_operator,
@@ -173,6 +175,10 @@ __all__ = [
     "eval_dimension_curve",
     # Device
     "get_device",
+    # Checkpoints
+    "load",
+    "read_provenance",
+    "save",
     # Kernel registry
     "Operator",
     "get_operator",
@@ -225,6 +231,7 @@ __all__ = [
     "IGLDependencyError",
     "IGLError",
     "IGLNotFittedError",
+    "IGLSerializationError",
     # Factory
     "make_igl_airm",
 ]

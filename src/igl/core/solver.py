@@ -133,7 +133,7 @@ def direct_solve_weights(
             weights = _svd_pinv_solve(phi_aug, y_aug)
 
     if not torch.isfinite(weights).all():
-        message = f"direct_solve_weights produced non-finite weights " f"(col_scale={col_scale_value:.3g}, l2_eff={l2_eff:.3g})"
+        message = f"direct_solve_weights produced non-finite weights (col_scale={col_scale_value:.3g}, l2_eff={l2_eff:.3g})"
         if on_nonfinite == "raise":
             raise IGLConvergenceError(epoch=0, last_loss=float("nan"), message=message)
         warnings.warn(f"{message}; falling back to zero weights.", RuntimeWarning, stacklevel=2)

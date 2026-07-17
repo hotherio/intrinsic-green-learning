@@ -91,6 +91,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
     encoder_depth: int | None
     config: IGLConfig | None
     random_state: int | None
+    device: str | torch.device | None
 
     def __init__(
         self,
@@ -104,6 +105,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         encoder_depth: int | None = None,
         config: IGLConfig | None = None,
         random_state: int | None = None,
+        device: str | torch.device | None = None,
     ) -> None:
         # sklearn's contract: __init__ must ONLY store the kwargs. No logic.
         self.max_dim = max_dim
@@ -115,6 +117,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         self.encoder_depth = encoder_depth
         self.config = config
         self.random_state = random_state
+        self.device = device
 
     # ---- internal helpers (subclass extension points) ----
 
@@ -222,7 +225,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         # ndarray we re-cast on the next line.
         x_scaled = self.scaler_.fit_transform(x)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
-        device = torch.device("cpu")
+        device = torch.device(self.device) if self.device is not None else torch.device("cpu")
         x_scaled_arr = np.asarray(x_scaled, dtype=np.float32)
         x_tensor = _to_torch(x_scaled_arr, device=device)
         y_tensor = self._prepare_y(y, device=device, x_scaled=x_scaled_arr)
@@ -244,7 +247,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         # Scope torch RNG mutations to module construction + training so the
         # caller's global RNG state is preserved.
         with self._local_rng():
-            self.module_: IGLModule = self._build_module(input_dim=n_features, output_dim=output_dim)
+            self.module_: IGLModule = self._build_module(input_dim=n_features, output_dim=output_dim).to(device)
             trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
             self.history_: TrainingHistory = trainer.fit(self.module_, x_train, y_train, x_val=x_val, y_val=y_val)
 

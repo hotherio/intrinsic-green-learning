@@ -65,6 +65,7 @@ class IGLClassifier(_BaseIGLEstimator[CrossEntropyLoss], ClassifierMixin):
         encoder_depth: int | None = None,
         config: IGLConfig | None = None,
         random_state: int | None = None,
+        device: str | torch.device | None = None,
         validation_fraction: float | None = 0.2,
     ) -> None:
         super().__init__(
@@ -77,6 +78,7 @@ class IGLClassifier(_BaseIGLEstimator[CrossEntropyLoss], ClassifierMixin):
             encoder_depth=encoder_depth,
             config=config,
             random_state=random_state,
+            device=device,
         )
         self.validation_fraction = validation_fraction
 

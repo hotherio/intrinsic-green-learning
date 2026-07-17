@@ -5,7 +5,7 @@ import warnings
 import pytest
 import torch
 
-from igl import direct_solve_weights
+from igl import IGLConvergenceError, direct_solve_weights
 
 
 def test_solver_recovers_true_weights_when_well_posed() -> None:
@@ -75,3 +75,18 @@ def test_solver_predictions_are_close_to_targets(l2: float) -> None:
     residual = (phi @ w - y).norm() / y.norm()
     # Looser l2 → tighter fit; either way the residual is bounded.
     assert residual < 5.0
+
+
+def test_solver_raise_mode_on_non_finite_inputs() -> None:
+    phi = torch.full((8, 3), float("nan"))
+    y = torch.randn(8, 2)
+    with pytest.raises(IGLConvergenceError, match="non-finite inputs"):
+        direct_solve_weights(phi, y, on_nonfinite="raise")
+
+
+def test_solver_warn_mode_is_default_on_non_finite_inputs() -> None:
+    phi = torch.full((8, 3), float("inf"))
+    y = torch.randn(8, 2)
+    with pytest.warns(RuntimeWarning, match="non-finite inputs"):
+        weights = direct_solve_weights(phi, y)
+    assert torch.equal(weights, torch.zeros(3, 2))

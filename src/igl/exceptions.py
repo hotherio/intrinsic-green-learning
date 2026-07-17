@@ -26,8 +26,8 @@ class IGLConvergenceError(IGLError):
     epoch: int
     last_loss: float
 
-    def __init__(self, *, epoch: int, last_loss: float) -> None:
-        super().__init__(f"training diverged at epoch {epoch} (last finite loss: {last_loss:.6g})")
+    def __init__(self, *, epoch: int, last_loss: float, message: str | None = None) -> None:
+        super().__init__(message or f"training diverged at epoch {epoch} (last finite loss: {last_loss:.6g})")
         self.epoch = epoch
         self.last_loss = last_loss
 

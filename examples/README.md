@@ -1,7 +1,8 @@
 # IGL examples
 
-Standalone scripts that exercise the public IGL API on synthetic data —
-nothing external is required.
+Standalone scripts that exercise the public IGL API. Scripts under
+`synthetic/` need nothing external; scripts under `nlp/` require the
+`[nlp]` extra and network access to download a tiny HuggingFace model.
 
 ## How to run
 

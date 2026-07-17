@@ -21,6 +21,7 @@ nav:
     - 'igl.matryoshka': 'reference/matryoshka.md'
     - 'igl.models': 'reference/models.md'
     - 'igl.metrics': 'reference/metrics.md'
+    - 'igl.nlp': 'reference/nlp.md'
     - 'igl.nn': 'reference/nn.md'
     - 'igl.preprocessing': 'reference/preprocessing.md'
     - 'igl.spd': 'reference/spd.md'

@@ -140,11 +140,19 @@ are small-dictionary, huge-RHS, streaming or SPD problems. The real levers:
    reports as its single biggest fix, and the one Muon uses. Shared GPU
    primitive across encoder, SPD loss, and optimizer. **Candidate PR.**
 
-## Follow-up backlog (not run this wave)
+**E4 hybrid — basin selection confirmed, and the practical recipe.** The
+explore-then-polish arm (minibatch Adam picks the basin, then L-BFGS polishes)
+resolves the moons puzzle: pure L-BFGS committed to a *worse* basin on moons
+(final 0.317 vs baseline 0.313), but with an Adam warmup first the hybrid
+matches the baseline exactly (0.3132, 1.0×) — the classification
+non-acceleration *was* basin selection, not a landscape incompatibility. On
+regression the hybrid keeps a quality win and a speedup (final 0.0020 vs
+0.0032 at D=512, **1.7–2.8×**; lower than pure L-BFGS's 32× because warmup
+epochs run in Adam, but it never regresses any bed). So the shippable outer
+recipe is **Adam warmup → L-BFGS polish**, safeguarded: universal, never worse
+than the baseline, 1.7–2.8× faster with better optima where a tail exists.
 
-- **E4 hybrid** (explore-then-polish: minibatch Adam picks the basin, L-BFGS
-  polishes) — tests whether moons' non-acceleration is basin selection;
-  results in `e4_outer_acceleration` hybrid pass.
+## Follow-up backlog (not run this wave)
 - **E9 forgetting-factor RLS** — γ-decayed Σ, c instead of per-cycle reset, so
   every batch feeds both statistics and gradient (the RLS analog of the E2
   warm-start effect). Prototype against `mhalm/` on tiny-shakespeare.
@@ -161,8 +169,9 @@ are small-dictionary, huge-RHS, streaming or SPD problems. The real levers:
 - **CUDA-resident** solve path (no CPU hop). Throughput §1.
 - **block-CG inner backend** for p ≳ 10k, per-column stopping, warm-started
   across outer steps. E2/E3.
-- **full-batch L-BFGS outer mode** for bounded-data regression/distillation
-  fits (IGLDistiller). E4.
+- **safeguarded Adam→L-BFGS outer mode** for bounded-data regression /
+  distillation fits (IGLDistiller): 1.7–2.8× faster, never worse than
+  minibatch Adam on any bed. E4 + hybrid.
 - **true-CE inner option** for classification/LM readouts (better bpb at equal
   accuracy). E7.
 - **Newton-Schulz** matrix-function path in `igl.spd`. Throughput §3.

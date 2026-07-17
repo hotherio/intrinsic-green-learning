@@ -52,15 +52,32 @@ def peak_rss_mb() -> float:
 
 
 def _other_python_training_alive() -> bool:
-    """True when another python process with a heavyweight entrypoint is running."""
+    """True when another python process with a heavyweight entrypoint is running.
+
+    The launcher chain of this very process (shell, uv, tee, ...) repeats the
+    benchmark module name on its command lines, so the whole ancestor chain is
+    excluded before matching.
+    """
     try:
-        out = subprocess.check_output(["ps", "-axo", "pid,command"], text=True)
+        out = subprocess.check_output(["ps", "-axo", "pid,ppid,command"], text=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
-    me = os.getpid()
+    parents: dict[int, int] = {}
+    commands: dict[int, str] = {}
     for line in out.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        if not pid.isdigit() or int(pid) == me or not command:
+        parts = line.strip().split(None, 2)
+        if len(parts) < 3 or not parts[0].isdigit() or not parts[1].isdigit():
+            continue
+        pid = int(parts[0])
+        parents[pid] = int(parts[1])
+        commands[pid] = parts[2]
+    ancestors = {os.getpid()}
+    node = os.getpid()
+    while node in parents and parents[node] not in ancestors and parents[node] > 1:
+        node = parents[node]
+        ancestors.add(node)
+    for pid, command in commands.items():
+        if pid in ancestors:
             continue
         if "python" in command and any(marker in command for marker in ("train", "probe_", "benchmarks.", "pytest")):
             return True

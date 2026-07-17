@@ -40,7 +40,14 @@ from benchmarks.vp.vp_loop import VPLoop, VPLoopConfig, VPLoopResult
 from igl import CrossEntropyLoss, IGLModule, MSELoss
 
 SEEDS = [42, 123, 456]
-ARMS = ("minibatch-adam", "fullbatch-adam", "fullbatch-lbfgs", "minibatch-adam-aa", "fullbatch-adam-aa")
+ARMS = (
+    "minibatch-adam",
+    "fullbatch-adam",
+    "fullbatch-lbfgs",
+    "minibatch-adam-aa",
+    "fullbatch-adam-aa",
+    "hybrid-adam-lbfgs",
+)
 
 
 def testbeds(*, smoke: bool) -> dict[str, dict[str, Any]]:
@@ -77,6 +84,16 @@ def arm_config(arm: str, *, seed: int, smoke: bool) -> VPLoopConfig:
     if arm == "fullbatch-adam-aa":
         # classic Anderson setting: deterministic outer map, raw iterates
         return VPLoopConfig(epochs=fullbatch_multiplier * base_epochs, batch_size=10**9, inner_batch_size=2048, seed=seed)
+    if arm == "hybrid-adam-lbfgs":
+        # explore (minibatch Adam picks the basin) then polish (L-BFGS endgame)
+        return VPLoopConfig(
+            epochs=base_epochs // 2,
+            batch_size=256,
+            inner_batch_size=2048,
+            hybrid_warmup_epochs=base_epochs // 4,
+            lbfgs_max_iter=10,
+            seed=seed,
+        )
     return VPLoopConfig(epochs=base_epochs // 2, inner_batch_size=2048, lbfgs_max_iter=10, seed=seed)
 
 
@@ -87,12 +104,12 @@ def time_to_target(result: VPLoopResult, target: float) -> float | None:
     return None
 
 
-def run_bed(name: str, bed: dict[str, Any], *, smoke: bool) -> dict[str, Any]:
+def run_bed(name: str, bed: dict[str, Any], *, smoke: bool, arms: tuple[str, ...] = ARMS) -> dict[str, Any]:
     x_train, y_train, x_val, y_val = bed["data"]
     out: dict[str, Any] = {"arms": {}}
     baselines: dict[int, VPLoopResult] = {}
     seeds = SEEDS[:1] if smoke else SEEDS
-    for arm in ARMS:
+    for arm in arms:
         per_seed: list[dict[str, Any]] = []
         for seed in seeds:
             set_seed(seed)
@@ -167,13 +184,20 @@ def verdicts(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--arms", default=None, help="comma-separated subset of arms (baseline auto-included)")
     args = parser.parse_args()
+    arms = ARMS
+    if args.arms:
+        chosen = [a.strip() for a in args.arms.split(",")]
+        if "minibatch-adam" not in chosen:
+            chosen.insert(0, "minibatch-adam")  # targets are defined against the baseline
+        arms = tuple(chosen)
     state = machine_state(gate=not args.smoke)
     start = time.time()
     beds = testbeds(smoke=args.smoke)
-    results = {name: run_bed(name, bed, smoke=args.smoke) for name, bed in beds.items()}
+    results = {name: run_bed(name, bed, smoke=args.smoke, arms=arms) for name, bed in beds.items()}
     payload = {
-        "config": {"seeds": SEEDS, "arms": list(ARMS), "smoke": args.smoke},
+        "config": {"seeds": SEEDS, "arms": list(arms), "smoke": args.smoke},
         "beds": results,
         "verdicts": verdicts(results),
     }

@@ -102,8 +102,16 @@ def machine_state(*, gate: bool = True) -> dict[str, Any]:
         "mps_available": torch.backends.mps.is_available(),
     }
     if gate:
-        if load1 > LOAD_GATE:
-            raise RuntimeError(f"machine-state gate: load average {load1:.1f} > {LOAD_GATE}; rerun on a quiet machine")
+        # The 1-minute load average decays slowly after a heavy process exits;
+        # wait out the decay before concluding the machine is busy.
+        for attempt in range(6):
+            load1 = os.getloadavg()[0]
+            if load1 <= LOAD_GATE:
+                break
+            if attempt == 5:
+                raise RuntimeError(f"machine-state gate: load average {load1:.1f} > {LOAD_GATE}; rerun on a quiet machine")
+            time.sleep(30)
+        state["load_avg"] = [round(load1, 2), *state["load_avg"][1:]]
         # Retry the process scan: IDE test-discovery pytest processes flicker
         # for a few seconds and must not fail a multi-hour benchmark launch.
         for attempt in range(3):

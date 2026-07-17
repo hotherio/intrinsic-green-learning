@@ -86,6 +86,7 @@ def teacher_forced(bed: dict[str, Any], *, epochs: int, seed: int) -> dict[str, 
     )
     module = build_module(x_train.shape[1], bed["output_dim"], seed=seed)
     result = loop.fit(module, x_train, y_train, x_val, y_val)
+    print("teacher-forced pass done", flush=True)
     medians = {name: float(np.median(errors)) for name, errors in result.grad_probe_errors.items()}
     w_medians = {name: float(np.median(errors)) for name, errors in result.grad_probe_w_errors.items()}
     # Primary P1 fit: gradient error vs ACHIEVED w-error (the exact Danskin statement,
@@ -113,10 +114,14 @@ def teacher_forced(bed: dict[str, Any], *, epochs: int, seed: int) -> dict[str, 
 def free_running(bed: dict[str, Any], *, epochs: int) -> dict[str, Any]:
     """Direct vs converged-CG vs converged-SVRG full trainings (P2), with repeats (P8)."""
     x_train, y_train, x_val, y_val = bed["data"]
+    # The SVRG free-running arm is deliberately absent at full scale: its
+    # 5000-epoch-per-solve budget explosion is itself the E2/E5 finding
+    # (a stochastic inner solver cannot reach 1e-6 in practical budgets;
+    # the smoke-scale run records the resulting quality bias). P2's claim
+    # is about *converged* iterative solvers, which CG delivers.
     arms: dict[str, Any] = {
         "direct": None,
         f"cg_{FREE_TOL:g}": partial(cg_inner, tol=FREE_TOL),
-        f"svrg_{FREE_TOL:g}": partial(svrg_inner, tol=FREE_TOL),
     }
     out: dict[str, Any] = {}
     for name, solver in arms.items():
@@ -137,6 +142,7 @@ def free_running(bed: dict[str, Any], *, epochs: int) -> dict[str, Any]:
                 hashes.append(hashlib.sha256(blob).hexdigest()[:16])
             finals.append(result.val_loss[-1])
             state_hashes.append(hashes)
+            print(f"free-running {name} seed={seed} final={finals[-1]:.5g}", flush=True)
         out[name] = {
             "final_val_by_seed": finals,
             "state_hashes": state_hashes,

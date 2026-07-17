@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../kernels/">
+        <link rel="prev" href="../device/">
       
       
-        <link rel="next" href="../models/">
+        <link rel="next" href="../kernels/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>igl.matryoshka - Intrinsic Green Learning</title>
+        <title>igl.io - Intrinsic Green Learning</title>
       
     
     
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#iglmatryoshka" class="md-skip">
+        <a href="#checkpoints" class="md-skip">
           Skip to content
         </a>
       
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              igl.matryoshka
+              igl.io
             
           </span>
         </div>
@@ -697,10 +697,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../io/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    igl.io
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -709,6 +729,140 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#igl.io" class="md-nav__link">
+    <span class="md-ellipsis">
+      io
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="io">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.PreprocessingState" class="md-nav__link">
+    <span class="md-ellipsis">
+      PreprocessingState
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.Profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      Profile
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.Provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Provenance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.load" class="md-nav__link">
+    <span class="md-ellipsis">
+      load
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.read_provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      read_provenance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.io.save" class="md-nav__link">
+    <span class="md-ellipsis">
+      save
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.save" class="md-nav__link">
+    <span class="md-ellipsis">
+      save
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.load" class="md-nav__link">
+    <span class="md-ellipsis">
+      load
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.read_provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      read_provenance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.io.Provenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Provenance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.io.PreprocessingState" class="md-nav__link">
+    <span class="md-ellipsis">
+      PreprocessingState
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -739,30 +893,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    igl.matryoshka
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../matryoshka/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -771,62 +905,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.sampler.UniformSampler" class="md-nav__link">
-    <span class="md-ellipsis">
-      UniformSampler
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.sampler.PowerLawSampler" class="md-nav__link">
-    <span class="md-ellipsis">
-      PowerLawSampler
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.dimension_curve.eval_dimension_curve" class="md-nav__link">
-    <span class="md-ellipsis">
-      eval_dimension_curve
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.matryoshka.dimension_curve.detect_elbow" class="md-nav__link">
-    <span class="md-ellipsis">
-      detect_elbow
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1330,28 +1408,68 @@
                   
 
 
-<h1 id="iglmatryoshka"><code>igl.matryoshka</code></h1>
-<p>Truncation samplers and post-fit dimension-curve helpers.</p>
+<h1 id="checkpoints">Checkpoints</h1>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="igl.io" class="doc doc-heading">
+            <code>igl.io</code>
+
+
+</h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Versioned checkpoint save/load for modules and estimators.</p>
+<p>One file, one schema: :func:<code>save</code> writes a <code>torch.save</code> payload holding
+only tensors and JSON-safe primitives, so :func:<code>load</code> reads it with
+<code>torch.load(..., weights_only=True)</code>. The payload carries the resolved
+:class:<code>igl.IGLConfig</code>, the module <code>state_dict</code>, the preprocessing
+constants (scaler statistics, scalar input stats, or a fitted
+:class:<code>igl.whitening.TargetWhitener</code>), estimator extras (params, classes,
+history, dimension curve), and provenance (package and torch versions,
+seed, epochs, quick/full profile).</p>
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
 
 
 <div class="doc doc-object doc-class">
 
 
 
-<h2 id="igl.matryoshka.sampler.UniformSampler" class="doc doc-heading">
-            <code>igl.matryoshka.sampler.UniformSampler</code>
+<h3 id="igl.io.PreprocessingState" class="doc doc-heading">
+            <code>PreprocessingState</code>
 
 
-</h2>
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
 
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
 
-        <p>Uniform sampler: <code>k ~ Uniform{1, …, d_max}</code>.</p>
-<p>The simplest Matryoshka sampling strategy, and the default. It gives equal
-weight to all truncation levels and lets the encoder discover the true
-intrinsic dimension without prior bias.</p>
+        <p>Preprocessing constants for bare-module checkpoints.</p>
+<p>Estimator checkpoints derive these from fitted attributes; bare
+:class:<code>igl.IGLModule</code> saves carry them explicitly.</p>
 
 
 
@@ -1383,48 +1501,109 @@ intrinsic dimension without prior bias.</p>
 
 
 
-<h2 id="igl.matryoshka.sampler.PowerLawSampler" class="doc doc-heading">
-            <code>igl.matryoshka.sampler.PowerLawSampler</code>
+<h3 id="igl.io.Profile" class="doc doc-heading">
+            <code>Profile</code>
 
 
-</h2>
+</h3>
 
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-external" title="enum.StrEnum" href="https://docs.python.org/3/library/enum.html#enum.StrEnum">StrEnum</a></code></p>
 
 
-        <p>Power-law sampler: <code>P(k) ∝ k^{-α}</code>.</p>
-<p>Useful when prior knowledge suggests the effective dimension is small —
-biases sampling toward lower truncation levels so the encoder is more
-aggressively forced to compress.</p>
+        <p>Fit profile recorded in provenance: quick fits must not be silently reused.</p>
 
 
-<p><span class="doc-section-title">Parameters:</span></p>
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="igl.io.Provenance" class="doc doc-heading">
+            <code>Provenance</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>User-supplied provenance stamped into the checkpoint.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
     <table>
       <thead>
         <tr>
           <th>Name</th>
           <th>Type</th>
           <th>Description</th>
-          <th>Default</th>
         </tr>
       </thead>
       <tbody>
           <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.seed">seed</span></code></td>
             <td>
-                <code>alpha</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Exponent (must be positive). Larger <code>alpha</code> puts more mass on
-small <code>k</code>. Default <code>1.0</code>.</p>
+                <p>Seed used for the fit, if any.</p>
               </div>
             </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.epochs">epochs</span></code></td>
             <td>
-                  <code>1.0</code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Epoch budget of the fit, if recorded.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.profile">profile</span></code></td>
+            <td>
+                  <code><span title="igl.io.ProfileLike">ProfileLike</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>Profile.FULL</code> (default) or <code>Profile.QUICK</code>; quick
+checkpoints are refused by :func:<code>load</code> unless <code>allow_quick</code>.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -1456,22 +1635,19 @@ small <code>k</code>. Default <code>1.0</code>.</p>
 
 </div>
 
+
 <div class="doc doc-object doc-function">
 
 
-<h2 id="igl.matryoshka.dimension_curve.eval_dimension_curve" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">matryoshka</span><span class="o">.</span><span class="n">dimension_curve</span><span class="o">.</span><span class="n">eval_dimension_curve</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">x_val</span><span class="p">,</span> <span class="n">y_val</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">source_l2</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span></code>
+<h3 id="igl.io.load" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_quick</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">)</span></code>
 
-</h2>
+</h3>
 
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-        <p>Evaluate the trained module at every truncation level <code>k</code>.</p>
-<p>For each <code>k</code>, freshly solves the readout weights via lstsq using only the
-first <code>k</code> latent dimensions, then computes the validation metric. Returns
-a <code>{k: metric}</code> mapping. The mapping iterates <code>k = 1, 2, …, d_max</code> in
-insertion order.</p>
+        <p>Read a checkpoint written by :func:<code>save</code>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1487,14 +1663,14 @@ insertion order.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>module</code>
+                <code>path</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.nn.module.IGLModule" href="../nn/#igl.nn.module.IGLModule">IGLModule</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="pathlib.Path" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Trained :class:<code>IGLModule</code>.</p>
+                <p>Checkpoint file.</p>
               </div>
             </td>
             <td>
@@ -1503,67 +1679,35 @@ insertion order.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>x_val</code>
+                <code>allow_quick</code>
             </td>
             <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Validation inputs <code>[N, D]</code>.</p>
+                <p>Load <code>profile="quick"</code> checkpoints; refused by
+default so a quick fit is never silently mistaken for a full one.</p>
               </div>
             </td>
             <td>
-                <em>required</em>
+                  <code>False</code>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>y_val</code>
+                <code>map_location</code>
             </td>
             <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Validation targets.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>loss</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.types.LossStrategy" href="../types/#igl.types.LossStrategy">LossStrategy</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <span title="torch.device">device</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Loss strategy used to compute the per-<code>k</code> metric.</p>
+                <p>Device for the loaded tensors.</p>
               </div>
             </td>
             <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>source_l2</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Tikhonov regularisation forwarded to
-:func:<code>igl.direct_solve_weights</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.001</code>
+                  <code>&#39;cpu&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -1581,143 +1725,11 @@ insertion order.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
+                  <code><span title="igl.io.Saveable">Saveable</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A dict mapping <code>k → curve_score</code> where <code>curve_score</code> is whatever</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The curve score is always lower-is-better so :func:<code>detect_elbow</code></p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>can locate the knee.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="igl.matryoshka.dimension_curve.detect_elbow" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">matryoshka</span><span class="o">.</span><span class="n">dimension_curve</span><span class="o">.</span><span class="n">detect_elbow</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span></code>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-        <p>Locate the elbow of a dimension/loss curve in log-space.</p>
-<p>Operates on <code>log(loss)</code> so a 5× loss reduction has the same log-delta
-whether it occurs at <code>loss=0.1</code> or <code>loss=0.001</code>. Returns the largest
-<code>k</code> whose log-reduction exceeds <code>max_log_delta / ratio</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>curve</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.DimensionCurve">DimensionCurve</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>{k: loss}</code> mapping (from :func:<code>eval_dimension_curve</code>).
-Must contain at least one entry.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>ratio</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A reduction must be at least <code>max_log_delta / ratio</code> to count
-as substantial. Default <code>2.0</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>2.0</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The estimated intrinsic dimension <code>d_eff</code>.</p>
+                <p>The reconstructed module or estimator, ready for inference.</p>
               </div>
             </td>
           </tr>
@@ -1736,16 +1748,625 @@ as substantial. Default <code>2.0</code>.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+                  <code><span title="igl.exceptions.IGLSerializationError">IGLSerializationError</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>curve</code> is empty or <code>ratio &lt;= 0</code>.</p>
+                <p>On schema mismatch or a refused quick profile.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.io.read_provenance" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">read_provenance</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Read only the provenance block of a checkpoint.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.io.save" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">save</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">preprocessing</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">provenance</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Write a schema-v1 checkpoint for a module or fitted estimator.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>obj</code>
+            </td>
+            <td>
+                  <code><span title="igl.io.Saveable">Saveable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A bare :class:<code>igl.IGLModule</code> or a fitted estimator.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="pathlib.Path" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Destination file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.config.IGLConfig" href="../config/#igl.config.IGLConfig">IGLConfig</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Required for bare modules (a module does not retain its
+config); forbidden for estimators (theirs is derived).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>preprocessing</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.io.PreprocessingState" href="#igl.io.PreprocessingState">PreprocessingState</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional constants for bare modules; forbidden for
+estimators.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>provenance</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.io.Provenance" href="#igl.io.Provenance">Provenance</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional provenance; versions and timestamp are stamped
+automatically.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="igl.exceptions.IGLSerializationError">IGLSerializationError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For unfitted estimators or a bare module
+without <code>config</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When estimator-derived fields are passed explicitly.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.save" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">preprocessing</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">provenance</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Write a schema-v1 checkpoint for a module or fitted estimator.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>obj</code>
+            </td>
+            <td>
+                  <code><span title="igl.io.Saveable">Saveable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A bare :class:<code>igl.IGLModule</code> or a fitted estimator.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="pathlib.Path" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Destination file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.config.IGLConfig" href="../config/#igl.config.IGLConfig">IGLConfig</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Required for bare modules (a module does not retain its
+config); forbidden for estimators (theirs is derived).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>preprocessing</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.io.PreprocessingState" href="#igl.io.PreprocessingState">PreprocessingState</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional constants for bare modules; forbidden for
+estimators.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>provenance</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.io.Provenance" href="#igl.io.Provenance">Provenance</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional provenance; versions and timestamp are stamped
+automatically.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="igl.exceptions.IGLSerializationError">IGLSerializationError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For unfitted estimators or a bare module
+without <code>config</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>When estimator-derived fields are passed explicitly.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.load" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_quick</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Read a checkpoint written by :func:<code>save</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="pathlib.Path" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Checkpoint file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>allow_quick</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Load <code>profile="quick"</code> checkpoints; refused by
+default so a quick fit is never silently mistaken for a full one.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_location</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a> | <span title="torch.device">device</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Device for the loaded tensors.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;cpu&#39;</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="igl.io.Saveable">Saveable</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The reconstructed module or estimator, ready for inference.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="igl.exceptions.IGLSerializationError">IGLSerializationError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>On schema mismatch or a refused quick profile.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.read_provenance" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">read_provenance</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Read only the provenance block of a checkpoint.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.io.Provenance" class="doc doc-heading">
+            <code>igl.io.Provenance</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>User-supplied provenance stamped into the checkpoint.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.seed">seed</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Seed used for the fit, if any.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.epochs">epochs</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Epoch budget of the fit, if recorded.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.io.Provenance.profile">profile</span></code></td>
+            <td>
+                  <code><span title="igl.io.ProfileLike">ProfileLike</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>Profile.FULL</code> (default) or <code>Profile.QUICK</code>; quick
+checkpoints are refused by :func:<code>load</code> unless <code>allow_quick</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.io.PreprocessingState" class="doc doc-heading">
+            <code>igl.io.PreprocessingState</code>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>Preprocessing constants for bare-module checkpoints.</p>
+<p>Estimator checkpoints derive these from fitted attributes; bare
+:class:<code>igl.IGLModule</code> saves carry them explicitly.</p>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 

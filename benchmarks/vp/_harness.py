@@ -104,8 +104,14 @@ def machine_state(*, gate: bool = True) -> dict[str, Any]:
     if gate:
         if load1 > LOAD_GATE:
             raise RuntimeError(f"machine-state gate: load average {load1:.1f} > {LOAD_GATE}; rerun on a quiet machine")
-        if _other_python_training_alive():
-            raise RuntimeError("machine-state gate: another python training/benchmark process is running")
+        # Retry the process scan: IDE test-discovery pytest processes flicker
+        # for a few seconds and must not fail a multi-hour benchmark launch.
+        for attempt in range(3):
+            if not _other_python_training_alive():
+                break
+            if attempt == 2:
+                raise RuntimeError("machine-state gate: another python training/benchmark process is running")
+            time.sleep(5)
     return state
 
 

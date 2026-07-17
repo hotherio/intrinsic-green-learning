@@ -40,29 +40,43 @@ from benchmarks.vp.vp_loop import VPLoop, VPLoopConfig, VPLoopResult
 from igl import CrossEntropyLoss, IGLModule, MSELoss
 
 SEEDS = [42, 123, 456]
-ARMS = ("minibatch-adam", "fullbatch-adam", "fullbatch-lbfgs", "minibatch-adam-aa")
+ARMS = ("minibatch-adam", "fullbatch-adam", "fullbatch-lbfgs", "minibatch-adam-aa", "fullbatch-adam-aa")
 
 
 def testbeds(*, smoke: bool) -> dict[str, dict[str, Any]]:
     n_small = 2000 if smoke else 8000
     n_moons = 800 if smoke else 2000
     x_a, y_a = mlp_manifold(n_small, latent_dim=2, ambient_dim=64)
-    x_b, y_b = mlp_manifold(n_small, latent_dim=4, ambient_dim=512 if not smoke else 128)
     x_m, y_m = moons_classification(n_moons)
-    return {
+    beds = {
         "manifold_2_64": {"data": split(x_a, y_a), "loss": MSELoss(), "output_dim": x_a.shape[1], "kind": "regression"},
-        "manifold_4_512": {"data": split(x_b, y_b), "loss": MSELoss(), "output_dim": x_b.shape[1], "kind": "regression"},
         "moons": {"data": split(x_m, y_m), "loss": CrossEntropyLoss(n_classes=2), "output_dim": 2, "kind": "classification"},
     }
+    if not smoke:
+        x_b, y_b = mlp_manifold(n_small, latent_dim=4, ambient_dim=512)
+        beds["manifold_4_512"] = {
+            "data": split(x_b, y_b),
+            "loss": MSELoss(),
+            "output_dim": x_b.shape[1],
+            "kind": "regression",
+        }
+    return beds
 
 
 def arm_config(arm: str, *, seed: int, smoke: bool) -> VPLoopConfig:
-    base_epochs = 60 if smoke else 400
-    if arm in ("minibatch-adam", "minibatch-adam-aa"):
+    base_epochs = 30 if smoke else 400
+    fullbatch_multiplier = 3 if smoke else 8
+    if arm == "minibatch-adam":
         return VPLoopConfig(epochs=base_epochs, batch_size=256, inner_batch_size=2048, seed=seed)
+    if arm == "minibatch-adam-aa":
+        # RNA on EMA-averaged iterates: extrapolating raw SGD iterates fits noise
+        return VPLoopConfig(epochs=base_epochs, batch_size=256, inner_batch_size=2048, seed=seed, aa_ema=0.5)
     if arm == "fullbatch-adam":
         # one step per epoch: give it the same number of *gradient steps* upper bound
-        return VPLoopConfig(epochs=8 * base_epochs, batch_size=10**9, inner_batch_size=2048, seed=seed)
+        return VPLoopConfig(epochs=fullbatch_multiplier * base_epochs, batch_size=10**9, inner_batch_size=2048, seed=seed)
+    if arm == "fullbatch-adam-aa":
+        # classic Anderson setting: deterministic outer map, raw iterates
+        return VPLoopConfig(epochs=fullbatch_multiplier * base_epochs, batch_size=10**9, inner_batch_size=2048, seed=seed)
     return VPLoopConfig(epochs=base_epochs // 2, inner_batch_size=2048, lbfgs_max_iter=10, seed=seed)
 
 
@@ -77,9 +91,10 @@ def run_bed(name: str, bed: dict[str, Any], *, smoke: bool) -> dict[str, Any]:
     x_train, y_train, x_val, y_val = bed["data"]
     out: dict[str, Any] = {"arms": {}}
     baselines: dict[int, VPLoopResult] = {}
+    seeds = SEEDS[:1] if smoke else SEEDS
     for arm in ARMS:
         per_seed: list[dict[str, Any]] = []
-        for seed in SEEDS:
+        for seed in seeds:
             set_seed(seed)
             module = IGLModule(input_dim=x_train.shape[1], max_dim=8, output_dim=bed["output_dim"], n_anchors=48, n_scales=4)
             loop = VPLoop(
@@ -138,9 +153,10 @@ def verdicts(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
     p7b = True
     for bed_result in results.values():
         baseline_finals = {r["seed"]: r["final_val"] for r in bed_result["arms"]["minibatch-adam"]}
-        for r in bed_result["arms"]["minibatch-adam-aa"]:
-            if r["final_val"] > baseline_finals[r["seed"]] * 1.001:  # tolerance for eval jitter
-                p7b = False
+        for aa_arm in ("minibatch-adam-aa", "fullbatch-adam-aa"):
+            for r in bed_result["arms"].get(aa_arm, []):
+                if aa_arm == "minibatch-adam-aa" and r["final_val"] > baseline_finals[r["seed"]] * 1.001:
+                    p7b = False  # the safeguard must make minibatch AA free vs its own baseline
     return {
         "P7a_median_speedups_to_baseline_final": best_speedups,
         "P7a_pass": p7a,

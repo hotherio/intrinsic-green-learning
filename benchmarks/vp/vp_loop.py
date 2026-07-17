@@ -33,7 +33,7 @@ from igl import IGLModule, direct_solve_weights, normalize_phi
 InnerSolver = Callable[[torch.Tensor, torch.Tensor, torch.Tensor | None], tuple[torch.Tensor, int]]
 """``(phi, target, x0) -> (w, iterations)`` — x0 is a warm start or None."""
 
-OuterMode = Literal["minibatch-adam", "fullbatch-adam", "fullbatch-lbfgs", "minibatch-adam-aa"]
+OuterMode = Literal["minibatch-adam", "fullbatch-adam", "fullbatch-lbfgs", "minibatch-adam-aa", "fullbatch-adam-aa"]
 
 
 def direct_inner(
@@ -55,6 +55,7 @@ class VPLoopConfig:
     fixed_k: int | None = None  # None = uniform 1..max_dim, matching the house sampler
     aa_window: int = 5
     aa_reg: float = 1e-8
+    aa_ema: float | None = None  # EMA factor for the extrapolated iterates (RNA on averaged iterates)
     lbfgs_max_iter: int = 10
     seed: int = 0
 
@@ -198,7 +199,9 @@ class VPLoop:
 
         optimizer = torch.optim.AdamW(params, lr=config.encoder_lr)
         batch_size = n if self.outer_mode.startswith("fullbatch") else config.batch_size
+        aa_active = self.outer_mode.endswith("-aa")
         aa_history: deque[torch.Tensor] = deque(maxlen=config.aa_window + 1)
+        aa_ema_state: torch.Tensor | None = None
         best_val = float("inf")
 
         for _epoch in range(config.epochs):
@@ -230,8 +233,15 @@ class VPLoop:
             result.epoch_time_s.append(time.perf_counter() - start)
             best_val = min(best_val, val)
 
-            if self.outer_mode == "minibatch-adam-aa":
-                aa_history.append(_flat([p.detach().clone() for p in params]))
+            if aa_active:
+                iterate = _flat([p.detach().clone() for p in params])
+                if config.aa_ema is not None:
+                    aa_ema_state = (
+                        iterate if aa_ema_state is None else config.aa_ema * aa_ema_state + (1 - config.aa_ema) * iterate
+                    )
+                    aa_history.append(aa_ema_state.clone())
+                else:
+                    aa_history.append(iterate)
                 proposal = self._rna_proposal(aa_history)
                 if proposal is not None:
                     result.aa_proposals += 1
@@ -243,7 +253,8 @@ class VPLoop:
                         result.val_loss[-1] = val_prop
                         best_val = val_prop
                         aa_history.clear()
-                        aa_history.append(_flat([p.detach().clone() for p in params]))
+                        aa_ema_state = _flat([p.detach().clone() for p in params])
+                        aa_history.append(aa_ema_state.clone())
                     else:
                         self._load_flat(params, backup)
         result.wall_clock_s = time.perf_counter() - start

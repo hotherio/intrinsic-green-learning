@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../spd/">
+        <link rel="prev" href="../viz/">
       
       
-        <link rel="next" href="../data/">
+        <link rel="next" href="../../about/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>igl.spectral - Intrinsic Green Learning</title>
+        <title>igl.whitening - Intrinsic Green Learning</title>
       
     
     
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#iglspectral" class="md-skip">
+        <a href="#whitening" class="md-skip">
           Skip to content
         </a>
       
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              igl.spectral
+              igl.whitening
             
           </span>
         </div>
@@ -842,30 +842,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    igl.spectral
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../spectral/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -874,293 +854,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#mathematical-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      Mathematical setup
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spectralkernel" class="md-nav__link">
-    <span class="md-ellipsis">
-      SpectralKernel
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.kernel.SpectralKernel" class="md-nav__link">
-    <span class="md-ellipsis">
-      SpectralKernel
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="SpectralKernel">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#igl.spectral.kernel.SpectralKernel.compute_design_matrix" class="md-nav__link">
-    <span class="md-ellipsis">
-      compute_design_matrix
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#closed-form-1-d-bases" class="md-nav__link">
-    <span class="md-ellipsis">
-      Closed-form 1-D bases
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.fourier_sine.FourierSineBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      FourierSineBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.fourier_cosine.FourierCosineBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      FourierCosineBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.chebyshev.ChebyshevBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      ChebyshevBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.legendre.LegendreBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      LegendreBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.hermite.HermiteBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      HermiteBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.laguerre.LaguerreBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      LaguerreBasis
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-driven-bases" class="md-nav__link">
-    <span class="md-ellipsis">
-      Data-driven bases
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.learned_lb.LearnedLaplacianBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      LearnedLaplacianBasis
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="LearnedLaplacianBasis">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#igl.spectral.bases.learned_lb.LearnedLaplacianBasis.evaluate" class="md-nav__link">
-    <span class="md-ellipsis">
-      evaluate
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#igl.spectral.bases.learned_lb.LearnedLaplacianBasis.refresh" class="md-nav__link">
-    <span class="md-ellipsis">
-      refresh
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.bases.graph_laplacian.GraphLaplacianBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      GraphLaplacianBasis
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="GraphLaplacianBasis">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#igl.spectral.bases.graph_laplacian.GraphLaplacianBasis.evaluate" class="md-nav__link">
-    <span class="md-ellipsis">
-      evaluate
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mixtures" class="md-nav__link">
-    <span class="md-ellipsis">
-      Mixtures
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.multi.MultiSpectralBasis" class="md-nav__link">
-    <span class="md-ellipsis">
-      MultiSpectralBasis
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="MultiSpectralBasis">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#igl.spectral.multi.MultiSpectralBasis.evaluate" class="md-nav__link">
-    <span class="md-ellipsis">
-      evaluate
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#null-space-augmentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Null-space augmentation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.null_space.ConstantNullSpace" class="md-nav__link">
-    <span class="md-ellipsis">
-      ConstantNullSpace
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.null_space.PolynomialNullSpace" class="md-nav__link">
-    <span class="md-ellipsis">
-      PolynomialNullSpace
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.null_space.CustomNullSpace" class="md-nav__link">
-    <span class="md-ellipsis">
-      CustomNullSpace
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.null_space.build_null_space" class="md-nav__link">
-    <span class="md-ellipsis">
-      build_null_space
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#refresh-hook" class="md-nav__link">
-    <span class="md-ellipsis">
-      Refresh hook
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#igl.spectral.refresh.LearnedLBRefresh" class="md-nav__link">
-    <span class="md-ellipsis">
-      LearnedLBRefresh
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1212,10 +905,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../whitening/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    igl.whitening
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1224,6 +937,335 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening" class="md-nav__link">
+    <span class="md-ellipsis">
+      whitening
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="whitening">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener" class="md-nav__link">
+    <span class="md-ellipsis">
+      TargetWhitener
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TargetWhitener">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.is_fitted" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_fitted
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      fit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.from_state_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      from_state_dict
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.inverse_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      inverse_transform
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.state_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      state_dict
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      transform
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss" class="md-nav__link">
+    <span class="md-ellipsis">
+      WhitenedMSELoss
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WhitenedMSELoss">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.curve_score" class="md-nav__link">
+    <span class="md-ellipsis">
+      curve_score
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.target" class="md-nav__link">
+    <span class="md-ellipsis">
+      target
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.damped_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      damped_metric
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.fisher_pullback" class="md-nav__link">
+    <span class="md-ellipsis">
+      fisher_pullback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.logit_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      logit_metric
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.psd_sqrt_inv" class="md-nav__link">
+    <span class="md-ellipsis">
+      psd_sqrt_inv
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.tail_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      tail_metric
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.psd_sqrt_inv" class="md-nav__link">
+    <span class="md-ellipsis">
+      psd_sqrt_inv
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.logit_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      logit_metric
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.fisher_pullback" class="md-nav__link">
+    <span class="md-ellipsis">
+      fisher_pullback
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.damped_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      damped_metric
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.tail_metric" class="md-nav__link">
+    <span class="md-ellipsis">
+      tail_metric
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener" class="md-nav__link">
+    <span class="md-ellipsis">
+      TargetWhitener
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TargetWhitener">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.is_fitted" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_fitted
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      fit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.from_state_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      from_state_dict
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.inverse_transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      inverse_transform
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.state_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      state_dict
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      transform
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss" class="md-nav__link">
+    <span class="md-ellipsis">
+      WhitenedMSELoss
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WhitenedMSELoss">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.curve_score" class="md-nav__link">
+    <span class="md-ellipsis">
+      curve_score
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.target" class="md-nav__link">
+    <span class="md-ellipsis">
+      target
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1538,183 +1580,34 @@
                   
 
 
-<h1 id="iglspectral"><code>igl.spectral</code></h1>
-<p>Spectral formulation of IGL: eigendecomposition-based Green's kernels +
-null-space augmentation.</p>
-<p>Not flattened into the top-level <code>igl</code> namespace. Import explicitly::</p>
-<div class="highlight"><pre><span></span><code>from igl.spectral import SpectralKernel, FourierSineBasis, ConstantNullSpace
-</code></pre></div>
-<h2 id="mathematical-setup">Mathematical setup</h2>
-<p>For an operator <span class="arithmatex">\(L\)</span> with eigendecomposition <span class="arithmatex">\(L \phi_n = \lambda_n \phi_n\)</span>,
-the Green's function is</p>
-<div class="arithmatex">\[
-G(z, s) = \sum_n \frac{\phi_n(z)\, \phi_n(s)}{\max(\lambda_n, \varepsilon)}.
-\]</div>
-<p>Zero-<span class="arithmatex">\(\lambda\)</span> modes ARE the null space — modes the Green's function
-cannot reach. The kernel-agnostic
-<code>NullSpaceBasis</code> adds them back as extra
-design-matrix columns whose coefficients are fitted by lstsq without
-Tikhonov shrinkage.</p>
-<h2 id="spectralkernel">SpectralKernel</h2>
+<h1 id="whitening">Whitening</h1>
 
 
-<div class="doc doc-object doc-class">
+<div class="doc doc-object doc-module">
 
 
 
-<h2 id="igl.spectral.kernel.SpectralKernel" class="doc doc-heading">
-            <code>igl.spectral.kernel.SpectralKernel</code>
+<h2 id="igl.whitening" class="doc doc-heading">
+            <code>igl.whitening</code>
 
 
 </h2>
 
-
     <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
 
+        <p>Metric estimation and target whitening.</p>
+<p>Whitening a reconstruction target by a metric square root makes plain least
+squares optimize the second-order expansion of the geometry the metric
+encodes — distillation as a metric change. The pieces compose::</p>
+<div class="highlight"><pre><span></span><code>from igl.whitening import TargetWhitener, WhitenedMSELoss, fisher_pullback
 
-        <p>Spectral Green's-function kernel.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>latent_dim</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Latent dimensionality <code>d</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>bases</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.SpectralBasis">SpectralBasis</span> | <a class="autorefs autorefs-external" title="collections.abc.Sequence" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence">Sequence</a>[<span title="igl.types.SpectralBasis">SpectralBasis</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One :class:<code>SpectralBasis</code> (used uniformly across all
-<code>latent_dim</code> dimensions) or a sequence of length
-<code>latent_dim</code>. Sub-bases may have different mode counts.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_anchors</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of anchor positions <code>R</code> in latent space.</p>
-              </div>
-            </td>
-            <td>
-                  <code>64</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>null_space</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.NullSpaceBasis">NullSpaceBasis</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional :class:<code>NullSpaceBasis</code> — its
-<code>evaluate(z)</code> output is concatenated to the design matrix.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Floor applied to eigenvalues (additional safety on top
-of the basis's own clamping).</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.0001</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>anchor_init_std</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Std-dev of the Gaussian initialiser for the
-learnable anchor positions.</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.25</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>On shape mismatches or invalid hyperparameters.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
+g = fisher_pullback(w_unembed, states)          # metric of the softmax read-out
+whitener = TargetWhitener(g).fit(states)        # centering + G^{1/2} + unit scale
+loss = WhitenedMSELoss(whitener)                # plugs into MatryoshkaTrainer
+</code></pre></div>
+<p>The loss whitens in <code>target()</code>, so the trainer's closed-form inner solve,
+validation, early stopping, and the dimension curve all operate in the
+whitened geometry with no trainer changes.</p>
 
 
 
@@ -1732,19 +1625,25 @@ learnable anchor positions.</p>
 
 
 
+<div class="doc doc-object doc-class">
 
-<div class="doc doc-object doc-function">
 
 
-<h3 id="igl.spectral.kernel.SpectralKernel.compute_design_matrix" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_design_matrix</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<h3 id="igl.whitening.TargetWhitener" class="doc doc-heading">
+            <code>TargetWhitener</code>
+
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Build the design matrix.</p>
+
+        <p>Whiten targets by a metric square root: <code>y_w = ((y - mu) @ a) / y_scale</code>.</p>
+<p>Fitting computes the mean of <code>y</code>, the symmetric square-root pair of the
+metric, and a scalar RMS scale so whitened targets are unit-scale for the
+trainer. <code>inverse_transform</code> undoes all three. With <code>metric=None</code> the
+whitener degrades to centering plus unit scaling.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1760,821 +1659,36 @@ learnable anchor positions.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>z</code>
-            </td>
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>[N, d]</code> latent coordinates.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>gate_mask</code>
+                <code>metric</code>
             </td>
             <td>
                   <code><span title="torch.Tensor">Tensor</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Optional <code>[d]</code> binary mask; latent dims with
-<code>mask = 0</code> contribute a factor of <code>1</code> (neutral).</p>
+                <p>Symmetric PSD metric <code>[C, C]</code> over the target space, or
+<code>None</code> for the identity metric.</p>
               </div>
             </td>
             <td>
                   <code>None</code>
             </td>
           </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>[N, output_dim]</code> design matrix.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="closed-form-1-d-bases">Closed-form 1-D bases</h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.fourier_sine.FourierSineBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.fourier_sine.FourierSineBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Fourier sine spectral basis (Dirichlet BCs).</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code> (default <code>16</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.fourier_cosine.FourierCosineBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.fourier_cosine.FourierCosineBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Fourier cosine spectral basis (Neumann BCs).</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code> (default <code>16</code>); index <code>0</code> is
-the constant.</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
+                <code>clamp</code>
             </td>
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Floor applied to the zero eigenvalue so the kernel's
-<code>1/λ</code> weighting stays finite. Default <code>1e-4</code>.</p>
+                <p>Eigenvalue floor forwarded to
+:func:<code>igl.whitening.psd_sqrt_inv</code>.</p>
               </div>
             </td>
             <td>
-                  <code>0.0001</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code> or <code>epsilon &lt;= 0</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.chebyshev.ChebyshevBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.chebyshev.ChebyshevBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Chebyshev (first-kind) spectral basis.</p>
-<p>Inputs are mapped from <code>[0, 1]</code> to <code>[-1, 1]</code> via
-<code>x = 2 z − 1</code> before evaluation.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code> (default <code>16</code>); index <code>0</code> is
-the constant <code>T₀</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Floor applied to the zero eigenvalue (<code>λ₀</code>).</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.0001</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code> or <code>epsilon &lt;= 0</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.legendre.LegendreBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.legendre.LegendreBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Legendre spectral basis.</p>
-<p>Inputs mapped from <code>[0, 1]</code> to <code>[-1, 1]</code> via <code>x = 2 z − 1</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code> (default <code>16</code>); index <code>0</code> is
-the constant <code>P₀</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Floor applied to <code>λ₀</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.0001</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code> or <code>epsilon &lt;= 0</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.hermite.HermiteBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.hermite.HermiteBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Hermite-function spectral basis (Gaussian-weighted domain).</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.laguerre.LaguerreBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.laguerre.LaguerreBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>1-D Laguerre-function spectral basis (exponentially-weighted domain).</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of modes <code>K</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For <code>n_modes &lt; 1</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="data-driven-bases">Data-driven bases</h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.bases.learned_lb.LearnedLaplacianBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.learned_lb.LearnedLaplacianBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>Numerically-estimated Laplace–Beltrami spectrum on a learned manifold.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>n_modes</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of eigenmodes <code>K</code> to retain (smallest
-eigenvalues).</p>
-              </div>
-            </td>
-            <td>
-                  <code>16</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>k_nn</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of nearest neighbours used to build the graph.</p>
-              </div>
-            </td>
-            <td>
-                  <code>10</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Floor applied to the zero eigenvalue (<code>λ₀</code>) when
-evaluating the Nyström extension.</p>
-              </div>
-            </td>
-            <td>
-                  <code>0.0001</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For invalid hyperparameters.</p>
-              </div>
+                  <code>1e-06</code>
             </td>
           </tr>
       </tbody>
@@ -2592,14 +1706,333 @@ evaluating the Nyström extension.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><span title="igl.spectral.bases.learned_lb.LearnedLaplacianBasis.is_refreshed">is_refreshed</span></code></td>
+            <td><code><span title="igl.whitening.TargetWhitener.mu_">mu_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target mean <code>[C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.a_">a_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Metric square root <code>[C, C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.a_inv_">a_inv_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Inverse square root <code>[C, C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.y_scale_">y_scale_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scalar RMS of the centered, whitened targets (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="igl.whitening.TargetWhitener.is_fitted" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">is_fitted</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether :meth:<code>fit</code> has run.</p>
+    </div>
+
+</div>
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.TargetWhitener.fit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Fit the whitening constants on targets <code>[N, C]</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>y</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Targets <code>[N, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" title="typing.Self" href="https://docs.python.org/3/library/typing.html#typing.Self">Self</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>self</code>, for chaining.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.TargetWhitener.from_state_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">from_state_dict</span><span class="p">(</span><span class="n">state</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Rebuild a fitted whitener from :meth:<code>state_dict</code> output.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.TargetWhitener.inverse_transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">inverse_transform</span><span class="p">(</span><span class="n">y_w</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Undo :meth:<code>transform</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.TargetWhitener.state_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">state_dict</span><span class="p">()</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Serialize the fitted constants as a flat tensor dict.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.TargetWhitener.transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">transform</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whiten targets: center, rotate-and-scale by <code>a_</code>, unit-scale.</p>
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="igl.whitening.WhitenedMSELoss" class="doc doc-heading">
+            <code>WhitenedMSELoss</code>
+
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+
+        <p>MSE in a whitened target space: second-order distillation as least squares.</p>
+<p>Wraps a <em>fitted</em> :class:<code>TargetWhitener</code>; whitening happens in
+:meth:<code>target</code>, so it flows through every trainer touchpoint — the
+closed-form inner solve, the per-batch loss, validation, early stopping,
+and :func:<code>igl.eval_dimension_curve</code> — with no trainer changes. When the
+whitener's metric is the Fisher pullback of a softmax read-out, the
+optimized quantity is the second-order expansion of the downstream KL.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>whitener</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.whitening.whitener.TargetWhitener" href="#igl.whitening.TargetWhitener">TargetWhitener</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A fitted :class:<code>TargetWhitener</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.WhitenedMSELoss.higher_is_better">higher_is_better</span></code></td>
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>True</code> once :meth:<code>refresh</code> has run. Calling
-:meth:<code>evaluate</code> before refresh raises.</p>
+                <p>Always <code>False</code> — the metric is whitened MSE.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLNotFittedError" href="../exceptions/#igl.exceptions.IGLNotFittedError">IGLNotFittedError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>whitener</code> is not fitted.</p>
               </div>
             </td>
           </tr>
@@ -2627,92 +2060,15 @@ evaluating the Nyström extension.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="igl.spectral.bases.learned_lb.LearnedLaplacianBasis.evaluate" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">evaluate</span><span class="p">(</span><span class="n">z</span><span class="p">)</span></code>
+<h4 id="igl.whitening.WhitenedMSELoss.curve_score" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
 
-</h3>
+</h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Nyström-extend the eigenfunctions to <code>z</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>z</code>
-            </td>
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>[N, d]</code> query latents.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>[N, n_modes]</code> eigenfunction values.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If :meth:<code>refresh</code> has not been called.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Whitened MSE — already non-saturating, so identical to :meth:<code>metric</code>.</p>
 
     </div>
 
@@ -2721,47 +2077,15 @@ evaluating the Nyström extension.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="igl.spectral.bases.learned_lb.LearnedLaplacianBasis.refresh" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">refresh</span><span class="p">(</span><span class="n">z</span><span class="p">)</span></code>
+<h4 id="igl.whitening.WhitenedMSELoss.target" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">target</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
 
-</h3>
+</h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Recompute the LB spectrum from a fresh set of encoded latents.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>z</code>
-            </td>
-            <td>
-                  <code><span title="torch.Tensor">Tensor</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>[M, d]</code> encoded latents (<code>M</code> should be ≥ a few hundred
-for the spectrum to be informative).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Whiten raw targets <code>[N, C]</code> (1-D targets are lifted to <code>[N, 1]</code>).</p>
 
     </div>
 
@@ -2775,23 +2099,24 @@ for the spectrum to be informative).</p>
 
 </div>
 
-<div class="doc doc-object doc-class">
+
+<div class="doc doc-object doc-function">
 
 
+<h3 id="igl.whitening.damped_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">damped_metric</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">lam</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span></code>
 
-<h2 id="igl.spectral.bases.graph_laplacian.GraphLaplacianBasis" class="doc doc-heading">
-            <code>igl.spectral.bases.graph_laplacian.GraphLaplacianBasis</code>
-
-
-</h2>
+</h3>
 
 
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
+    <div class="doc doc-contents ">
 
-
-        <p>Graph-Laplacian spectral basis.</p>
+        <p>Blend a sampled metric with a trace-scaled damping metric.</p>
+<p><code>g + lam * (trace(g) / trace(m)) * m</code> — the Tikhonov damping of
+natural-gradient practice. A sampled Fisher estimate leaves the
+near-null spectrum ill-conditioned; a floor metric <code>m</code> (typically
+:func:<code>logit_metric</code>) regularises it without changing the leading
+geometry.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2807,15 +2132,14 @@ for the spectrum to be informative).</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>adjacency</code>
+                <code>g</code>
             </td>
             <td>
-                  <code><span title="torch.Tensor">Tensor</span> | <span title="numpy.ndarray">ndarray</span> | <span title="scipy.sparse.spmatrix">spmatrix</span></code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>[n, n]</code> adjacency matrix. Accepts a dense PyTorch
-tensor, a dense numpy array, or any scipy sparse matrix.</p>
+                <p>The metric to damp <code>[C, C]</code>.</p>
               </div>
             </td>
             <td>
@@ -2824,59 +2148,41 @@ tensor, a dense numpy array, or any scipy sparse matrix.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>n_modes</code>
+                <code>m</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of eigenmodes <code>K</code>.</p>
+                <p>The damping metric <code>[C, C]</code>.</p>
               </div>
             </td>
             <td>
-                  <code>16</code>
+                <em>required</em>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>normalization</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.GraphLaplacianNormLike">GraphLaplacianNormLike</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of :class:<code>GraphLaplacianNorm</code>. Default
-<code>SYMMETRIC</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code><span title="igl.types.GraphLaplacianNorm.SYMMETRIC">SYMMETRIC</span></code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>epsilon</code>
+                <code>lam</code>
             </td>
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Floor applied to <code>λ₀</code> (which is always 0 for a
-connected graph in the symmetric / unnormalized cases).</p>
+                <p>Damping weight relative to the trace ratio.</p>
               </div>
             </td>
             <td>
-                  <code>0.0001</code>
+                  <code>0.1</code>
             </td>
           </tr>
       </tbody>
     </table>
 
 
-<p><span class="doc-section-title">Raises:</span></p>
+    <p><span class="doc-section-title">Returns:</span></p>
     <table>
       <thead>
         <tr>
@@ -2887,47 +2193,39 @@ connected graph in the symmetric / unnormalized cases).</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For invalid shapes or hyperparameters.</p>
+                <p>The damped metric <code>[C, C]</code>.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
 
+    </div>
 
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
+</div>
 
 <div class="doc doc-object doc-function">
 
 
-<h3 id="igl.spectral.bases.graph_laplacian.GraphLaplacianBasis.evaluate" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">evaluate</span><span class="p">(</span><span class="n">z</span><span class="p">)</span></code>
+<h3 id="igl.whitening.fisher_pullback" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">fisher_pullback</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">states</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">n_sub</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Return eigenfunction values at the given node indices.</p>
+        <p>Estimate the Fisher pullback of KL through a softmax read-out.</p>
+<p><code>G = w^T E[diag(p) - p p^T] w</code> with <code>p = softmax(states @ w^T)</code>,
+estimated on a subsample of <code>states</code>. This is the second-order
+expansion of <code>KL(p(h) || p(h_hat))</code> in <code>h_hat - h</code>, averaged over
+the state distribution: softmax saturation annihilates the logit-shift
+direction exactly and down-weights directions that only move improbable
+logits.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2943,15 +2241,149 @@ connected graph in the symmetric / unnormalized cases).</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>z</code>
+                <code>w</code>
             </td>
             <td>
                   <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>[N]</code> long-tensor of node indices, or <code>[N, 1]</code> with
-integer dtype.</p>
+                <p>Read-out matrix <code>[V, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>states</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>States <code>[N, C]</code> defining the empirical distribution.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_sub</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Subsample size for the expectation.</p>
+              </div>
+            </td>
+            <td>
+                  <code>4096</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch size for the accumulation.</p>
+              </div>
+            </td>
+            <td>
+                  <code>256</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>generator</code>
+            </td>
+            <td>
+                  <code><span title="torch.Generator">Generator</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional RNG for the subsample, for reproducibility.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The estimated metric <code>[C, C]</code>, symmetric PSD up to sampling noise.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.logit_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">logit_metric</span><span class="p">(</span><span class="n">w</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pull the Euclidean logit geometry back to the target space.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>w</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Read-out matrix <code>[V, C]</code> mapping targets to logits.</p>
               </div>
             </td>
             <td>
@@ -2977,7 +2409,17 @@ integer dtype.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>[N, n_modes]</code> eigenfunction values.</p>
+                <p><code>G = w^T w</code> of shape <code>[C, C]</code>: every logit direction counts</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>equally, kernel directions of <code>w</code> are free.</p>
               </div>
             </td>
           </tr>
@@ -2988,222 +2430,23 @@ integer dtype.</p>
 
 </div>
 
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="mixtures">Mixtures</h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.multi.MultiSpectralBasis" class="doc doc-heading">
-            <code>igl.spectral.multi.MultiSpectralBasis</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="torch.nn.Module">Module</span></code></p>
-
-
-        <p>A weighted concatenation of several :class:<code>SpectralBasis</code> instances.</p>
-<p>Implements the :class:<code>SpectralBasis</code> Protocol: <code>n_modes</code> is the
-sum of the sub-bases' mode counts, <code>eigenvalues</code> is the concatenated
-vector, and <code>null_indices</code> is the union of the sub-bases' null
-indices (re-numbered to account for offsets).</p>
-<p>The mixing weights are softmax-normalised mode-block weights —
-every basis is multiplied by a learned (or fixed) coefficient so the
-optimiser can up- or down-weight a contribution.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>bases</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" title="collections.abc.Sequence" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence">Sequence</a>[<span title="igl.types.SpectralBasis">SpectralBasis</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Sequence of two or more :class:<code>SpectralBasis</code> instances.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>learnable</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>When <code>True</code> (default), the mixing weights are
-<code>nn.Parameter</code>; otherwise they are equal and fixed.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>For empty or singleton sequences.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
 <div class="doc doc-object doc-function">
 
 
-<h3 id="igl.spectral.multi.MultiSpectralBasis.evaluate" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">evaluate</span><span class="p">(</span><span class="n">z</span><span class="p">)</span></code>
+<h3 id="igl.whitening.psd_sqrt_inv" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">psd_sqrt_inv</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">clamp</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
 
 </h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Evaluate every sub-basis and weight by the softmax-mixed coefficients.</p>
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="null-space-augmentation">Null-space augmentation</h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.null_space.ConstantNullSpace" class="doc doc-heading">
-            <code>igl.spectral.null_space.ConstantNullSpace</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-        <p>One column of ones — the DC mode.</p>
-<p>Standard null space for the Neumann Laplacian (constants are
-harmonic with the Neumann boundary condition). Useful in general as
-a cheap way to give a local :class:<code>igl.GreenKernel</code> a DC mode it
-otherwise lacks.</p>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="igl.spectral.null_space.PolynomialNullSpace" class="doc doc-heading">
-            <code>igl.spectral.null_space.PolynomialNullSpace</code>
-
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-
-        <p>Constants + per-dimension monomials up to <code>degree</code>.</p>
-<p>For <code>degree = 1</code>: one column of ones plus <code>d</code> columns <code>z_j</code>.
-For <code>degree = 2</code>: also includes <code>z_j^2</code>. Up to <code>degree = k</code>:
-the constant plus all univariate monomials per dimension —
-contains the harmonics of the Euclidean Laplacian up to that
-degree (mixed monomials like <code>z_j z_k</code> are not included; users
-needing those can subclass :class:<code>CustomNullSpace</code>).</p>
+        <p>Compute the square root and inverse square root of a symmetric PSD matrix.</p>
+<p>A single eigendecomposition of the symmetrised input is used for both
+outputs, with eigenvalues clamped to <code>clamp * lambda_max</code> so the
+inverse root is the exact inverse of the root on the retained spectrum.
+Sampled metrics (e.g. :func:<code>igl.whitening.fisher_pullback</code>) leave the
+near-null spectrum ill-conditioned; the clamp keeps both factors finite.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3219,14 +2462,14 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>latent_dim</code>
+                <code>g</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of input dimensions <code>d</code>.</p>
+                <p>Symmetric PSD matrix <code>[C, C]</code>.</p>
               </div>
             </td>
             <td>
@@ -3235,18 +2478,51 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>degree</code>
+                <code>clamp</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum monomial degree (inclusive). Default <code>1</code>.</p>
+                <p>Eigenvalue floor relative to the largest eigenvalue.</p>
               </div>
             </td>
             <td>
-                  <code>1</code>
+                  <code>1e-06</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A tuple <code>(a, a_inv)</code> with <code>a = g^{1/2}</code> and <code>a_inv = g^{-1/2}</code>,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>both symmetric <code>[C, C]</code>.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -3268,54 +2544,36 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For <code>degree &lt; 0</code> or <code>latent_dim &lt; 1</code>.</p>
+                <p>If <code>g</code> is not a square 2-D tensor or <code>clamp</code> is
+not in <code>(0, 1)</code>.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
 
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
     </div>
 
 </div>
 
-<div class="doc doc-object doc-class">
+<div class="doc doc-object doc-function">
 
 
+<h3 id="igl.whitening.tail_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">tail_metric</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">states</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">n_probes</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
-<h2 id="igl.spectral.null_space.CustomNullSpace" class="doc doc-heading">
-            <code>igl.spectral.null_space.CustomNullSpace</code>
-
-
-</h2>
+</h3>
 
 
-    <div class="doc doc-contents first">
+    <div class="doc doc-contents ">
 
-
-        <p>Wraps a user-supplied callable as a :class:<code>NullSpaceBasis</code>.</p>
+        <p>Pull a metric back through a differentiable map by Hutchinson probing.</p>
+<p>Estimates <code>E[J^T g J]</code> with <code>J = d fn / d x</code> averaged over
+<code>states</code>, without ever forming <code>J</code>: for probe vectors
+<code>u ~ N(0, I)</code>, <code>E_u[(J^T g^{1/2} u)(J^T g^{1/2} u)^T] = J^T g J</code>.
+One backward pass per probe. In the paper use case <code>fn</code> runs the
+remaining transformer blocks and <code>g</code> is the head's Fisher metric,
+giving each layer the metric of its own consumer.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3338,7 +2596,7 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Callable <code>z -&gt; [N, n_columns]</code>.</p>
+                <p>Differentiable map from <code>[N, C_in]</code> to <code>[N, C_out]</code>.</p>
               </div>
             </td>
             <td>
@@ -3347,143 +2605,66 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>n_columns</code>
+                <code>states</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Points <code>[N, C_in]</code> at which to average the pullback.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>g</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Metric on the output space <code>[C_out, C_out]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_probes</code>
             </td>
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of columns the callable returns.</p>
+                <p>Number of Hutchinson probes.</p>
               </div>
             </td>
             <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Raises:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>When <code>n_columns &lt; 1</code>.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-  <div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="igl.spectral.null_space.build_null_space" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spectral</span><span class="o">.</span><span class="n">null_space</span><span class="o">.</span><span class="n">build_null_space</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">latent_dim</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></code>
-
-</h2>
-
-
-    <div class="doc doc-contents first">
-
-        <p>Build a built-in null space from a :class:<code>NullSpaceKind</code>.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>kind</code>
-            </td>
-            <td>
-                  <code><span title="igl.types.NullSpaceKindLike">NullSpaceKindLike</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>One of :data:<code>NullSpaceKind</code>. <code>NONE</code> returns <code>None</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
+                  <code>64</code>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>latent_dim</code>
+                <code>generator</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Required for <code>POLYNOMIAL</code>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>degree</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+                  <code><span title="torch.Generator">Generator</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Forwarded to :class:<code>PolynomialNullSpace</code>.</p>
+                <p>Optional RNG for the probes, for reproducibility.</p>
               </div>
             </td>
             <td>
-                  <code>1</code>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -3501,21 +2682,11 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.spectral.null_space.ConstantNullSpace" href="#igl.spectral.null_space.ConstantNullSpace">ConstantNullSpace</a> | <a class="autorefs autorefs-internal" title="igl.spectral.null_space.PolynomialNullSpace" href="#igl.spectral.null_space.PolynomialNullSpace">PolynomialNullSpace</a> | None</code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>An instance of :class:<code>ConstantNullSpace</code> /</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.spectral.null_space.ConstantNullSpace" href="#igl.spectral.null_space.ConstantNullSpace">ConstantNullSpace</a> | <a class="autorefs autorefs-internal" title="igl.spectral.null_space.PolynomialNullSpace" href="#igl.spectral.null_space.PolynomialNullSpace">PolynomialNullSpace</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                
+                <p>The mean-field pullback metric <code>[C_in, C_in]</code>.</p>
               </div>
             </td>
           </tr>
@@ -3524,29 +2695,33 @@ needing those can subclass :class:<code>CustomNullSpace</code>).</p>
 
     </div>
 
-</div><h2 id="refresh-hook">Refresh hook</h2>
-
-
-<div class="doc doc-object doc-class">
+</div>
 
 
 
-<h2 id="igl.spectral.refresh.LearnedLBRefresh" class="doc doc-heading">
-            <code>igl.spectral.refresh.LearnedLBRefresh</code>
+  </div>
 
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.whitening.psd_sqrt_inv" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">whitening</span><span class="o">.</span><span class="n">psd_sqrt_inv</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">clamp</span><span class="o">=</span><span class="mf">1e-06</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-
-        <p>Refresh a :class:<code>LearnedLaplacianBasis</code> every <code>every</code> batches.</p>
-<p>Implements :class:<code>igl.types.ExtraLoss</code> purely for its scheduling
-semantics — it returns <code>None</code> (no loss contribution) and uses the
-callback to invoke :meth:<code>LearnedLaplacianBasis.refresh</code> with the
-current batch's encoded latents. The first refresh happens on the
-very first call.</p>
+        <p>Compute the square root and inverse square root of a symmetric PSD matrix.</p>
+<p>A single eigendecomposition of the symmetrised input is used for both
+outputs, with eigenvalues clamped to <code>clamp * lambda_max</code> so the
+inverse root is the exact inverse of the root on the retained spectrum.
+Sampled metrics (e.g. :func:<code>igl.whitening.fisher_pullback</code>) leave the
+near-null spectrum ill-conditioned; the clamp keeps both factors finite.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3562,14 +2737,14 @@ very first call.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>basis</code>
+                <code>g</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="igl.spectral.bases.learned_lb.LearnedLaplacianBasis" href="#igl.spectral.bases.learned_lb.LearnedLaplacianBasis">LearnedLaplacianBasis</a></code>
+                  <code><span title="torch.Tensor">Tensor</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The learned-LB basis to keep up to date.</p>
+                <p>Symmetric PSD matrix <code>[C, C]</code>.</p>
               </div>
             </td>
             <td>
@@ -3578,34 +2753,51 @@ very first call.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>every</code>
-            </td>
-            <td>
-                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Refresh frequency in batches.</p>
-              </div>
-            </td>
-            <td>
-                  <code>200</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>weight</code>
+                <code>clamp</code>
             </td>
             <td>
                   <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Ignored (kept for protocol compatibility); defaults to 0.</p>
+                <p>Eigenvalue floor relative to the largest eigenvalue.</p>
               </div>
             </td>
             <td>
-                  <code>0.0</code>
+                  <code>1e-06</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A tuple <code>(a, a_inv)</code> with <code>a = g^{1/2}</code> and <code>a_inv = g^{-1/2}</code>,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>both symmetric <code>[C, C]</code>.</p>
+              </div>
             </td>
           </tr>
       </tbody>
@@ -3627,7 +2819,897 @@ very first call.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>When <code>every &lt; 1</code>.</p>
+                <p>If <code>g</code> is not a square 2-D tensor or <code>clamp</code> is
+not in <code>(0, 1)</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.whitening.logit_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">whitening</span><span class="o">.</span><span class="n">logit_metric</span><span class="p">(</span><span class="n">w</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Pull the Euclidean logit geometry back to the target space.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>w</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Read-out matrix <code>[V, C]</code> mapping targets to logits.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>G = w^T w</code> of shape <code>[C, C]</code>: every logit direction counts</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>equally, kernel directions of <code>w</code> are free.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.whitening.fisher_pullback" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">whitening</span><span class="o">.</span><span class="n">fisher_pullback</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">states</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">n_sub</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">batch</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Estimate the Fisher pullback of KL through a softmax read-out.</p>
+<p><code>G = w^T E[diag(p) - p p^T] w</code> with <code>p = softmax(states @ w^T)</code>,
+estimated on a subsample of <code>states</code>. This is the second-order
+expansion of <code>KL(p(h) || p(h_hat))</code> in <code>h_hat - h</code>, averaged over
+the state distribution: softmax saturation annihilates the logit-shift
+direction exactly and down-weights directions that only move improbable
+logits.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>w</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Read-out matrix <code>[V, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>states</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>States <code>[N, C]</code> defining the empirical distribution.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_sub</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Subsample size for the expectation.</p>
+              </div>
+            </td>
+            <td>
+                  <code>4096</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>batch</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batch size for the accumulation.</p>
+              </div>
+            </td>
+            <td>
+                  <code>256</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>generator</code>
+            </td>
+            <td>
+                  <code><span title="torch.Generator">Generator</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional RNG for the subsample, for reproducibility.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The estimated metric <code>[C, C]</code>, symmetric PSD up to sampling noise.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.whitening.damped_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">whitening</span><span class="o">.</span><span class="n">damped_metric</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">lam</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Blend a sampled metric with a trace-scaled damping metric.</p>
+<p><code>g + lam * (trace(g) / trace(m)) * m</code> — the Tikhonov damping of
+natural-gradient practice. A sampled Fisher estimate leaves the
+near-null spectrum ill-conditioned; a floor metric <code>m</code> (typically
+:func:<code>logit_metric</code>) regularises it without changing the leading
+geometry.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>g</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The metric to damp <code>[C, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>m</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The damping metric <code>[C, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>lam</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Damping weight relative to the trace ratio.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.1</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The damped metric <code>[C, C]</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.whitening.tail_metric" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">whitening</span><span class="o">.</span><span class="n">tail_metric</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">states</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">n_probes</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>Pull a metric back through a differentiable map by Hutchinson probing.</p>
+<p>Estimates <code>E[J^T g J]</code> with <code>J = d fn / d x</code> averaged over
+<code>states</code>, without ever forming <code>J</code>: for probe vectors
+<code>u ~ N(0, I)</code>, <code>E_u[(J^T g^{1/2} u)(J^T g^{1/2} u)^T] = J^T g J</code>.
+One backward pass per probe. In the paper use case <code>fn</code> runs the
+remaining transformer blocks and <code>g</code> is the head's Fisher metric,
+giving each layer the metric of its own consumer.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>fn</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a>[[<span title="torch.Tensor">Tensor</span>], <span title="torch.Tensor">Tensor</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Differentiable map from <code>[N, C_in]</code> to <code>[N, C_out]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>states</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Points <code>[N, C_in]</code> at which to average the pullback.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>g</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Metric on the output space <code>[C_out, C_out]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>n_probes</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of Hutchinson probes.</p>
+              </div>
+            </td>
+            <td>
+                  <code>64</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>generator</code>
+            </td>
+            <td>
+                  <code><span title="torch.Generator">Generator</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional RNG for the probes, for reproducibility.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The mean-field pullback metric <code>[C_in, C_in]</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.whitening.TargetWhitener" class="doc doc-heading">
+            <code>igl.whitening.TargetWhitener</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>Whiten targets by a metric square root: <code>y_w = ((y - mu) @ a) / y_scale</code>.</p>
+<p>Fitting computes the mean of <code>y</code>, the symmetric square-root pair of the
+metric, and a scalar RMS scale so whitened targets are unit-scale for the
+trainer. <code>inverse_transform</code> undoes all three. With <code>metric=None</code> the
+whitener degrades to centering plus unit scaling.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>metric</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Symmetric PSD metric <code>[C, C]</code> over the target space, or
+<code>None</code> for the identity metric.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>clamp</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#float">float</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Eigenvalue floor forwarded to
+:func:<code>igl.whitening.psd_sqrt_inv</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1e-06</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.mu_">mu_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Target mean <code>[C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.a_">a_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Metric square root <code>[C, C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.a_inv_">a_inv_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Inverse square root <code>[C, C]</code> (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.TargetWhitener.y_scale_">y_scale_</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scalar RMS of the centered, whitened targets (post-fit).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="igl.whitening.TargetWhitener.is_fitted" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">is_fitted</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether :meth:<code>fit</code> has run.</p>
+    </div>
+
+</div>
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.TargetWhitener.fit" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Fit the whitening constants on targets <code>[N, C]</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>y</code>
+            </td>
+            <td>
+                  <code><span title="torch.Tensor">Tensor</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Targets <code>[N, C]</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-external" title="typing.Self" href="https://docs.python.org/3/library/typing.html#typing.Self">Self</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>self</code>, for chaining.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.TargetWhitener.from_state_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">from_state_dict</span><span class="p">(</span><span class="n">state</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Rebuild a fitted whitener from :meth:<code>state_dict</code> output.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.TargetWhitener.inverse_transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">inverse_transform</span><span class="p">(</span><span class="n">y_w</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Undo :meth:<code>transform</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.TargetWhitener.state_dict" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">state_dict</span><span class="p">()</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Serialize the fitted constants as a flat tensor dict.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.TargetWhitener.transform" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">transform</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whiten targets: center, rotate-and-scale by <code>a_</code>, unit-scale.</p>
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.whitening.WhitenedMSELoss" class="doc doc-heading">
+            <code>igl.whitening.WhitenedMSELoss</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>MSE in a whitened target space: second-order distillation as least squares.</p>
+<p>Wraps a <em>fitted</em> :class:<code>TargetWhitener</code>; whitening happens in
+:meth:<code>target</code>, so it flows through every trainer touchpoint — the
+closed-form inner solve, the per-batch loss, validation, early stopping,
+and :func:<code>igl.eval_dimension_curve</code> — with no trainer changes. When the
+whitener's metric is the Fisher pullback of a softmax read-out, the
+optimized quantity is the second-order expansion of the downstream KL.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>whitener</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.whitening.whitener.TargetWhitener" href="#igl.whitening.TargetWhitener">TargetWhitener</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A fitted :class:<code>TargetWhitener</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.whitening.WhitenedMSELoss.higher_is_better">higher_is_better</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Always <code>False</code> — the metric is whitened MSE.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLNotFittedError" href="../exceptions/#igl.exceptions.IGLNotFittedError">IGLNotFittedError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>whitener</code> is not fitted.</p>
               </div>
             </td>
           </tr>
@@ -3651,6 +3733,40 @@ very first call.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.WhitenedMSELoss.curve_score" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whitened MSE — already non-saturating, so identical to :meth:<code>metric</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.WhitenedMSELoss.target" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">target</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whiten raw targets <code>[N, C]</code> (1-D targets are lifted to <code>[N, 1]</code>).</p>
+
+    </div>
+
+</div>
 
 
 

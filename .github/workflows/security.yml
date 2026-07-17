@@ -40,12 +40,17 @@ jobs:
         run: uv export --frozen --no-emit-project --output-file requirements.txt
 
       - name: Run pip-audit
-        # --ignore-vuln CVE-2025-3000: torch 2.12.0 advisory with no released
-        # fix version (pip-audit reports an empty "Fix Versions" column), so
-        # there is nothing to bump to. Scoped, deliberate suppression tracked
-        # in issue #52 — remove it as soon as a patched torch ships. New
-        # advisories still fail the job.
-        run: uvx pip-audit --requirement requirements.txt --strict --disable-pip --ignore-vuln CVE-2025-3000
+        # Scoped, deliberate suppressions tracked in issue #52; new advisories
+        # still fail the job. Both trace back to torch 2.12.0 and go away with
+        # the next torch release that addresses them:
+        #   - CVE-2025-3000: torch advisory with no released fix version
+        #     (pip-audit reports an empty "Fix Versions" column).
+        #   - PYSEC-2026-3447: fixed in setuptools 83.0.0, but torch pins
+        #     setuptools<82, so the fix is unreachable until torch relaxes it.
+        run: >-
+          uvx pip-audit --requirement requirements.txt --strict --disable-pip
+          --ignore-vuln CVE-2025-3000
+          --ignore-vuln PYSEC-2026-3447
 
   zizmor:
     # Non-blocking. Block 6 cleared SHA-pinning, concurrency, and per-job

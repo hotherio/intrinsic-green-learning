@@ -70,7 +70,7 @@ def eval_dimension_curve(
         # Bias column so each k gets its own intercept.
         ones_col = torch.ones(phi.shape[0], 1, device=device, dtype=phi.dtype)
         phi_aug = torch.cat([phi, ones_col], dim=-1)
-        weights = direct_solve_weights(phi_aug, target, l2=source_l2).to(device)
+        weights = direct_solve_weights(phi_aug, target, l2=source_l2, on_nonfinite="raise").to(device)
         pred = phi_aug @ weights
         results[k] = loss.curve_score(pred, target)
 

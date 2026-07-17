@@ -12,9 +12,11 @@ is negligible for the sizes IGL typically uses (R ≤ 256, N ≤ 10K).
 """
 
 import warnings
-from typing import cast
+from typing import Literal, cast
 
 import torch
+
+from igl.exceptions import IGLConvergenceError
 
 
 def _svd_pinv_solve(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -44,6 +46,7 @@ def direct_solve_weights(
     y: torch.Tensor,
     *,
     l2: float = 1e-3,
+    on_nonfinite: Literal["warn", "raise"] = "warn",
 ) -> torch.Tensor:
     """Solve the Tikhonov-regularised least-squares problem.
 
@@ -56,11 +59,20 @@ def direct_solve_weights(
         y: Targets ``[N, C]`` or ``[N, 1]``.
         l2: Tikhonov coefficient relative to Φ's mean column norm (default
             ``1e-3``).
+        on_nonfinite: Policy when inputs or the solution are non-finite.
+            ``"warn"`` (default) emits a :class:`RuntimeWarning` and returns a
+            zero matrix — the right behaviour inside training, where the
+            trainer's convergence guards take over. ``"raise"`` raises
+            :class:`igl.exceptions.IGLConvergenceError` instead — the right
+            behaviour at evaluation time, where a silent zero readout would
+            poison downstream metrics.
 
     Returns:
-        ``w`` of shape ``[R, C]``. If the solve produces non-finite entries
-        (e.g. catastrophic conditioning), the function emits a
-        :class:`RuntimeWarning` and returns a zero matrix of the right shape.
+        ``w`` of shape ``[R, C]``.
+
+    Raises:
+        IGLConvergenceError: When non-finite values are encountered and
+            ``on_nonfinite="raise"``.
     """
     # Non-finite INPUT guard. A diverged encoder feeds NaN/Inf into phi; the
     # lstsq/SVD backends then crash with an opaque LinAlgError ("svd: input
@@ -72,12 +84,10 @@ def direct_solve_weights(
     # healthy runs (inputs are finite), so the validated path is bit-identical.
     n_cols = y.shape[1] if y.dim() > 1 else 1
     if not (torch.isfinite(phi).all() and torch.isfinite(y).all()):
-        warnings.warn(
-            "direct_solve_weights received non-finite inputs (diverged training); "
-            "returning zero weights.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
+        message = "direct_solve_weights received non-finite inputs (diverged training)"
+        if on_nonfinite == "raise":
+            raise IGLConvergenceError(epoch=0, last_loss=float("nan"), message=message)
+        warnings.warn(f"{message}; returning zero weights.", RuntimeWarning, stacklevel=2)
         return torch.zeros(phi.shape[1], n_cols, dtype=torch.float32, device=phi.device)
 
     # On CUDA, keep the whole solve on-device (cuSOLVER) to avoid a per-call
@@ -123,13 +133,10 @@ def direct_solve_weights(
             weights = _svd_pinv_solve(phi_aug, y_aug)
 
     if not torch.isfinite(weights).all():
-        warnings.warn(
-            f"direct_solve_weights produced non-finite weights "
-            f"(col_scale={col_scale_value:.3g}, l2_eff={l2_eff:.3g}); "
-            f"falling back to zero weights.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
+        message = f"direct_solve_weights produced non-finite weights " f"(col_scale={col_scale_value:.3g}, l2_eff={l2_eff:.3g})"
+        if on_nonfinite == "raise":
+            raise IGLConvergenceError(epoch=0, last_loss=float("nan"), message=message)
+        warnings.warn(f"{message}; falling back to zero weights.", RuntimeWarning, stacklevel=2)
         weights = torch.zeros_like(weights)
     return weights
 

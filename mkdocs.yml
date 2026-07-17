@@ -25,6 +25,7 @@ nav:
     - 'igl.spectral': 'reference/spectral.md'
     - 'igl.data': 'reference/data.md'
     - 'igl.viz': 'reference/viz.md'
+    - 'igl.whitening': 'reference/whitening.md'
   - About: 'about.md'
   - Security: 'security.md'
   - Guidelines:

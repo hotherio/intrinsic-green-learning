@@ -69,6 +69,7 @@ class VPLoopResult:
     grad_probe_w_errors: dict[str, list[float]] = field(default_factory=dict)
     aa_proposals: int = 0
     aa_accepted: int = 0
+    epoch_time_s: list[float] = field(default_factory=list)  # cumulative wall-clock at each epoch end
     wall_clock_s: float = 0.0
 
 
@@ -118,6 +119,7 @@ class VPLoop:
         self.inner_solver = inner_solver
         self.outer_mode = outer_mode
         self.probe_solvers = probe_solvers or {}
+        self._lbfgs_start = 0.0
 
     # -- inner solve -----------------------------------------------------
 
@@ -225,6 +227,7 @@ class VPLoop:
             result.train_loss.append(epoch_loss / max(n_batches, 1))
             val = self._refresh_and_validate(module, x_train, y_train, x_val, y_val, generator)
             result.val_loss.append(val)
+            result.epoch_time_s.append(time.perf_counter() - start)
             best_val = min(best_val, val)
 
             if self.outer_mode == "minibatch-adam-aa":
@@ -260,6 +263,7 @@ class VPLoop:
     ) -> None:
         """Full-batch L-BFGS on the reduced functional (direct inner solve in the closure)."""
         config = self.config
+        self._lbfgs_start = time.perf_counter()
         optimizer = torch.optim.LBFGS(
             params, lr=1.0, max_iter=config.lbfgs_max_iter, history_size=10, line_search_fn="strong_wolfe"
         )
@@ -280,6 +284,7 @@ class VPLoop:
             loss = optimizer.step(closure)  # pyright: ignore[reportArgumentType]
             result.train_loss.append(float(loss.item()))  # pyright: ignore[reportAttributeAccessIssue]
             result.val_loss.append(self._refresh_and_validate(module, x_train, y_train, x_val, y_val, generator))
+            result.epoch_time_s.append(time.perf_counter() - self._lbfgs_start)
 
     def _probe_gradients(
         self,

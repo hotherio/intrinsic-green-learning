@@ -85,8 +85,8 @@ def repeats_for(p: int) -> int:
     return 3 if p <= 16384 else 2
 
 
-def timed_arm(fn: Callable[[], SolveResult], *, repeats: int) -> tuple[Timing, SolveResult]:
-    timing = time_median(fn, repeats=repeats, warmup=1)
+def timed_arm(fn: Callable[[], SolveResult], *, repeats: int, warmup: int = 1) -> tuple[Timing, SolveResult]:
+    timing = time_median(fn, repeats=repeats, warmup=warmup)
     result = timing.result
     assert isinstance(result, SolveResult)
     return timing, result
@@ -127,11 +127,13 @@ def sweep(p_grid: list[int], n_grid: list[int], *, measure_rss: bool) -> list[di
                 "nystrom_pcg": lambda phi=phi, y=y: nystrom_pcg(phi, y, l2=L2, tol=CG_TOL, max_iter=CG_MAX_ITER),
             }
             if p <= SVRG_MAX_P:
-                arms["svrg"] = lambda phi=phi, y=y: sgd_to_tol(phi, y, l2=L2, tol=1e-4, batch_size=512, max_epochs=2000)
+                arms["svrg"] = lambda phi=phi, y=y: sgd_to_tol(phi, y, l2=L2, tol=1e-4, batch_size=512, max_epochs=1000)
             reference: torch.Tensor | None = None
             for name, fn in arms.items():
                 arm_reps = 1 if (name not in ("direct_lstsq", "cholesky_normal") and p >= ITERATIVE_SINGLE_REPEAT_P) else reps
-                timing, result = timed_arm(fn, repeats=arm_reps)
+                if name == "svrg":  # epoch-bounded already; one measured run, no warmup
+                    arm_reps = 1
+                timing, result = timed_arm(fn, repeats=arm_reps, warmup=0 if name == "svrg" else 1)
                 if name == "direct_lstsq":
                     reference = result.w
                 error = float("nan")

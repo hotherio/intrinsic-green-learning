@@ -38,6 +38,7 @@ from igl.kernels._registry import (
     register_operator,
 )
 from igl.matryoshka.dimension_curve import detect_elbow, eval_dimension_curve
+from igl.matryoshka.knockout import KnockoutResult, detect_knockout_knee, greedy_knockout
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.metrics.dimension import DimensionComparison, compare_d_eff, d_eff_from_curve
 from igl.models.autoencoder import IGLAutoencoder
@@ -45,6 +46,7 @@ from igl.models.classifier import IGLClassifier
 from igl.models.distiller import IGLDistiller
 from igl.models.regressor import IGLRegressor
 from igl.nn.module import IGLModule
+from igl.seeding import fit_seeds, seed_everything
 from igl.types import (
     ActivationType,
     ActivationTypeLike,
@@ -76,6 +78,7 @@ from igl.types import (
     PreconditionMode,
     PreconditionModeLike,
     PreconditionModeLiteral,
+    PrefixForward,
     SamplingMode,
     SamplingModeLike,
     SamplingModeLiteral,
@@ -165,16 +168,23 @@ __all__ = [
     "EpochStats",
     "MSELoss",
     "MatryoshkaTrainer",
+    "PrefixForward",
     "TrainingHistory",
     "direct_solve_weights",
     # Matryoshka / dimension discovery
     "PowerLawSampler",
     "UniformSampler",
+    "KnockoutResult",
     "d_eff_from_curve",
     "detect_elbow",
+    "detect_knockout_knee",
+    "greedy_knockout",
     "eval_dimension_curve",
     # Device
     "get_device",
+    # Seeding
+    "fit_seeds",
+    "seed_everything",
     # Checkpoints
     "load",
     "read_provenance",

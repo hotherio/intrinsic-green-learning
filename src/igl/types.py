@@ -25,9 +25,9 @@ can implement custom encoders, loss strategies, and samplers without
 depending on the internal modules where they're consumed.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from enum import StrEnum
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 import torch
 
@@ -345,6 +345,35 @@ class NullSpaceBasis(Protocol):
     def evaluate(self, z: torch.Tensor, /) -> torch.Tensor:
         """Evaluate every null-space basis function. Returns ``[N, n_columns]``."""
         ...  # pragma: no cover  # Protocol method body
+
+
+@runtime_checkable
+class PrefixForward(Protocol):
+    """A module trainable with Matryoshka prefix masking, without the VP solve.
+
+    Any ``nn.Module`` whose ``forward`` accepts a ``gate_mask`` keyword
+    (a ``[max_dim]`` 0/1 tensor selecting the leading latent coordinates)
+    satisfies this protocol and can be trained by
+    :class:`igl.MatryoshkaTrainer` and scored by
+    :func:`igl.eval_dimension_curve` by plain gradient descent — e.g. a
+    prefix-masked autoencoder used as an instrument-vs-instrument control.
+    """
+
+    max_dim: int
+
+    def forward(self, x: torch.Tensor, *, gate_mask: torch.Tensor | None = None) -> torch.Tensor: ...
+
+    def __call__(self, x: torch.Tensor, *, gate_mask: torch.Tensor | None = None) -> torch.Tensor: ...
+
+    def parameters(self) -> Iterator[torch.nn.Parameter]: ...
+
+    def train(self, mode: bool = True) -> object: ...  # noqa: FBT001, FBT002
+
+    def eval(self) -> object: ...
+
+    def state_dict(self) -> dict[str, torch.Tensor]: ...
+
+    def load_state_dict(self, state_dict: dict[str, torch.Tensor]) -> object: ...
 
 
 class ExtraLoss(Protocol):

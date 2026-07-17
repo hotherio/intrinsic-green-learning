@@ -21,3 +21,18 @@ Truncation samplers and post-fit dimension-curve helpers.
     options:
       show_root_heading: true
       show_source: false
+
+::: igl.greedy_knockout
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: igl.KnockoutResult
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: igl.detect_knockout_knee
+    options:
+      show_root_heading: true
+      show_source: false

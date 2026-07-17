@@ -206,7 +206,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         x: NDArray[np.floating],
         y: NDArray[np.generic],
         *,
-        validation_fraction: float | None = None,
+        validation_fraction: float | None = 0.2,
     ) -> _LossT:
         """Shared fit machinery used by the concrete estimators.
 
@@ -230,7 +230,32 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         x_tensor = _to_torch(x_scaled_arr, device=device)
         y_tensor = self._prepare_y(y, device=device, x_scaled=x_scaled_arr)
         loss = self._build_loss(y)
+        return self._fit_tensors(
+            x_tensor,
+            y_tensor,
+            loss=loss,
+            output_dim=self._output_dim(y),
+            validation_fraction=validation_fraction,
+            device=device,
+        )
 
+    def _fit_tensors(
+        self,
+        x_tensor: torch.Tensor,
+        y_tensor: torch.Tensor,
+        *,
+        loss: _LossT,
+        output_dim: int,
+        validation_fraction: float | None,
+        device: torch.device,
+    ) -> _LossT:
+        """Tensor-level fit pipeline: split, seeded build, train, dimension curve.
+
+        Shared by :meth:`_fit_core` (StandardScaler preprocessing) and
+        estimators with their own preprocessing (e.g. the whitened-target
+        distiller). Stores ``self.module_``, ``self.history_``,
+        ``self.dimension_curve_``, and ``self.effective_dimension_``.
+        """
         if validation_fraction is not None and 0.0 < validation_fraction < 1.0:
             n_val = max(1, int(len(x_tensor) * validation_fraction))
             perm = np.random.RandomState(self.random_state or 0).permutation(len(x_tensor))
@@ -242,12 +267,10 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
             x_train, y_train = x_tensor, y_tensor
             x_val = y_val = None
 
-        # Determine the output_dim per task.
-        output_dim = self._output_dim(y)
         # Scope torch RNG mutations to module construction + training so the
         # caller's global RNG state is preserved.
         with self._local_rng():
-            self.module_: IGLModule = self._build_module(input_dim=n_features, output_dim=output_dim).to(device)
+            self.module_: IGLModule = self._build_module(input_dim=x_tensor.shape[1], output_dim=output_dim).to(device)
             trainer = MatryoshkaTrainer(loss=loss, config=self._matryoshka_config())
             self.history_: TrainingHistory = trainer.fit(self.module_, x_train, y_train, x_val=x_val, y_val=y_val)
 

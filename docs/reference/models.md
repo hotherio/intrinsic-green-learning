@@ -16,3 +16,8 @@ scikit-learn-compatible estimators: classifier, regressor, autoencoder.
     options:
       show_root_heading: true
       show_source: false
+
+::: igl.IGLDistiller
+    options:
+      show_root_heading: true
+      show_source: false

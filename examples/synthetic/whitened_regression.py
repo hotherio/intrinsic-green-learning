@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 
 from examples._utils import make_run_dir, set_seed
-from igl import IGLModule, MatryoshkaConfig, MatryoshkaTrainer, MSELoss
+from igl import IGLDistiller, IGLModule, MatryoshkaConfig, MatryoshkaTrainer, MSELoss
 from igl.whitening import TargetWhitener, WhitenedMSELoss, fisher_pullback
 
 EXAMPLE_NAME = "whitened_regression"
@@ -75,6 +75,18 @@ def main() -> None:
                 curve[k] = _downstream_kl(w, states, y_hat)
         results[name] = curve
         print(f"{name}: " + "  ".join(f"k={k}: KL={v:.4f}" for k, v in curve.items()))
+
+    # The same pipeline as a three-line estimator: metric in, charts out.
+    set_seed(42)
+    distiller = IGLDistiller(
+        max_dim=max_dim,
+        metric=fisher_pullback(w, states, n_sub=n_samples),
+        config=None,
+        random_state=42,
+    )
+    distiller.fit(states.numpy())
+    kl_estimator = _downstream_kl(w, states, torch.from_numpy(distiller.reconstruct(states.numpy(), k=4)))
+    print(f"IGLDistiller (k=4): KL={kl_estimator:.4f}  effective_dimension_={distiller.effective_dimension_}")
 
     run_dir = make_run_dir(EXAMPLE_NAME)
     (run_dir / "downstream_kl.json").write_text(json.dumps(results, indent=2))

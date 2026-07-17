@@ -40,6 +40,7 @@ from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.metrics.dimension import DimensionComparison, compare_d_eff, d_eff_from_curve
 from igl.models.autoencoder import IGLAutoencoder
 from igl.models.classifier import IGLClassifier
+from igl.models.distiller import IGLDistiller
 from igl.models.regressor import IGLRegressor
 from igl.nn.module import IGLModule
 from igl.types import (
@@ -152,6 +153,7 @@ __all__ = [
     # sklearn-compatible models
     "IGLAutoencoder",
     "IGLClassifier",
+    "IGLDistiller",
     "IGLRegressor",
     # Metrics
     "DimensionComparison",

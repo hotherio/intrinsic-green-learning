@@ -7,14 +7,19 @@ would disqualify the swap regardless of its speed.
 
 Pre-registered predictions (P9):
 
-- P9a  Detected effective dimension (elbow) identical between the direct
-       and CG(1e-6) fits for every (testbed, seed).
-- P9b  Dimension curves pointwise within 2% relative of each other.
-- P9c  Greedy-knockout knee identical.
+- P9a  Detected effective dimension (elbow) identical whether each per-k
+       readout is refit by the direct solve or by CG(1e-8), on ONE fitted
+       module, for every (testbed, seed).
+- P9b  The two per-k dimension curves are pointwise within 2% relative.
+- P9c  Greedy-knockout knee identical between the two refit solvers.
 
-Protocol: free-running fits per (arm, seed) as in E1, then the package's
-own ``eval_dimension_curve`` / ``detect_elbow`` / ``greedy_knockout`` on
-each fitted module. Seeds {42, 123, 456}.
+Protocol: fit ONE module per (testbed, seed) with the package's direct
+solve, then read the dimension curve twice on that SAME module -- once
+refitting each truncation via the package (direct) and once via CG(1e-8).
+This isolates the *solver's* effect on the instrument reading; comparing
+two independently-trained models instead (as an earlier version did) only
+re-measures E1's trajectory chaos on the flat tail of the curve. Seeds
+{42, 123, 456}.
 
 Run with::
 
@@ -24,27 +29,41 @@ Run with::
 import argparse
 import json
 import time
-from functools import partial
 from typing import Any
+
+import torch
 
 from benchmarks.vp._harness import machine_state, set_seed, write_result
 from benchmarks.vp.data import moons_classification, split, swiss_roll_regression
-from benchmarks.vp.e1_equivalence import cg_inner
+from benchmarks.vp.solvers import block_cg
 from benchmarks.vp.vp_loop import VPLoop, VPLoopConfig
-from igl import CrossEntropyLoss, IGLModule, MSELoss, detect_elbow, eval_dimension_curve, greedy_knockout
+from igl import CrossEntropyLoss, IGLModule, MSELoss, detect_elbow, normalize_phi
+from igl.matryoshka.knockout import detect_knockout_knee
 
 SEEDS = [42, 123, 456]
-CG_TOL = 1e-6
+CG_TOL = 1e-8
 CURVE_REL_BAND = 0.02
 
 
-def fitted_module(bed: dict[str, Any], *, seed: int, epochs: int, solver: Any) -> IGLModule:
-    x_train, y_train, x_val, y_val = bed["data"]
-    set_seed(seed)
-    module = IGLModule(input_dim=x_train.shape[1], max_dim=8, output_dim=bed["output_dim"], n_anchors=48, n_scales=4)
-    loop = VPLoop(loss=bed["loss"], config=VPLoopConfig(epochs=epochs, seed=seed, inner_batch_size=1024), inner_solver=solver)
-    loop.fit(module, x_train, y_train, x_val, y_val)
-    return module
+def curve_two_solvers(module: IGLModule, x_val: torch.Tensor, y_val: torch.Tensor, loss: Any) -> dict[str, dict[int, float]]:
+    """Dimension curve of ONE fitted module, each per-k readout refit by direct vs CG."""
+    from igl import direct_solve_weights
+
+    target = loss.target(y_val)
+    d_max = module.max_dim
+    z_full = module.encoder(x_val)
+    out: dict[str, dict[int, float]] = {"direct": {}, "cg": {}}
+    for k in range(1, d_max + 1):
+        mask = torch.zeros(d_max)
+        mask[:k] = 1.0
+        phi = normalize_phi(module.green(z_full * mask.unsqueeze(0), gate_mask=mask), module.normalize)
+        ones = torch.ones(phi.shape[0], 1, dtype=phi.dtype)
+        phi_aug = torch.cat([phi, ones], dim=-1)
+        w_direct = direct_solve_weights(phi_aug, target, l2=1e-3, on_nonfinite="raise")
+        w_cg = block_cg(phi_aug, target, l2=1e-3, tol=CG_TOL, max_iter=50_000).w
+        out["direct"][k] = loss.curve_score(phi_aug @ w_direct, target)
+        out["cg"][k] = loss.curve_score(phi_aug @ w_cg, target)
+    return out
 
 
 def main() -> None:
@@ -64,40 +83,39 @@ def main() -> None:
     results: dict[str, Any] = {}
     all_elbow_match, all_curve_close, all_knee_match = True, True, True
     for name, bed in beds.items():
-        _, _, x_val, y_val = bed["data"]
+        x_train, y_train, x_val, y_val = bed["data"]
         per_seed: list[dict[str, Any]] = []
         for seed in SEEDS:
-            readings: dict[str, dict[str, Any]] = {}
-            for arm, solver in (("direct", None), ("cg", partial(cg_inner, tol=CG_TOL))):
-                module = fitted_module(bed, seed=seed, epochs=epochs, solver=solver)
-                curve = eval_dimension_curve(module, x_val, y_val, loss=bed["loss"])
-                knockout = greedy_knockout(module, x_val, y_val.float(), loss=bed["loss"])
-                readings[arm] = {
-                    "curve": {int(k): float(v) for k, v in curve.items()},
-                    "elbow": int(detect_elbow(curve)),
-                    "knockout_knee": int(knockout.knee),
-                }
-            direct, cg = readings["direct"], readings["cg"]
-            curve_rel = max(abs(cg["curve"][k] - v) / max(abs(v), 1e-12) for k, v in direct["curve"].items())
+            set_seed(seed)
+            module = IGLModule(input_dim=x_train.shape[1], max_dim=8, output_dim=bed["output_dim"], n_anchors=48, n_scales=4)
+            VPLoop(loss=bed["loss"], config=VPLoopConfig(epochs=epochs, seed=seed, inner_batch_size=1024)).fit(
+                module, x_train, y_train, x_val, y_val
+            )
+            curves = curve_two_solvers(module, x_val, y_val, bed["loss"])
+            elbow_d, elbow_c = int(detect_elbow(curves["direct"])), int(detect_elbow(curves["cg"]))
+            knee_d, knee_c = int(detect_knockout_knee(curves["direct"])), int(detect_knockout_knee(curves["cg"]))
+            curve_rel = max(abs(curves["cg"][k] - v) / max(abs(v), 1e-12) for k, v in curves["direct"].items())
             row = {
                 "seed": seed,
-                "elbow_direct": direct["elbow"],
-                "elbow_cg": cg["elbow"],
-                "elbow_match": direct["elbow"] == cg["elbow"],
+                "elbow_direct": elbow_d,
+                "elbow_cg": elbow_c,
+                "elbow_match": elbow_d == elbow_c,
                 "max_curve_rel_gap": curve_rel,
                 "curve_within_band": curve_rel <= CURVE_REL_BAND,
-                "knee_direct": direct["knockout_knee"],
-                "knee_cg": cg["knockout_knee"],
-                "knee_match": direct["knockout_knee"] == cg["knockout_knee"],
-                "curves": {"direct": direct["curve"], "cg": cg["curve"]},
+                "knee_direct": knee_d,
+                "knee_cg": knee_c,
+                "knee_match": knee_d == knee_c,
+                "curves": {
+                    "direct": {int(k): v for k, v in curves["direct"].items()},
+                    "cg": {int(k): v for k, v in curves["cg"].items()},
+                },
             }
             all_elbow_match = all_elbow_match and bool(row["elbow_match"])
             all_curve_close = all_curve_close and bool(row["curve_within_band"])
             all_knee_match = all_knee_match and bool(row["knee_match"])
             per_seed.append(row)
             print(
-                f"{name:10s} seed={seed} elbow {direct['elbow']}=={cg['elbow']} "
-                f"knee {direct['knockout_knee']}=={cg['knockout_knee']} curve_gap={curve_rel:.4f}",
+                f"{name:10s} seed={seed} elbow {elbow_d}=={elbow_c} knee {knee_d}=={knee_c} curve_gap={curve_rel:.5f}",
                 flush=True,
             )
         results[name] = per_seed

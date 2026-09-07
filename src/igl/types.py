@@ -351,10 +351,11 @@ class LossStrategy(Protocol):
             ``curve_score()`` is always lower-is-better regardless of this
             flag.
 
-    A strategy may also define ``metric_tensor(pred, target) -> Tensor``
-    returning the metric as a 0-d tensor on the prediction's device. The
-    trainer prefers it, so an epoch needs a single host transfer; without it
-    ``metric()`` costs one extra synchronisation per epoch.
+    A strategy may also define ``metric_tensor(pred, target) -> Tensor`` and
+    ``curve_score_tensor(pred, target) -> Tensor`` returning the same values
+    as 0-d tensors on the prediction's device. The trainer and the dimension
+    curve prefer them, so an epoch (or a whole curve) needs a single host
+    transfer; without them each call costs one synchronisation.
     """
 
     higher_is_better: bool

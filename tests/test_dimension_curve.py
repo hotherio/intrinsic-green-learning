@@ -118,3 +118,42 @@ def test_full_pipeline_finds_low_dimension_on_moons() -> None:
     curve = eval_dimension_curve(module, x, y, loss=CrossEntropyLoss(n_classes=2))
     d_eff = detect_elbow(curve)
     assert d_eff <= 4  # well below max_dim=6; moons is genuinely low-D
+
+
+def test_dimension_curve_transfers_scores_once_when_the_strategy_has_a_tensor_score(mocker: object) -> None:
+    import sys
+
+    from igl import IGLModule, MatryoshkaConfig, MatryoshkaTrainer, MSELoss, eval_dimension_curve
+
+    torch.manual_seed(0)
+    x = torch.randn(64, 5)
+    module = IGLModule(input_dim=5, max_dim=4, output_dim=5, n_anchors=8, n_scales=2)
+    cfg = MatryoshkaConfig(epochs=1, batch_size=32, inner_batch_size=64, early_stop_patience=None, verbose=False)
+    MatryoshkaTrainer(loss=MSELoss(), config=cfg).fit(module, x, x)
+    original = torch.Tensor.item
+    calls: list[str] = []
+
+    def spy(self: torch.Tensor) -> object:
+        calls.append(sys._getframe(1).f_code.co_filename.rsplit("/", 1)[-1])  # noqa: SLF001
+        return original(self)
+
+    getattr(mocker, "patch").object(torch.Tensor, "item", new=spy)  # noqa: B009
+    curve = eval_dimension_curve(module, x, x, loss=MSELoss())
+    assert list(curve) == [1, 2, 3, 4]
+    assert "dimension_curve.py" not in calls and "loss.py" not in calls, calls
+
+
+def test_dimension_curve_falls_back_to_curve_score_without_a_tensor_hook() -> None:
+    from igl import IGLModule, MatryoshkaConfig, MatryoshkaTrainer, MSELoss, eval_dimension_curve
+
+    class _FloatOnly(MSELoss):
+        curve_score_tensor = None  # type: ignore[assignment]
+
+    torch.manual_seed(0)
+    x = torch.randn(64, 5)
+    module = IGLModule(input_dim=5, max_dim=3, output_dim=5, n_anchors=8, n_scales=2)
+    cfg = MatryoshkaConfig(epochs=1, batch_size=32, inner_batch_size=64, early_stop_patience=None, verbose=False)
+    MatryoshkaTrainer(loss=MSELoss(), config=cfg).fit(module, x, x)
+    tensor_curve = eval_dimension_curve(module, x, x, loss=MSELoss())
+    float_curve = eval_dimension_curve(module, x, x, loss=_FloatOnly())
+    assert tensor_curve == float_curve

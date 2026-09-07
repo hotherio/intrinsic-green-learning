@@ -53,13 +53,17 @@ class CrossEntropyLoss:
         """Top-1 classification accuracy."""
         return float(self.metric_tensor(pred, target).item())
 
+    def curve_score_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """0/1 error rate as a 0-d tensor on ``pred``'s device (no host sync)."""
+        return (pred.argmax(dim=-1) != target.argmax(dim=-1)).float().mean()
+
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """0/1 classification *error rate* — used for dimension-curve elbow detection.
 
         Cross-entropy saturates on easy tasks and smears the elbow; error
         rate is discrete and gives sharper transitions.
         """
-        return float((pred.argmax(dim=-1) != target.argmax(dim=-1)).float().mean().item())
+        return float(self.curve_score_tensor(pred, target).item())
 
 
 class MSELoss:
@@ -87,6 +91,10 @@ class MSELoss:
 
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         return float(self.metric_tensor(pred, target).item())
+
+    def curve_score_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """MSE as a 0-d tensor on ``pred``'s device (no host sync)."""
+        return self.metric_tensor(pred, target)
 
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """MSE — already lower-is-better and non-saturating; same as ``metric``."""

@@ -224,6 +224,10 @@ class AIRMLoss:
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         return float(self.metric_tensor(pred, target).item())
 
+    def curve_score_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """AIRM² as a 0-d tensor on ``pred``'s device."""
+        return self.metric_tensor(pred, target)
+
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Dimension-curve score = AIRM² (already lower-is-better and not saturating)."""
         return self.metric(pred, target)

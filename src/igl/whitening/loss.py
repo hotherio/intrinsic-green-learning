@@ -54,6 +54,10 @@ class WhitenedMSELoss:
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         return float(self.metric_tensor(pred, target).item())
 
+    def curve_score_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Whitened MSE as a 0-d tensor on ``pred``'s device (no host sync)."""
+        return self.metric_tensor(pred, target)
+
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Whitened MSE — already non-saturating, so identical to :meth:`metric`."""
         return self.metric(pred, target)

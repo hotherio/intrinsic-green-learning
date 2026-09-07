@@ -8,6 +8,8 @@ that's the discovered effective dimension ``d_eff``.
 """
 
 import math
+from collections.abc import Callable
+from typing import cast
 
 import torch
 
@@ -69,6 +71,10 @@ def eval_dimension_curve(
         return results
 
     z_full = module.encoder(x_val)
+    score_tensor = cast(
+        "Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None", getattr(loss, "curve_score_tensor", None)
+    )
+    scores: list[torch.Tensor] = []
     for k in range(1, d_max + 1):
         mask = torch.zeros(d_max, device=device)
         mask[:k] = 1.0
@@ -79,7 +85,14 @@ def eval_dimension_curve(
         # row-normalised Φ and inflating the ridge scale).
         weights, intercept = solve_with_intercept(phi, target, l2=source_l2, on_nonfinite="raise")
         pred = phi @ weights.to(device) + intercept.to(device)
-        results[k] = loss.curve_score(pred, target)
+        if score_tensor is not None:
+            scores.append(score_tensor(pred, target).detach().reshape(()))
+        else:
+            results[k] = loss.curve_score(pred, target)
+    if scores:
+        # One host transfer for the whole curve instead of one per truncation level.
+        for k, value in enumerate(cast(list[float], torch.stack(scores).tolist()), start=1):  # pyright: ignore[reportUnknownMemberType]
+            results[k] = float(value)
 
     return results
 

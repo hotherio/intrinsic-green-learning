@@ -206,11 +206,7 @@ class AIRMLoss:
             # one of the three per-batch eigh. Bit-identical to inline
             # matrix_pow_sym(c, -0.5): per-matrix eigh is independent of batching.
             if self._cov_inv_half is None:
-                c_full = (
-                    self.covs + self._jitter_eye(self.covs.device, self.covs.dtype)
-                    if self.jitter > 0
-                    else self.covs
-                )
+                c_full = self.covs + self._jitter_eye(self.covs.device, self.covs.dtype) if self.jitter > 0 else self.covs
                 self._cov_inv_half = matrix_pow_sym(c_full, -0.5, eps=self.eps)
             c_inv_half = self._cov_inv_half.index_select(0, idx)
             c_hat = self._pred_to_spd(pred)

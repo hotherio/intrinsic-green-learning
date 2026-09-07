@@ -195,7 +195,7 @@ def solve_with_intercept(
 
 
 @contextlib.contextmanager
-def _full_precision_matmul(device: torch.device) -> Generator[None]:
+def full_precision_matmul(device: torch.device) -> Generator[None]:
     """Disable TF32 for the duration of a solve on CUDA (no-op elsewhere).
 
     The Gram matrix and the refinement residual must not run through TF32:
@@ -251,7 +251,7 @@ def ridge_solve_device(
     y32 = y.detach().float()
     if y32.dim() == 1:
         y32 = y32.unsqueeze(-1)
-    with _full_precision_matmul(phi32.device):
+    with full_precision_matmul(phi32.device):
         ok = torch.isfinite(phi32).all() & torch.isfinite(y32).all()
         phi_c = torch.nan_to_num(phi32)
         y_c = torch.nan_to_num(y32)

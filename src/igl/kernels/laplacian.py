@@ -14,7 +14,16 @@ class _Laplacian:
         return log_abs, torch.ones_like(d)
 
 
+def _inverse_sigma(sigma: torch.Tensor) -> torch.Tensor:
+    return 1.0 / (sigma + KERNEL_EPS)
+
+
 laplacian = _Laplacian()
-register_operator("laplacian", laplacian, is_oscillatory=laplacian.is_oscillatory)
+register_operator(
+    "laplacian",
+    laplacian,
+    is_oscillatory=laplacian.is_oscillatory,
+    separable=(torch.abs, _inverse_sigma),
+)
 
 __all__ = ["laplacian"]

@@ -12,7 +12,7 @@ Run with::
 import numpy as np
 
 import igl
-from examples._utils import make_run_dir, set_seed
+from examples._utils import example_device, make_run_dir, set_seed
 from igl.data import embed_in_high_dim, make_moons
 from igl.io import Provenance
 
@@ -24,7 +24,7 @@ def main() -> None:
     x_2d, _ = make_moons(400, noise=0.08, seed=42)
     states = embed_in_high_dim(x_2d, target_dim=12, seed=123).numpy()
 
-    distiller = igl.IGLDistiller(max_dim=6, random_state=42)
+    distiller = igl.IGLDistiller(max_dim=6, random_state=42, device=example_device())
     distiller.fit(states)
     reference = distiller.reconstruct(states)
 

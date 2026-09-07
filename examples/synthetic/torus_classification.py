@@ -19,7 +19,7 @@ Outputs land in ``results/torus_classification/<git_sha>/``.
 import torch
 
 import igl
-from examples._utils import git_short_sha, make_run_dir, save_curve, save_history, set_seed
+from examples._utils import example_device, git_short_sha, make_run_dir, save_curve, save_history, set_seed
 from igl.data import embed_in_high_dim, make_flat_torus, make_flat_torus_labels
 
 EXAMPLE_NAME = "torus_classification"
@@ -44,7 +44,7 @@ def _run_classification(
         n_anchors=48,
         n_scales=4,
         operator="gaussian",
-    )
+    ).to(example_device())
     trainer = igl.MatryoshkaTrainer(
         loss=igl.CrossEntropyLoss(n_classes=2),
         config=igl.MatryoshkaConfig(
@@ -94,7 +94,7 @@ def _run_regression(
             verbose=False,
         ),
     )
-    module = igl.IGLModule(input_dim=ambient_dim, max_dim=12, output_dim=4, config=config)
+    module = igl.IGLModule(input_dim=ambient_dim, max_dim=12, output_dim=4, config=config).to(example_device())
     trainer = igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=config.matryoshka)
     history = trainer.fit(module, x_train, y_train, x_val=x_val, y_val=y_val)
     curve = dict(igl.eval_dimension_curve(module, x_val, y_val, loss=igl.MSELoss()))
@@ -118,7 +118,8 @@ def main() -> None:
     x_4d, theta = make_flat_torus(n_train + n_val, seed=42)
     y_class = make_flat_torus_labels(theta, task="xor")
     y_reg = make_flat_torus_labels(theta, task="regression_smooth")
-    x = embed_in_high_dim(x_4d, target_dim=ambient_dim, seed=123)
+    x = embed_in_high_dim(x_4d, target_dim=ambient_dim, seed=123).to(example_device())
+    y_class, y_reg = y_class.to(example_device()), y_reg.to(example_device())
 
     x_train, x_val = x[:n_train], x[n_train:]
     y_class_train, y_class_val = y_class[:n_train], y_class[n_train:]

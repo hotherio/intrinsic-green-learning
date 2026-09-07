@@ -94,7 +94,7 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
         module = reg_module
         igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=cfg).fit(module, x, x, x_val=x_val, y_val=x_val)
 
-    def spectral() -> None:
+    def spectral_module() -> igl.IGLModule:
         from igl.spectral import ConstantNullSpace, FourierCosineBasis, SpectralKernel
 
         kernel = SpectralKernel(
@@ -104,7 +104,12 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             null_space=ConstantNullSpace(),
         )
         torch.manual_seed(0)
-        module = igl.IGLModule(input_dim=problem.input_dim, max_dim=problem.max_dim, output_dim=2, kernel=kernel).to(device)
+        return igl.IGLModule(input_dim=problem.input_dim, max_dim=problem.max_dim, output_dim=2, kernel=kernel).to(device)
+
+    spec_module = spectral_module()
+
+    def spectral() -> None:
+        module = spec_module
         igl.MatryoshkaTrainer(loss=igl.CrossEntropyLoss(n_classes=2), config=cfg).fit(module, x, y, x_val=x_val, y_val=y_val)
 
     def orthogonality() -> None:
@@ -115,20 +120,28 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             module, x, x, x_val=x_val, y_val=x_val, extra_losses=[OrthogonalityPenalty(weight=0.1, every=1)]
         )
 
-    def airm(method: Literal["eigh", "iterative"]) -> None:
-        from igl.data import make_spd_dataset
-        from igl.spd import AIRMLoss, LogEigVectorizer
+    from igl.data import make_spd_dataset
+    from igl.spd import LogEigVectorizer
 
-        covs, _ = make_spd_dataset(problem.n, d=4, seed=0)
-        vec = torch.as_tensor(LogEigVectorizer().fit(covs.numpy()).transform(covs.numpy()), dtype=torch.float32).to(device)
+    covs, _ = make_spd_dataset(problem.n, d=4, seed=0)
+    vec = torch.as_tensor(LogEigVectorizer().fit(covs.numpy()).transform(covs.numpy()), dtype=torch.float32).to(device)
+
+    def airm_module() -> igl.IGLModule:
         torch.manual_seed(0)
-        module = igl.IGLModule(
+        return igl.IGLModule(
             input_dim=vec.shape[1],
             max_dim=problem.max_dim,
             output_dim=vec.shape[1],
             n_anchors=problem.n_anchors,
             n_scales=problem.n_scales,
         ).to(device)
+
+    airm_modules = {"eigh": airm_module(), "iterative": airm_module()}
+
+    def airm(method: Literal["eigh", "iterative"]) -> None:
+        from igl.spd import AIRMLoss
+
+        module = airm_modules[method]
         # ``matrix_method`` exists from the device-backends work on; older
         # libraries measured through run_matrix.sh only support eigh.
         loss = AIRMLoss(latent_dim=4, matrix_method=method) if method != "eigh" else AIRMLoss(latent_dim=4)

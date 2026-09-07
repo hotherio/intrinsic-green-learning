@@ -90,6 +90,11 @@ def main() -> None:
             if not res:
                 continue
             for name, wl in res["workloads"].items():
+                if "error" in wl:
+                    rows.append([device, sha, name, "-", "-", "-", "-", f"skipped: {wl['error'][:60]}"])
+                    continue
+                sites = wl.get("cuda_sync_sites", {})
+                top = ", ".join(f"{site} ({n / res['epochs']:g})" for site, n in list(sites.items())[:3])
                 rows.append(
                     [
                         device,
@@ -97,10 +102,26 @@ def main() -> None:
                         name,
                         wl["per_epoch"]["aten::_local_scalar_dense"],
                         wl["per_epoch"]["aten::_to_copy"],
+                        wl["memcpy_dtoh"] / res["epochs"],
                         wl["cuda_sync_warnings"] / res["epochs"],
+                        top,
                     ]
                 )
-    print(table(["device", "commit", "workload", "scalar_dense/epoch", "to_copy/epoch", "cuda sync warnings/epoch"], rows))
+    print(
+        table(
+            [
+                "device",
+                "commit",
+                "workload",
+                "scalar_dense/epoch",
+                "to_copy/epoch",
+                "memcpy DtoH/epoch",
+                "cuda sync warnings/epoch",
+                "sites (per epoch)",
+            ],
+            rows,
+        )
+    )
 
     print("\n## Components\n")
     for device in devices:

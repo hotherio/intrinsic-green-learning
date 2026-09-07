@@ -106,9 +106,10 @@ def detect_knockout_knee(curve: dict[int, float], *, ratio: float = 2.0) -> int:
     """Locate the smallest number of active coordinates before the score blows up.
 
     Walking from few to many active coordinates, the knee is the first count
-    whose score is within ``ratio`` of the best score over the curve. A
-    single-point curve returns 1 only when it genuinely holds the best score
-    — the detector never fires unconditionally at ``n = 1``.
+    whose score is within ``ratio`` of the best score over the curve. When the
+    best score is exactly zero (a perfect error rate) no multiple of it can
+    serve as a tolerance, so the knee is the first count that attains zero.
+    The detector never fires unconditionally at ``n = 1``.
 
     Args:
         curve: ``{n_active: curve_score}`` (lower is better).
@@ -123,7 +124,7 @@ def detect_knockout_knee(curve: dict[int, float], *, ratio: float = 2.0) -> int:
         return next(iter(curve))
     counts = sorted(curve)
     best = min(curve.values())
-    floor = best * ratio if best > 0 else ratio - 1.0
+    floor = best * ratio if best > 0 else 0.0
     for count in counts:
         if curve[count] <= floor:
             return count

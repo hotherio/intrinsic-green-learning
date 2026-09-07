@@ -94,6 +94,12 @@ def test_detect_knockout_knee_does_not_fire_unconditionally_at_one() -> None:
     assert detect_knockout_knee(curve) == 2
 
 
+def test_detect_knockout_knee_with_zero_best_requires_the_zero() -> None:
+    """A perfect score somewhere on the curve must not certify n = 1 for free."""
+    assert detect_knockout_knee({1: 0.5, 2: 0.0, 3: 0.0}) == 2  # noqa: PLR2004
+    assert detect_knockout_knee({1: 0.0, 2: 0.0}) == 1
+
+
 def test_seed_everything_makes_torch_reproducible() -> None:
     seed_everything(7)
     first = torch.randn(4)

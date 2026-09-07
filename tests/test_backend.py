@@ -185,3 +185,19 @@ def test_estimator_fits_and_predicts_on_every_available_device(device: str) -> N
     cfg = igl.IGLConfig(matryoshka=MatryoshkaConfig(epochs=5, batch_size=64, inner_batch_size=160, early_stop_patience=None))
     clf = igl.IGLClassifier(max_dim=4, n_anchors=12, n_scales=2, random_state=0, config=cfg, device=device).fit(x, y.numpy())
     assert clf.score(x, y.numpy()) > 0.6
+
+
+def test_cuda_backend_precision_context_toggles_tf32_and_restores() -> None:
+    """The TF32 flags are plain torch globals, so the context is testable without a GPU."""
+    from igl.device import CudaBackend
+
+    before = torch.backends.cuda.matmul.allow_tf32
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        with CudaBackend(tf32=True).precision():
+            assert torch.backends.cuda.matmul.allow_tf32
+        assert not torch.backends.cuda.matmul.allow_tf32
+        with CudaBackend(tf32=False).precision():
+            assert not torch.backends.cuda.matmul.allow_tf32
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = before

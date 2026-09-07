@@ -18,7 +18,7 @@ import functools
 import time
 import warnings
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, Literal
 
 import torch
 from torch.profiler import ProfilerActivity, profile
@@ -26,7 +26,6 @@ from torch.profiler import ProfilerActivity, profile
 import igl
 from benchmarks.device._harness import machine_state, resolve_device, sync, write_result
 from benchmarks.device.workloads import PROBLEMS, make_config, make_data, make_module
-from igl.spd.linalg import MatrixMethod
 
 SYNC_OPS = ("aten::_local_scalar_dense", "aten::item", "aten::_to_copy", "aten::copy_")
 
@@ -110,7 +109,7 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             module, x, x, x_val=x_val, y_val=x_val, extra_losses=[OrthogonalityPenalty(weight=0.1, every=1)]
         )
 
-    def airm(method: MatrixMethod) -> None:
+    def airm(method: Literal["eigh", "iterative"]) -> None:
         from igl.data import make_spd_dataset
         from igl.spd import AIRMLoss, LogEigVectorizer
 
@@ -124,7 +123,10 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             n_anchors=problem.n_anchors,
             n_scales=problem.n_scales,
         ).to(device)
-        igl.MatryoshkaTrainer(loss=AIRMLoss(latent_dim=4, matrix_method=method), config=cfg).fit(module, vec, vec)
+        # ``matrix_method`` exists from the device-backends work on; older
+        # libraries measured through run_matrix.sh only support eigh.
+        loss = AIRMLoss(latent_dim=4, matrix_method=method) if method != "eigh" else AIRMLoss(latent_dim=4)
+        igl.MatryoshkaTrainer(loss=loss, config=cfg).fit(module, vec, vec)
 
     def autoencoder() -> None:
         # Estimator level: includes the sklearn wrapper's own data movement and post-fit reads.
@@ -173,9 +175,14 @@ def main() -> None:
     for name, fit in workloads(device, epochs=args.epochs).items():
         if args.only and name not in args.only.split(","):
             continue
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            counts = _fit_once(fit, device)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                counts = _fit_once(fit, device)
+        except (TypeError, RuntimeError, ValueError) as exc:  # a workload the measured library lacks
+            results[name] = {"error": repr(exc)[:300]}
+            print(f"{device.type:4s} {name:16s} skipped: {repr(exc)[:120]}", flush=True)
+            continue
         per_epoch = {k: v / args.epochs for k, v in counts["ops"].items()}
         results[name] = {**counts, "per_epoch": per_epoch, "batches_per_epoch": batches_per_epoch}
         print(

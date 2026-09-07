@@ -25,7 +25,7 @@ for spec in "$@"; do
   echo "== $label ($src) on $DEV: $SUITE =="
   for mod in $SUITE; do
     # shellcheck disable=SC2086
-    $PY -m "benchmarks.device.$mod" --no-gate $EXTRA
+    $PY -m "benchmarks.device.$mod" --no-gate $EXTRA || echo "FAILED: $label $mod on $DEV (exit $?)"
   done
   export PYTHONPATH="${PYTHONPATH#"$src"}"; PYTHONPATH="${PYTHONPATH#:}"
 done

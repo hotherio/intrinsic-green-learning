@@ -18,7 +18,7 @@ from sklearn.base import TransformerMixin
 from igl.config import IGLConfig
 from igl.core.loss import MSELoss
 from igl.exceptions import IGLConfigError
-from igl.models._base import _BaseIGLEstimator
+from igl.models._base import _BaseIGLEstimator, _check_is_fitted, _to_torch
 from igl.types import NormalizeModeLike, OperatorNameLike
 
 if TYPE_CHECKING:
@@ -29,7 +29,9 @@ class IGLAutoencoder(_BaseIGLEstimator[MSELoss], TransformerMixin):
     """Train an IGL model with ``y = x`` (reconstruction).
 
     The :meth:`fit` method ignores its ``y`` argument and uses ``x`` as both
-    input and target.
+    input and target. :meth:`transform` returns the latent coordinates
+    (scikit-learn's contract); :meth:`reconstruct` returns the input
+    reconstructed through the Matryoshka bottleneck.
 
     Attributes:
         n_features_in_: Ambient input dimension.
@@ -103,15 +105,31 @@ class IGLAutoencoder(_BaseIGLEstimator[MSELoss], TransformerMixin):
         return self
 
     def transform(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
-        """Return the reconstructed input (in the scaled feature space)."""
-        out = self._predict_phi(np.asarray(x)).cpu().numpy()
-        return np.asarray(out, dtype=np.float64)
+        """Return the latent coordinates ``z = Ψ(x)`` of shape ``[N, max_dim]``."""
+        _check_is_fitted(self, "module_")
+        device = next(self.module_.parameters()).device
+        # sklearn's `.transform` partial stubs: the runtime return is an ndarray.
+        x_scaled = self.scaler_.transform(np.asarray(x, dtype=np.float32))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        x_tensor = _to_torch(np.asarray(x_scaled, dtype=np.float32), device=device)
+        self.module_.eval()
+        with torch.no_grad():
+            latent = self.module_.latent(x_tensor)
+        return np.asarray(latent.cpu().numpy(), dtype=np.float64)
 
-    def reconstruct(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
-        """Inverse-transform the reconstruction back to the original feature space."""
-        scaled = self.transform(np.asarray(x))
+    def reconstruct(self, x: NDArray[np.floating], *, scaled: bool = False) -> NDArray[np.floating]:
+        """Reconstruct ``x`` through the bottleneck.
+
+        Args:
+            x: Inputs ``[N, D]`` in the original feature space.
+            scaled: When ``True`` return the reconstruction in the
+                StandardScaler-scaled space the model was trained in;
+                otherwise inverse-transform it back to the original space.
+        """
+        out = np.asarray(self._predict_phi(np.asarray(x)).cpu().numpy(), dtype=np.float64)
+        if scaled:
+            return out
         # sklearn's `inverse_transform` partial stubs.
-        unscaled = self.scaler_.inverse_transform(scaled)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        unscaled = self.scaler_.inverse_transform(out)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         return np.asarray(unscaled, dtype=np.float64)
 
 

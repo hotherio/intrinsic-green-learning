@@ -287,7 +287,7 @@ def test_autoencoder_fits_and_reconstructs(swiss_data: tuple[np.ndarray, np.ndar
     assert recon.shape == (5, x.shape[1])
 
 
-def test_autoencoder_transform_returns_scaled_space(swiss_data: tuple[np.ndarray, np.ndarray]) -> None:
+def test_autoencoder_transform_returns_the_latent(swiss_data: tuple[np.ndarray, np.ndarray]) -> None:
     x, _ = swiss_data
     ae = IGLAutoencoder(
         max_dim=4,
@@ -296,8 +296,11 @@ def test_autoencoder_transform_returns_scaled_space(swiss_data: tuple[np.ndarray
         random_state=0,
         config=_fast_config(),
     ).fit(x)
-    out = ae.transform(x[:3])
-    assert out.shape == (3, x.shape[1])
+    latent = ae.transform(x[:3])
+    assert latent.shape == (3, 4)
+    scaled = ae.reconstruct(x[:3], scaled=True)
+    assert scaled.shape == (3, x.shape[1])
+    np.testing.assert_allclose(ae.reconstruct(x[:3]), ae.scaler_.inverse_transform(scaled), rtol=1e-6, atol=1e-6)
 
 
 # ----- compare_d_eff -----
@@ -310,29 +313,17 @@ def test_compare_d_eff_returns_dimension_comparison(
     x_moons, y_moons = moons_data
     x_swiss, params = swiss_data
 
-    clf = IGLClassifier(
-        max_dim=4,
-        n_anchors=12,
-        n_scales=2,
-        encoder_hidden=32,
-        random_state=0,
-        config=_fast_config(epochs=20),
-    ).fit(x_moons, y_moons)
-    reg = IGLRegressor(
-        max_dim=4,
-        n_anchors=12,
-        n_scales=2,
-        encoder_hidden=32,
-        random_state=0,
-        config=_fast_config(epochs=20),
-    ).fit(x_swiss, params)
+    kwargs = {"max_dim": 4, "n_anchors": 12, "n_scales": 2, "encoder_hidden": 32, "random_state": 0}
+    clf = IGLClassifier(**kwargs, config=_fast_config(epochs=20)).fit(x_moons, y_moons)
+    reg = IGLRegressor(**kwargs, config=_fast_config(epochs=20)).fit(x_swiss, params)
+    ae = IGLAutoencoder(**kwargs, config=_fast_config(epochs=20)).fit(x_swiss)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        report = igl.compare_d_eff(cls=clf.dimension_curve_, reg=reg.dimension_curve_)
-    assert "cls" in report.d_effs
-    assert "reg" in report.d_effs
-    assert isinstance(report.hierarchy_holds, bool)
+        report = igl.compare_d_eff(cls=clf.dimension_curve_, reg=reg.dimension_curve_, recon=ae.dimension_curve_)
+    assert set(report.d_effs) == {"cls", "reg", "recon"}
+    # The README's headline: d_eff(cls) <= d_eff(reg) <= d_eff(recon) on the same data.
+    assert report.hierarchy_holds is True, report.d_effs
 
 
 def test_d_eff_from_curve_matches_detect_elbow() -> None:

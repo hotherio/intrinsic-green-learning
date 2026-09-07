@@ -111,7 +111,32 @@ def test_injected_cpu_backend_is_bit_identical_to_the_default() -> None:
     b = _fit(counting)
     assert torch.equal(a.source_weights, b.source_weights)
     assert all(torch.equal(p, q) for p, q in zip(a.parameters(), b.parameters(), strict=True))
-    assert counting.transfers >= 3  # once per epoch for the readout failure count
+    assert counting.transfers == 3  # exactly one host transfer per epoch
+
+
+def test_device_branch_calls_item_only_for_the_sampler(mocker: object) -> None:
+    """On the device branch the package's only `.item()` per batch is the CPU sampler's draw.
+
+    Only calls made from this package's own frames are counted: torch's
+    optimizer keeps its step counters on the CPU and reads them with `.item()`
+    regardless of the device, which is not a device synchronisation.
+    """
+    import sys
+
+    original = torch.Tensor.item
+    calls: list[str] = []
+
+    def spy(self: torch.Tensor) -> object:
+        caller = sys._getframe(1).f_code.co_filename  # noqa: SLF001
+        if "/igl/" in caller:
+            calls.append(caller.rsplit("/", 1)[-1])
+        return original(self)
+
+    getattr(mocker, "patch").object(torch.Tensor, "item", new=spy)  # noqa: B009
+    epochs, n, batch = 2, 96, 32
+    _fit(_DeviceStyle(), epochs=epochs)
+    batches = -(-n // batch)
+    assert calls == ["sampler.py"] * (epochs * batches), calls
 
 
 class _DeviceStyle(MpsBackend):

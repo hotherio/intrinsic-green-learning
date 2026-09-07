@@ -217,8 +217,12 @@ class AIRMLoss:
         c_hat = self._pred_to_spd(pred)
         return airm_loss(c, c_hat, eps=self.eps, reduction="mean")
 
+    def metric_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """AIRM² as a 0-d tensor on ``pred``'s device."""
+        return self.loss(pred, target)
+
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
-        return float(self.loss(pred, target).item())
+        return float(self.metric_tensor(pred, target).item())
 
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Dimension-curve score = AIRM² (already lower-is-better and not saturating)."""

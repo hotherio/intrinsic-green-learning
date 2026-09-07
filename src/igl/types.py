@@ -329,6 +329,11 @@ class LossStrategy(Protocol):
             (e.g. accuracy), ``False`` when minimised (e.g. MSE, AIRM).
             ``curve_score()`` is always lower-is-better regardless of this
             flag.
+
+    A strategy may also define ``metric_tensor(pred, target) -> Tensor``
+    returning the metric as a 0-d tensor on the prediction's device. The
+    trainer prefers it, so an epoch needs a single host transfer; without it
+    ``metric()`` costs one extra synchronisation per epoch.
     """
 
     higher_is_better: bool

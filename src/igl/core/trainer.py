@@ -13,10 +13,12 @@ The trainer is agnostic to the task — pass any :class:`igl.types.LossStrategy`
 """
 
 import logging
+import math
 import re
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import cast
 
 import torch
 from torch import nn
@@ -260,7 +262,7 @@ class MatryoshkaTrainer:
         best_state: dict[str, torch.Tensor] | None = None
 
         for epoch in range(config.epochs):
-            epoch_loss, n_bad = self._train_one_epoch(
+            loss_sum, n_bad_dev, n_skipped = self._train_one_epoch(
                 module=module,
                 backend=backend,
                 optimizer=optimizer,
@@ -273,19 +275,11 @@ class MatryoshkaTrainer:
                 epoch=epoch,
                 extra_losses=extra_losses,
             )
-            if not torch.isfinite(torch.tensor(epoch_loss)):
-                raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
-            if n_bad > 0:
-                message = f"the readout solve failed in {n_bad} batch(es) of epoch {epoch + 1}"
-                if not config.skip_failing_batches:
-                    raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss, message=message)
-                warnings.warn(f"{message}; those batches trained against the bias only", RuntimeWarning, stacklevel=2)
-            history.train_loss.append(epoch_loss)
 
             if scheduler is not None:
                 scheduler.step()
 
-            val_loss, val_metric = self._validate_and_refresh(
+            val_loss_dev, val_metric_dev = self._validate_and_refresh(
                 module=module,
                 backend=backend,
                 x_train=x_train,
@@ -293,6 +287,22 @@ class MatryoshkaTrainer:
                 x_val=x_val,
                 y_val=y_val,
             )
+            # The ONE host transfer of the epoch: everything early stopping, the
+            # divergence check, the history and the logs need, in a single read.
+            loss_sum_host, n_bad_host, val_loss, val_metric = backend.host_scalars(
+                [loss_sum, n_bad_dev, val_loss_dev, val_metric_dev]
+            )
+            # Skipped batches contributed nothing; do not let them drag the mean down.
+            epoch_loss = loss_sum_host / max(n_samples - n_skipped, 1)
+            n_bad = int(n_bad_host)
+            if not math.isfinite(epoch_loss):
+                raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
+            if n_bad > 0:
+                message = f"the readout solve failed in {n_bad} batch(es) of epoch {epoch + 1}"
+                if not config.skip_failing_batches:
+                    raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss, message=message)
+                warnings.warn(f"{message}; those batches trained against the bias only", RuntimeWarning, stacklevel=2)
+            history.train_loss.append(epoch_loss)
             if x_val is not None:
                 history.val_loss.append(val_loss)
                 history.val_metric.append(val_metric)
@@ -341,15 +351,11 @@ class MatryoshkaTrainer:
             backend.restore(module, best_state)
             history.best_epoch = best_epoch
             history.best_metric = best_metric
-            # Refresh source weights from the restored encoder.
-            self._validate_and_refresh(
-                module=module,
-                backend=backend,
-                x_train=x_train,
-                y_train=y_train,
-                x_val=x_val,
-                y_val=y_val,
-            )
+            # Refresh source weights from the restored encoder (the same random
+            # subset draw as an epoch's refresh; no validation pass is needed).
+            module.eval()
+            if isinstance(module, IGLModule):
+                self._refresh_source_weights(module, backend, x_train, y_train)
 
         if isinstance(module, IGLModule) and config.final_refresh is FinalRefresh.FULL:
             # The deployed readout sees every training row, not the random
@@ -409,13 +415,21 @@ class MatryoshkaTrainer:
         history: TrainingHistory,
         epoch: int,
         extra_losses: Sequence[ExtraLoss],
-    ) -> tuple[float, int]:
-        """One epoch; returns the mean training loss and the number of failed readout solves."""
+    ) -> tuple[torch.Tensor, torch.Tensor, int]:
+        """One epoch, without touching the host.
+
+        Returns the summed training loss (a 0-d device tensor, float64 where the
+        device has it), the number of failed readout solves (a 0-d device
+        tensor), and the number of samples in skipped batches (a Python int
+        known to the host).
+        """
         config = self.config
         module.train()
         device = x_train.device
         perm = torch.randperm(n_samples, device=device)
-        epoch_loss = 0.0
+        # Summed on the device with the reference arithmetic (fp32 loss -> double,
+        # times the batch size, added) so the CPU history stays bit-identical.
+        loss_sum = backend.loss_accumulator(device)
         k_sum = 0
         n_batches = 0
         n_skipped = 0
@@ -500,7 +514,7 @@ class MatryoshkaTrainer:
                         torch.nn.utils.clip_grad_norm_(params, config.grad_clip)
                     optimizer.step()  # pyright: ignore[reportUnknownMemberType]
 
-                    epoch_loss += float(task_loss.item()) * int(idx.shape[0])
+                    loss_sum.add_(task_loss.detach().to(loss_sum.dtype) * int(idx.shape[0]))
                 except (RuntimeError, _LinAlgError) as exc:
                     # Only the linear-algebra family is skippable; a shape bug
                     # or an out-of-memory error must still surface.
@@ -525,9 +539,7 @@ class MatryoshkaTrainer:
         if config.sigma_max_diagnostic and isinstance(module, IGLModule):
             self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
 
-        # Skipped batches contributed nothing; do not let them drag the mean down.
-        (n_bad_host,) = backend.host_scalars([n_bad])
-        return epoch_loss / max(n_samples - n_skipped, 1), int(n_bad_host)
+        return loss_sum, n_bad, n_skipped
 
     @staticmethod
     def _sigma_max_diagnostic_step(
@@ -574,7 +586,13 @@ class MatryoshkaTrainer:
         y_train: torch.Tensor,
         x_val: torch.Tensor | None,
         y_val: torch.Tensor | None,
-    ) -> tuple[float, float]:
+    ) -> tuple[torch.Tensor | float, torch.Tensor | float]:
+        """Refresh the readout, then score the validation split without touching the host.
+
+        Returns the validation loss and metric as 0-d device tensors (or Python
+        floats when there is no validation split, or the strategy has no
+        ``metric_tensor``); the caller transfers them together.
+        """
         config = self.config
         module.eval()
 
@@ -588,12 +606,19 @@ class MatryoshkaTrainer:
         # validation can hit the same eigh-backward NaN paths. On failure
         # surface a sentinel "worst possible" loss so early stopping treats
         # it as a non-improving epoch instead of crashing on a NaN.
+        metric_tensor = cast(
+            "Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None", getattr(self.loss, "metric_tensor", None)
+        )
         with torch.no_grad():
             try:
                 output = module(x_val)
                 target_val = self.loss.target(y_val)
-                val_loss = float(self.loss.loss(output, target_val).item())
-                val_metric = self.loss.metric(output, target_val)
+                val_loss: torch.Tensor | float = self.loss.loss(output, target_val).detach()
+                val_metric: torch.Tensor | float = (
+                    metric_tensor(output, target_val).detach()
+                    if metric_tensor is not None
+                    else self.loss.metric(output, target_val)
+                )
             except (RuntimeError, _LinAlgError) as exc:
                 if not config.skip_failing_batches or not _is_linalg_failure(exc):
                     raise

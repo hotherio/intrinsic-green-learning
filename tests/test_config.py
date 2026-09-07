@@ -242,3 +242,11 @@ def test_spectral_config_domain_map_round_trips() -> None:
     cfg = IGLConfig(spectral=SpectralConfig(domain_map="none"))
     assert IGLConfig.from_dict(cfg.to_dict()) == cfg
     assert cfg.to_dict()["spectral"]["domain_map"] == "none"  # type: ignore[call-overload, index]
+
+
+def test_matryoshka_config_final_refresh_defaults_to_full_and_round_trips() -> None:
+    from igl import FinalRefresh
+
+    assert MatryoshkaConfig().final_refresh is FinalRefresh.FULL
+    cfg = IGLConfig(matryoshka=MatryoshkaConfig(final_refresh="subset"))
+    assert IGLConfig.from_dict(cfg.to_dict()) == cfg

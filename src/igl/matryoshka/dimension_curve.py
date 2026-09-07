@@ -12,7 +12,7 @@ import math
 import torch
 
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
+from igl.core.solver import solve_with_intercept
 from igl.exceptions import IGLConfigError
 from igl.nn.module import IGLModule
 from igl.types import DimensionCurve, LossStrategy, PrefixForward
@@ -75,11 +75,10 @@ def eval_dimension_curve(
         z_trunc = z_full * mask.unsqueeze(0)
         phi = module.green(z_trunc, gate_mask=mask)
         phi = normalize_phi(phi, module.normalize)
-        # Bias column so each k gets its own intercept.
-        ones_col = torch.ones(phi.shape[0], 1, device=device, dtype=phi.dtype)
-        phi_aug = torch.cat([phi, ones_col], dim=-1)
-        weights = direct_solve_weights(phi_aug, target, l2=source_l2, on_nonfinite="raise").to(device)
-        pred = phi_aug @ weights
+        # A free intercept per k, by centring (no ones column: collinear with a
+        # row-normalised Φ and inflating the ridge scale).
+        weights, intercept = solve_with_intercept(phi, target, l2=source_l2, on_nonfinite="raise")
+        pred = phi @ weights.to(device) + intercept.to(device)
         results[k] = loss.curve_score(pred, target)
 
     return results

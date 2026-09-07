@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import torch
 
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
+from igl.core.solver import solve_with_intercept
 from igl.exceptions import IGLConfigError
 from igl.nn.module import IGLModule
 from igl.types import LossStrategy
@@ -76,10 +76,8 @@ def greedy_knockout(
     def score_with(mask: torch.Tensor) -> float:
         phi = module.green(z_full * mask.unsqueeze(0), gate_mask=mask)
         phi = normalize_phi(phi, module.normalize)
-        ones_col = torch.ones(phi.shape[0], 1, device=device, dtype=phi.dtype)
-        phi_aug = torch.cat([phi, ones_col], dim=-1)
-        weights = direct_solve_weights(phi_aug, target, l2=source_l2, on_nonfinite="raise").to(device)
-        return loss.curve_score(phi_aug @ weights, target)
+        weights, intercept = solve_with_intercept(phi, target, l2=source_l2, on_nonfinite="raise")
+        return loss.curve_score(phi @ weights.to(device) + intercept.to(device), target)
 
     active = torch.ones(d_max, device=device)
     curve: dict[int, float] = {d_max: score_with(active)}

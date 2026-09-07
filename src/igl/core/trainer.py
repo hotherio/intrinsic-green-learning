@@ -13,6 +13,7 @@ The trainer is agnostic to the task — pass any :class:`igl.types.LossStrategy`
 """
 
 import logging
+import re
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -29,7 +30,15 @@ from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
-from igl.types import ExtraLoss, LossStrategy, MatryoshkaSampler, PrefixForward, SamplingMode, SchedulerType
+from igl.types import (
+    ExtraLoss,
+    FinalRefresh,
+    LossStrategy,
+    MatryoshkaSampler,
+    PrefixForward,
+    SamplingMode,
+    SchedulerType,
+)
 
 # ``torch._C._LinAlgError`` is the canonical exception raised by torch's
 # linear-algebra backends (e.g. eigh when the input refuses to factor).
@@ -43,6 +52,12 @@ _LOGGER = logging.getLogger("igl")
 
 _MIN_TREND_WINDOW = 2
 _TREND_RELATIVE_TOLERANCE = 0.01
+_LINALG_FAILURE = re.compile(r"eigh|linalg|svd|cholesky|singular|nan", re.IGNORECASE)
+
+
+def _is_linalg_failure(exc: BaseException) -> bool:
+    """The eigh-backward / factorisation family the batch guard may skip; anything else is a real bug."""
+    return isinstance(exc, _LinAlgError) or bool(_LINALG_FAILURE.search(str(exc)))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -56,8 +71,8 @@ class EpochStats:
         val_metric: Validation metric, or ``None`` when no validation split was given.
         best_epoch: Best epoch seen so far under early stopping, or ``None`` when
             early stopping is inactive or no improvement has been recorded yet.
-        truncation_k: Truncation level sampled for the last step of the epoch,
-            or ``None`` before any step ran.
+        truncation_k: Mean truncation level over the epoch's steps, or
+            ``None`` before any step ran.
     """
 
     epoch: int
@@ -280,6 +295,13 @@ class MatryoshkaTrainer:
                 y_val=y_val,
             )
 
+        if isinstance(module, IGLModule) and config.final_refresh is FinalRefresh.FULL:
+            # The deployed readout sees every training row, not the random
+            # inner_batch_size subset the per-epoch refresh uses. No RNG is
+            # consumed, so the encoder's training trajectory is unchanged.
+            module.eval()
+            self._refresh_source_weights(module, x_train, y_train, device=device, full=True)
+
         return history
 
     def _emit_epoch(
@@ -340,6 +362,7 @@ class MatryoshkaTrainer:
         epoch_loss = 0.0
         k_sum = 0
         n_batches = 0
+        n_skipped = 0
 
         for i in range(0, n_samples, config.batch_size):
             idx = perm[i : i + config.batch_size]
@@ -419,10 +442,13 @@ class MatryoshkaTrainer:
                     optimizer.step()  # pyright: ignore[reportUnknownMemberType]
 
                     epoch_loss += float(task_loss.item()) * int(idx.shape[0])
-                except (RuntimeError, _LinAlgError):
-                    if not config.skip_failing_batches:
+                except (RuntimeError, _LinAlgError) as exc:
+                    # Only the linear-algebra family is skippable; a shape bug
+                    # or an out-of-memory error must still surface.
+                    if not config.skip_failing_batches or not _is_linalg_failure(exc):
                         raise
                     optimizer.zero_grad()
+                    n_skipped += int(idx.shape[0])
             finally:
                 self.current_batch_indices = None
 
@@ -440,7 +466,8 @@ class MatryoshkaTrainer:
         if config.sigma_max_diagnostic and isinstance(module, IGLModule):
             self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
 
-        return epoch_loss / max(n_samples, 1)
+        # Skipped batches contributed nothing; do not let them drag the mean down.
+        return epoch_loss / max(n_samples - n_skipped, 1)
 
     @staticmethod
     def _sigma_max_diagnostic_step(
@@ -507,8 +534,8 @@ class MatryoshkaTrainer:
                 target_val = self.loss.target(y_val)
                 val_loss = float(self.loss.loss(output, target_val).item())
                 val_metric = self.loss.metric(output, target_val)
-            except (RuntimeError, _LinAlgError):
-                if not config.skip_failing_batches:
+            except (RuntimeError, _LinAlgError) as exc:
+                if not config.skip_failing_batches or not _is_linalg_failure(exc):
                     raise
                 worst = float("inf") if not self.loss.higher_is_better else -float("inf")
                 val_loss = worst
@@ -516,12 +543,22 @@ class MatryoshkaTrainer:
         return val_loss, val_metric
 
     def _refresh_source_weights(
-        self, module: IGLModule, x_train: torch.Tensor, y_train: torch.Tensor, *, device: torch.device
+        self,
+        module: IGLModule,
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        *,
+        device: torch.device,
+        full: bool = False,
     ) -> None:
+        """Re-solve the readout on a random ``inner_batch_size`` subset, or on every row when ``full``."""
         config = self.config
         with torch.no_grad():
-            inner_n = min(config.inner_batch_size, x_train.shape[0])
-            inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
+            if full:
+                inner_idx = torch.arange(x_train.shape[0], device=device)
+            else:
+                inner_n = min(config.inner_batch_size, x_train.shape[0])
+                inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
             z_full = module.encoder(x_train[inner_idx])
             phi_full = module.green(z_full)
             phi_full = normalize_phi(phi_full, module.normalize)

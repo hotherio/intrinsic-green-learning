@@ -231,6 +231,25 @@ NullSpaceKindLiteral = Literal["none", "constant", "polynomial"]
 type NullSpaceKindLike = NullSpaceKind | NullSpaceKindLiteral
 
 
+class FinalRefresh(StrEnum):
+    """Which rows solve the readout once training ends.
+
+    - ``FULL`` (default): every training row, so the deployed readout has
+      seen the whole training set. Consumes no RNG.
+    - ``SUBSET``: the same ``inner_batch_size`` random subset the per-epoch
+      refresh uses (the pre-0.13 behaviour).
+    """
+
+    FULL = "full"
+    SUBSET = "subset"
+
+
+FinalRefreshLiteral = Literal["full", "subset"]
+"""Literal companion of :class:`FinalRefresh`."""
+
+type FinalRefreshLike = FinalRefresh | FinalRefreshLiteral
+
+
 class DomainMap(StrEnum):
     """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
 
@@ -453,6 +472,9 @@ __all__ = [
     "EncoderKindLiteral",
     "EncoderProtocol",
     "ExtraLoss",
+    "FinalRefresh",
+    "FinalRefreshLike",
+    "FinalRefreshLiteral",
     "GraphLaplacianNorm",
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",

@@ -16,6 +16,8 @@ from igl import (
     PowerLawSampler,
     TrainingHistory,
     UniformSampler,
+    direct_solve_weights,
+    normalize_phi,
 )
 from igl.data import embed_in_high_dim, make_flat_torus, make_flat_torus_labels, make_moons
 
@@ -274,3 +276,89 @@ def test_trainer_on_epoch_callback_sees_validation_and_best_epoch() -> None:
     trainer.fit(module, x_train, y_train, x_val=x_val, y_val=y_val, on_epoch=seen.append)
     assert all(s.val_loss is not None and s.val_metric is not None for s in seen)
     assert seen[-1].best_epoch is not None
+
+
+# ----- final readout, batch-skip guard -----
+
+
+class _RaisingMSE:
+    """MSE that raises a chosen RuntimeError on selected calls."""
+
+    higher_is_better: bool = False
+
+    def __init__(self, message: str, raise_on_calls: tuple[int, ...]) -> None:
+        self.message = message
+        self._raise_on = set(raise_on_calls)
+        self._n_calls = 0
+
+    def target(self, y: torch.Tensor) -> torch.Tensor:
+        return y.float() if y.dim() > 1 else y.float().unsqueeze(-1)
+
+    def loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        self._n_calls += 1
+        if self._n_calls in self._raise_on:
+            raise RuntimeError(self.message)
+        return ((pred - target) ** 2).mean() * 0.0 + 1.0  # constant 1.0 with a graph
+
+    def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+        return float(((pred - target) ** 2).mean().item())
+
+    def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+        return self.metric(pred, target)
+
+
+def _config(**overrides: object) -> MatryoshkaConfig:
+    base: dict[str, object] = {
+        "epochs": 2,
+        "batch_size": 40,
+        "inner_batch_size": 64,
+        "scheduler": "none",
+        "early_stop_patience": None,
+        "verbose": False,
+    }
+    base.update(overrides)
+    return MatryoshkaConfig(**base)  # type: ignore[arg-type]
+
+
+def test_trainer_final_refresh_full_solves_the_readout_on_every_training_row() -> None:
+    x_train, y_train, _, _ = _torus_data()  # 120 rows > inner_batch_size=64
+    torch.manual_seed(0)
+    module = IGLModule(input_dim=4, max_dim=3, output_dim=4, n_anchors=8, n_scales=2)
+    trainer = MatryoshkaTrainer(loss=MSELoss(), config=_config(final_refresh="full"))
+    trainer.fit(module, x_train, y_train)
+    module.eval()
+    with torch.no_grad():
+        phi = normalize_phi(module.green(module.encoder(x_train)), module.normalize)
+        expected = direct_solve_weights(phi, y_train - module.bias, l2=trainer.config.source_l2)
+    torch.testing.assert_close(module.source_weights.detach(), expected, rtol=1e-4, atol=1e-5)
+
+
+def test_trainer_final_refresh_subset_keeps_the_random_subset_readout() -> None:
+    x_train, y_train, _, _ = _torus_data()
+    torch.manual_seed(0)
+    module = IGLModule(input_dim=4, max_dim=3, output_dim=4, n_anchors=8, n_scales=2)
+    trainer = MatryoshkaTrainer(loss=MSELoss(), config=_config(final_refresh="subset"))
+    trainer.fit(module, x_train, y_train)
+    module.eval()
+    with torch.no_grad():
+        phi = normalize_phi(module.green(module.encoder(x_train)), module.normalize)
+        full = direct_solve_weights(phi, y_train - module.bias, l2=trainer.config.source_l2)
+    assert not torch.allclose(module.source_weights.detach(), full, rtol=1e-4, atol=1e-5)
+
+
+def test_trainer_skip_guard_reraises_runtime_errors_outside_the_linalg_family() -> None:
+    x_train, y_train, _, _ = _torus_data()
+    module = IGLModule(input_dim=4, max_dim=3, output_dim=4, n_anchors=8, n_scales=2)
+    trainer = MatryoshkaTrainer(loss=_RaisingMSE("size mismatch", (1,)), config=_config(skip_failing_batches=True))
+    with pytest.raises(RuntimeError, match="size mismatch"):
+        trainer.fit(module, x_train, y_train)
+
+
+def test_trainer_skipped_batches_do_not_shrink_the_epoch_mean() -> None:
+    x_train, y_train, _, _ = _torus_data()
+    module = IGLModule(input_dim=4, max_dim=3, output_dim=4, n_anchors=8, n_scales=2)
+    loss = _RaisingMSE("linalg.eigh: the algorithm failed to converge", (1,))
+    trainer = MatryoshkaTrainer(loss=loss, config=_config(skip_failing_batches=True, epochs=1))
+    history = trainer.fit(module, x_train, y_train)
+    # Every surviving batch reports exactly 1.0; a skipped batch must not pull the mean below it.
+    assert history.train_loss[0] == pytest.approx(1.0)

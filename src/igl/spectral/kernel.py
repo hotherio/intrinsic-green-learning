@@ -275,9 +275,13 @@ class SpectralKernel(nn.Module):
             anchors_mapped = self.map_to_domain(anchors)
             kernel_main = torch.ones(z.shape[0], self.n_anchors, device=z.device, dtype=z.dtype)
             for j in range(self.latent_dim):
-                if gate_mask is not None and gate_mask[j].item() == 0:
-                    continue
-                kernel_main = kernel_main * self._factor(self._bases[j], self._keeps[j], z_mapped[:, j], anchors_mapped[:, j])
+                factor = self._factor(self._bases[j], self._keeps[j], z_mapped[:, j], anchors_mapped[:, j])
+                if gate_mask is not None:
+                    # Blend on the device instead of reading the mask on the host:
+                    # a masked dimension contributes the neutral factor 1.
+                    keep = gate_mask[j].to(factor.dtype)
+                    factor = 1.0 + keep * (factor - 1.0)
+                kernel_main = kernel_main * factor
 
         if self._null_space is None:
             return kernel_main

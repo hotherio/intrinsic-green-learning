@@ -21,6 +21,7 @@ Combining paths 1 with 2/3, or 2 with 3 when the configs disagree, raises
 :class:`igl.IGLConfigError`.
 """
 
+from collections.abc import Sequence
 from typing import Protocol, cast
 
 import torch
@@ -50,16 +51,23 @@ def _resolve_kernel_params(
     *,
     n_anchors: int | None,
     n_scales: int | None,
-    operator: OperatorNameLike | None,
+    operator: OperatorNameLike | Sequence[OperatorNameLike] | None,
     normalize: NormalizeModeLike | None,
     kernel_cfg: KernelConfig,
 ) -> tuple[int, int, OperatorName | tuple[OperatorName, ...], NormalizeMode]:
     """Explicit kwargs win over the kernel config; otherwise use config values."""
     resolved_anchors = n_anchors if n_anchors is not None else kernel_cfg.n_anchors
     resolved_scales = n_scales if n_scales is not None else kernel_cfg.n_scales
-    resolved_operator: OperatorName | tuple[OperatorName, ...] = (
-        OperatorName(operator) if operator is not None else kernel_cfg.operator
-    )
+    if operator is None:
+        resolved_operator: OperatorName | tuple[OperatorName, ...] = kernel_cfg.operator
+    else:
+        # Same coercion KernelConfig applies: a name or a sequence of names.
+        try:
+            resolved_operator = (
+                OperatorName(operator) if isinstance(operator, str) else tuple(OperatorName(op) for op in operator)
+            )
+        except ValueError as exc:
+            raise IGLConfigError(f"unknown operator {operator!r}") from exc
     # kernel_cfg.normalize is coerced to a NormalizeMode in __post_init__;
     # rewrap to satisfy the static type checker.
     resolved_normalize = NormalizeMode(normalize) if normalize is not None else NormalizeMode(kernel_cfg.normalize)
@@ -85,11 +93,10 @@ class IGLModule(nn.Module):
             :class:`KernelConfig`'s default of ``64``).
         n_scales: Number of kernel scales ``K``. ``None`` defers to
             ``config.kernel.n_scales`` (default ``4``).
-        operator: Single operator name. ``None`` defers to
-            ``config.kernel.operator`` (default
-            :data:`igl.OperatorName.GAUSSIAN`). For multi-operator setups
-            (e.g. ``("gaussian", "helmholtz")``), build the kernel via
-            :class:`KernelConfig` and pass through ``config``.
+        operator: Operator name, or a sequence of names for a
+            multi-operator kernel (e.g. ``("gaussian", "helmholtz")``).
+            ``None`` defers to ``config.kernel.operator`` (default
+            :data:`igl.OperatorName.GAUSSIAN`).
         encoder: Optional pre-built encoder satisfying
             :class:`igl.types.EncoderProtocol`.
         encoder_config: Optional :class:`EncoderConfig` from which to build
@@ -125,7 +132,7 @@ class IGLModule(nn.Module):
         *,
         n_anchors: int | None = None,
         n_scales: int | None = None,
-        operator: OperatorNameLike | None = None,
+        operator: OperatorNameLike | Sequence[OperatorNameLike] | None = None,
         encoder: EncoderProtocol | None = None,
         encoder_config: EncoderConfig | None = None,
         normalize: NormalizeModeLike | None = None,

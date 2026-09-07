@@ -109,3 +109,32 @@ def test_iterative_power_rejects_unsupported_exponents() -> None:
 
     with pytest.raises(IGLConfigError, match="±0.5"):
         matrix_pow_sym(torch.eye(3)[None], 0.25, method="iterative")
+
+
+def test_unpack_sym_vec_is_bit_identical_to_the_masked_formulation() -> None:
+    import math
+
+    from igl.spd.linalg import unpack_sym_vec
+
+    torch.manual_seed(0)
+    d = 6
+    vec = torch.randn(9, d * (d + 1) // 2)
+    rows, cols = torch.triu_indices(d, d)
+    on_diag = (rows == cols).to(vec.dtype)
+    unscaled = vec * (on_diag + (1.0 - on_diag) / math.sqrt(2.0))
+    expected = torch.zeros(9, d, d)
+    expected[:, rows, cols] = unscaled
+    mask = rows != cols
+    expected[:, cols[mask], rows[mask]] = unscaled[:, mask]
+    assert torch.equal(unpack_sym_vec(vec, d), expected)
+
+
+def test_iterative_exp_matches_fp64_on_wide_symmetric_spectra() -> None:
+    from igl.spd.linalg import matrix_exp_sym
+
+    torch.manual_seed(0)
+    q, _ = torch.linalg.qr(torch.randn(8, 16, 16, dtype=torch.float64))
+    lam = -40.0 + 80.0 * torch.rand(8, 16, dtype=torch.float64)
+    s64 = q @ torch.diag_embed(lam) @ q.transpose(-1, -2)
+    ref = matrix_exp_sym(s64)
+    assert _rel(matrix_exp_sym(s64.float(), method="iterative"), ref) < 1e-5

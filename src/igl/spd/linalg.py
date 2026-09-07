@@ -23,9 +23,11 @@ MatrixMethod = Literal["eigh", "iterative"]
 
 ``"eigh"`` (default) diagonalises; exact to fp32 rounding but the CUDA
 eigensolver synchronises with the host. ``"iterative"`` uses only matrix
-products, solves and inverses (``torch.linalg.matrix_exp``, inverse scaling and
-squaring with Denman–Beavers square roots for the logarithm, Denman–Beavers for
-the inverse square root): no host synchronisation, and on EEG-like spectra
+products, solves and inverses (a fixed-order scaling-and-squaring exponential,
+inverse scaling and squaring with Denman–Beavers square roots for the
+logarithm, Denman–Beavers for the inverse square root): no host
+synchronisation (``torch.linalg.matrix_exp`` reads a norm on the host to pick
+its order, so it is not used), and on EEG-like spectra
 spanning six orders of magnitude the fp32 error (2e-4..2e-3 measured) is in the
 same band as fp32 ``eigh``'s own (5e-4..8e-3): three Denman–Beavers roots
 (fewer roots keep the ``2^k`` error amplification small in fp32) and a
@@ -36,6 +38,8 @@ stalls a pipeline.
 _DB_ITERS = 12
 _ISS_ROOTS = 3
 _ATANH_TERMS = 12
+_EXP_SQUARINGS = 6
+_EXP_TAYLOR_DEGREE = 16
 
 
 def _eigh(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -86,9 +90,10 @@ def unpack_sym_vec(vec: torch.Tensor, d: int) -> torch.Tensor:
 
     sym = torch.zeros(batch, d, d, dtype=vec.dtype, device=vec.device)
     sym[:, rows, cols] = vec_unscaled
-    off_diag_mask = rows != cols
-    sym[:, cols[off_diag_mask], rows[off_diag_mask]] = vec_unscaled[:, off_diag_mask]
-    return sym
+    # Mirror the strict upper triangle instead of indexing with a boolean
+    # mask: the mask would call ``nonzero`` and synchronise on CUDA. Adding
+    # exact zeros keeps every entry bit-identical to the masked assignment.
+    return sym + sym.triu(1).transpose(-1, -2)
 
 
 def _denman_beavers(a: torch.Tensor, iters: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -102,6 +107,24 @@ def _denman_beavers(a: torch.Tensor, iters: int) -> tuple[torch.Tensor, torch.Te
     return y, z
 
 
+def _matrix_exp_fixed(x: torch.Tensor) -> torch.Tensor:
+    """Scaling and squaring with a fixed scaling and Taylor order (matrix products only).
+
+    Six squarings and a degree-16 Taylor polynomial evaluated by Horner's rule
+    keep the relative error at 1e-6..4e-6 in fp32 against an fp64 reference for
+    symmetric inputs with eigenvalues in ``[-40, 40]`` (measured), the range
+    log-Eig vectors occupy in practice.
+    """
+    eye = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device).expand_as(x)
+    a = x / float(2**_EXP_SQUARINGS)
+    out = eye
+    for m in range(_EXP_TAYLOR_DEGREE, 0, -1):
+        out = eye + (a @ out) / m
+    for _ in range(_EXP_SQUARINGS):
+        out = out @ out
+    return out
+
+
 def _trace_scale(c: torch.Tensor) -> torch.Tensor:
     """Per-matrix ``trace / d`` as ``[B, 1, 1]``: the scaling that centres the spectrum around 1."""
     return c.diagonal(dim1=-2, dim2=-1).mean(dim=-1)[:, None, None]
@@ -111,8 +134,8 @@ def matrix_exp_sym(s: torch.Tensor, *, method: MatrixMethod = "eigh") -> torch.T
     """Batched matrix exponential of symmetric matrices.
 
     For a real symmetric ``S = U Λ U^T``, ``exp(S) = U diag(exp Λ) U^T``; the
-    iterative method is ``torch.linalg.matrix_exp`` (scaling and squaring with
-    Padé approximants, matrix products only).
+    iterative method is a fixed-order scaling-and-squaring Taylor expansion
+    (matrix products only, no host synchronisation).
 
     Args:
         s: ``[B, d, d]`` symmetric matrices.
@@ -122,7 +145,7 @@ def matrix_exp_sym(s: torch.Tensor, *, method: MatrixMethod = "eigh") -> torch.T
         ``[B, d, d]`` symmetric positive-definite matrices.
     """
     if method == "iterative":
-        out = cast(torch.Tensor, torch.linalg.matrix_exp(s))  # pyright: ignore[reportUnknownMemberType]
+        out = _matrix_exp_fixed(s)
         return 0.5 * (out + out.transpose(-1, -2))
     eigvals, eigvecs = _eigh(s)
     return eigvecs @ torch.diag_embed(torch.exp(eigvals)) @ eigvecs.transpose(-1, -2)

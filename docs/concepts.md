@@ -46,7 +46,12 @@ Given ambient inputs $x \in \mathbb{R}^D$, IGL trains:
    [`igl.direct_solve_weights`][igl.direct_solve_weights] (Tikhonov-
    regularised lstsq). The solve reads $\Phi$ as the kernel produces it
    (`normalize="none"`, the default); the row normalisations in
-   [`NormalizeMode`][igl.types.NormalizeMode] are opt-in.
+   [`NormalizeMode`][igl.types.NormalizeMode] are opt-in. The intercept
+   is fitted by centring rather than by a column of ones, so it carries
+   no ridge and the anchors keep the ridge scale they had in training.
+   Once training ends the readout is re-solved on every training row
+   (`MatryoshkaConfig.final_refresh="full"`); the per-epoch refresh keeps
+   using a random `inner_batch_size` subset.
 
 The kernel is a product over the latent dimensions and a weighted sum
 over $K$ scales:

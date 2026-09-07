@@ -17,7 +17,6 @@ import re
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import cast
 
 import torch
 from torch import nn
@@ -25,8 +24,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from igl.config import MatryoshkaConfig
+from igl.core._backend import Backend, select_backend
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
@@ -119,11 +118,16 @@ class MatryoshkaTrainer:
             regression, …).
         sampler: Optional explicit :class:`MatryoshkaSampler`. When ``None``,
             one is built from ``config.sampling`` and ``config.alpha``.
+        backend: Optional explicit :class:`igl.device.Backend` (the per-device
+            execution branch). When ``None``, :func:`igl.device.select_backend`
+            picks it from the module's device at :meth:`fit`. Tests inject a
+            counting double here.
     """
 
     config: MatryoshkaConfig
     loss: LossStrategy
     sampler: MatryoshkaSampler
+    backend: Backend | None
     current_batch_indices: torch.Tensor | None
 
     def __init__(
@@ -132,10 +136,12 @@ class MatryoshkaTrainer:
         loss: LossStrategy,
         config: MatryoshkaConfig | None = None,
         sampler: MatryoshkaSampler | None = None,
+        backend: Backend | None = None,
     ) -> None:
         self.config = config or MatryoshkaConfig()
         self.loss = loss
         self.sampler = sampler if sampler is not None else _build_sampler(self.config)
+        self.backend = backend
         # Per-batch seam: strategies that need to look up auxiliary data
         # indexed by the batch's positions in the original training tensor
         # (e.g. ``AIRMLoss(covs=...)``) read this. Set by ``_train_one_epoch``
@@ -178,6 +184,7 @@ class MatryoshkaTrainer:
         """
         config = self.config
         device = next(module.parameters()).device
+        backend = self.backend if self.backend is not None else select_backend(device)
         x_train = x_train.to(device)
         y_train = y_train.to(device)
         if x_val is not None:
@@ -193,11 +200,7 @@ class MatryoshkaTrainer:
             params: list[nn.Parameter] = list(module.encoder.parameters()) + list(module.green.parameters()) + [module.bias]
         else:
             params = list(module.parameters())
-        optimizer = (
-            AdamW(params, lr=config.encoder_lr, weight_decay=config.weight_decay)
-            if config.weight_decay is not None
-            else AdamW(params, lr=config.encoder_lr)
-        )
+        optimizer = backend.make_optimizer(params, lr=config.encoder_lr, weight_decay=config.weight_decay)
         scheduler = (
             CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1)
             if config.scheduler is SchedulerType.COSINE_WARM_RESTARTS
@@ -205,15 +208,61 @@ class MatryoshkaTrainer:
         )
 
         use_early_stop = config.early_stop_patience is not None and x_val is not None
+        history = TrainingHistory()
+
+        precision = backend.precision()
+        precision.__enter__()
+        try:
+            self._fit_epochs(
+                module=module,
+                backend=backend,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                params=params,
+                x_train=x_train,
+                y_train=y_train,
+                x_val=x_val,
+                y_val=y_val,
+                extra_losses=extra_losses,
+                on_epoch=on_epoch,
+                history=history,
+                d_max=d_max,
+                n_samples=n_samples,
+                use_early_stop=use_early_stop,
+            )
+        finally:
+            precision.__exit__(None, None, None)
+        return history
+
+    def _fit_epochs(  # noqa: PLR0912, PLR0913, PLR0915 (the epoch loop reads as one unit; splitting obscures it)
+        self,
+        *,
+        module: IGLModule | PrefixForward,
+        backend: Backend,
+        optimizer: AdamW,
+        scheduler: CosineAnnealingWarmRestarts | None,
+        params: Sequence[nn.Parameter],
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        x_val: torch.Tensor | None,
+        y_val: torch.Tensor | None,
+        extra_losses: Sequence[ExtraLoss],
+        on_epoch: Callable[[EpochStats], None] | None,
+        history: TrainingHistory,
+        d_max: int,
+        n_samples: int,
+        use_early_stop: bool,
+    ) -> None:
+        config = self.config
         best_metric: float = -float("inf") if self.loss.higher_is_better else float("inf")
         best_epoch: int = -1
         epochs_since_improvement: int = 0
-        best_state: dict[str, object] | None = None
-        history = TrainingHistory()
+        best_state: dict[str, torch.Tensor] | None = None
 
         for epoch in range(config.epochs):
-            epoch_loss = self._train_one_epoch(
+            epoch_loss, n_bad = self._train_one_epoch(
                 module=module,
+                backend=backend,
                 optimizer=optimizer,
                 params=params,
                 x_train=x_train,
@@ -226,6 +275,11 @@ class MatryoshkaTrainer:
             )
             if not torch.isfinite(torch.tensor(epoch_loss)):
                 raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
+            if n_bad > 0:
+                message = f"the readout solve failed in {n_bad} batch(es) of epoch {epoch + 1}"
+                if not config.skip_failing_batches:
+                    raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss, message=message)
+                warnings.warn(f"{message}; those batches trained against the bias only", RuntimeWarning, stacklevel=2)
             history.train_loss.append(epoch_loss)
 
             if scheduler is not None:
@@ -233,6 +287,7 @@ class MatryoshkaTrainer:
 
             val_loss, val_metric = self._validate_and_refresh(
                 module=module,
+                backend=backend,
                 x_train=x_train,
                 y_train=y_train,
                 x_val=x_val,
@@ -248,7 +303,7 @@ class MatryoshkaTrainer:
                     best_metric = val_metric
                     best_epoch = epoch
                     epochs_since_improvement = 0
-                    best_state = self._snapshot(module)
+                    best_state = backend.snapshot(module)
                 else:
                     epochs_since_improvement += 1
 
@@ -283,12 +338,13 @@ class MatryoshkaTrainer:
             history.stop_reason = "max_epochs"
 
         if use_early_stop and best_state is not None:
-            self._restore(module, best_state)
+            backend.restore(module, best_state)
             history.best_epoch = best_epoch
             history.best_metric = best_metric
             # Refresh source weights from the restored encoder.
             self._validate_and_refresh(
                 module=module,
+                backend=backend,
                 x_train=x_train,
                 y_train=y_train,
                 x_val=x_val,
@@ -300,9 +356,7 @@ class MatryoshkaTrainer:
             # inner_batch_size subset the per-epoch refresh uses. No RNG is
             # consumed, so the encoder's training trajectory is unchanged.
             module.eval()
-            self._refresh_source_weights(module, x_train, y_train, device=device, full=True)
-
-        return history
+            self._refresh_source_weights(module, backend, x_train, y_train, full=True)
 
     def _emit_epoch(
         self,
@@ -341,10 +395,11 @@ class MatryoshkaTrainer:
                 "n/a" if stats.best_epoch is None else stats.best_epoch,
             )
 
-    def _train_one_epoch(  # noqa: PLR0915, PLR0912 (split would obscure single-epoch atomicity)
+    def _train_one_epoch(  # noqa: PLR0915, PLR0912, PLR0913 (split would obscure single-epoch atomicity)
         self,
         *,
         module: IGLModule | PrefixForward,
+        backend: Backend,
         optimizer: AdamW,
         params: Sequence[nn.Parameter],
         x_train: torch.Tensor,
@@ -354,7 +409,8 @@ class MatryoshkaTrainer:
         history: TrainingHistory,
         epoch: int,
         extra_losses: Sequence[ExtraLoss],
-    ) -> float:
+    ) -> tuple[float, int]:
+        """One epoch; returns the mean training loss and the number of failed readout solves."""
         config = self.config
         module.train()
         device = x_train.device
@@ -363,6 +419,7 @@ class MatryoshkaTrainer:
         k_sum = 0
         n_batches = 0
         n_skipped = 0
+        n_bad = torch.zeros((), dtype=torch.int64, device=device)
 
         for i in range(0, n_samples, config.batch_size):
             idx = perm[i : i + config.batch_size]
@@ -392,7 +449,9 @@ class MatryoshkaTrainer:
                     phi_lstsq = module.green(z_lstsq, gate_mask=mask)
                     phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
                     target_lstsq = self.loss.target(y_train[lstsq_idx]) - module.bias.detach()
-                    w_k = direct_solve_weights(phi_lstsq, target_lstsq, l2=config.source_l2).to(device)
+                    w_k, bad = backend.ridge_solve(phi_lstsq, target_lstsq, l2=config.source_l2)
+                    w_k = w_k.to(device)
+                    n_bad = n_bad + bad.to(device=device, dtype=torch.int64)
 
                 output = phi @ w_k + module.bias
             else:
@@ -467,7 +526,8 @@ class MatryoshkaTrainer:
             self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
 
         # Skipped batches contributed nothing; do not let them drag the mean down.
-        return epoch_loss / max(n_samples - n_skipped, 1)
+        (n_bad_host,) = backend.host_scalars([n_bad])
+        return epoch_loss / max(n_samples - n_skipped, 1), int(n_bad_host)
 
     @staticmethod
     def _sigma_max_diagnostic_step(
@@ -509,17 +569,17 @@ class MatryoshkaTrainer:
         self,
         *,
         module: IGLModule | PrefixForward,
+        backend: Backend,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         x_val: torch.Tensor | None,
         y_val: torch.Tensor | None,
     ) -> tuple[float, float]:
         config = self.config
-        device = next(module.parameters()).device
         module.eval()
 
         if isinstance(module, IGLModule):
-            self._refresh_source_weights(module, x_train, y_train, device=device)
+            self._refresh_source_weights(module, backend, x_train, y_train)
 
         if x_val is None or y_val is None:
             return 0.0, 0.0
@@ -545,14 +605,15 @@ class MatryoshkaTrainer:
     def _refresh_source_weights(
         self,
         module: IGLModule,
+        backend: Backend,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         *,
-        device: torch.device,
         full: bool = False,
     ) -> None:
         """Re-solve the readout on a random ``inner_batch_size`` subset, or on every row when ``full``."""
         config = self.config
+        device = x_train.device
         with torch.no_grad():
             if full:
                 inner_idx = torch.arange(x_train.shape[0], device=device)
@@ -563,15 +624,12 @@ class MatryoshkaTrainer:
             phi_full = module.green(z_full)
             phi_full = normalize_phi(phi_full, module.normalize)
             target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
-            # Guard a diverged encoder: a non-finite phi/target means training
-            # has blown up, and direct_solve_weights would crash *inside* its
-            # lstsq/SVD backend with an opaque torch LinAlgError. Skip the
-            # refresh and keep the last good source weights — the trainer's
-            # non-finite-loss check then raises a clean IGLConvergenceError on
-            # the next epoch instead of crashing. Bit-identical on healthy runs.
-            if torch.isfinite(phi_full).all() and torch.isfinite(target_full).all():
-                w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
-                module.set_source_weights(w_full)
+            # The backend decides how a suspect solve is handled: the CPU branch
+            # keeps its host guard (verbatim), the device branches keep the last
+            # good readout through a device flag. Either way the trainer's
+            # non-finite-loss check raises cleanly on the next epoch.
+            w_full = backend.refresh_weights(phi_full, target_full, l2=config.source_l2, current=module.source_weights)
+            module.set_source_weights(w_full.to(device))
 
     def _classify_stop(self, history: TrainingHistory) -> str:
         """Distinguish a validation plateau from a stop that fired mid-improvement."""
@@ -587,28 +645,6 @@ class MatryoshkaTrainer:
         threshold = _TREND_RELATIVE_TOLERANCE
         improving = relative_change > threshold if self.loss.higher_is_better else relative_change < -threshold
         return "improving_at_stop" if improving else "plateau"
-
-    @staticmethod
-    def _snapshot(module: IGLModule | PrefixForward) -> dict[str, object]:
-        if isinstance(module, IGLModule):
-            return {
-                "encoder": {k: v.detach().cpu().clone() for k, v in module.encoder.state_dict().items()},
-                "green": {k: v.detach().cpu().clone() for k, v in module.green.state_dict().items()},
-                "bias": module.bias.detach().cpu().clone(),
-            }
-        return {"state": {k: v.detach().cpu().clone() for k, v in module.state_dict().items()}}
-
-    @staticmethod
-    def _restore(module: IGLModule | PrefixForward, snapshot: dict[str, object]) -> None:
-        if isinstance(module, IGLModule):
-            encoder_state = cast(dict[str, torch.Tensor], snapshot["encoder"])
-            green_state = cast(dict[str, torch.Tensor], snapshot["green"])
-            bias = cast(torch.Tensor, snapshot["bias"])
-            module.encoder.load_state_dict(encoder_state)
-            module.green.load_state_dict(green_state)
-            module.bias.data.copy_(bias.to(module.bias.device))
-            return
-        module.load_state_dict(cast(dict[str, torch.Tensor], snapshot["state"]))
 
 
 __all__ = ["MatryoshkaTrainer", "TrainingHistory"]

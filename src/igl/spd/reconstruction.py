@@ -116,7 +116,7 @@ class IGLReconSPDClassifier(BaseEstimator, ClassifierMixin):
             kernel and the AIRM reconstruction depend on.
         normalize: Φ-normalisation mode. ``None`` (default) defers to
             ``config.kernel.normalize`` if a ``config`` is supplied, else
-            the package default :data:`igl.NormalizeMode.NW`.
+            the package default :data:`igl.NormalizeMode.NONE`.
         validation_fraction: Fraction of the training tensor used for
             validation. The 80/20 split (the default) is performed via
             ``torch.randperm(N)`` so the RNG-consumption profile matches

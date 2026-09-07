@@ -96,7 +96,7 @@ class IGLModule(nn.Module):
             an :class:`MLPEncoder`. Mutually exclusive with ``encoder``.
         normalize: Φ-normalization mode. ``None`` defers to
             ``config.kernel.normalize`` (default
-            :data:`igl.NormalizeMode.NW`).
+            :data:`igl.NormalizeMode.NONE`).
         normalize_input: If ``True``, prepend an
             ``nn.BatchNorm1d(affine=False)`` to the encoder. Stabilises
             training when ambient input dimensions have wildly different

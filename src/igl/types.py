@@ -79,10 +79,15 @@ type SamplingModeLike = SamplingMode | SamplingModeLiteral
 class NormalizeMode(StrEnum):
     """Row-wise normalization applied to the design matrix Φ before lstsq.
 
-    - ``NONE``: identity.
-    - ``SOFTMAX``: row-softmax.
+    - ``NONE`` (default): identity. The closed-form solve already scales its
+      ridge to Φ's column norms, so raw kernel values are a safe default for
+      every operator and basis.
+    - ``SOFTMAX``: row-softmax. Shift-invariant per row, so the overall
+      magnitude of a row (how close the point is to any anchor) is discarded.
     - ``L2``: L2-normalise each row.
-    - ``NW``: Nadaraya–Watson (divide each row by its sum, with a small epsilon).
+    - ``NW``: Nadaraya–Watson (divide each row by its sum, with a small
+      epsilon). Assumes non-negative rows; with an oscillatory operator or a
+      spectral basis a row sum can cross zero and the division blows up.
     """
 
     NONE = "none"

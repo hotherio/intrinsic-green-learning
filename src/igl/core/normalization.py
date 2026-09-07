@@ -16,7 +16,8 @@ def normalize_phi(phi: torch.Tensor, mode: NormalizeModeLike) -> torch.Tensor:
 
     Args:
         phi: Design matrix of shape ``[N, R]``.
-        mode: A :class:`NormalizeMode` member or matching string.
+        mode: A :class:`NormalizeMode` member or matching string. ``NONE``
+            is the package default; ``NW`` expects non-negative rows.
 
     Returns:
         The normalised matrix, same shape as ``phi``.

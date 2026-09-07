@@ -2,7 +2,7 @@
 
 import pytest
 
-from igl import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig
+from igl import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig, SpectralConfig
 
 
 def test_default_iglconfig_is_constructable() -> None:
@@ -219,3 +219,17 @@ def test_iglconfig_to_dict_serialises_int_hidden() -> None:
 def test_iglconfig_to_dict_serialises_single_operator_as_string() -> None:
     cfg = IGLConfig(kernel=KernelConfig(operator="gaussian"))
     assert cfg.to_dict()["kernel"]["operator"] == "gaussian"  # type: ignore[call-overload, index]
+
+
+def test_iglconfig_from_dict_missing_keys_fall_back_to_dataclass_defaults() -> None:
+    """A dict without a field rebuilds with the dataclass default, not a re-typed literal.
+
+    Regression: ``normalize`` fell back to SOFTMAX in ``from_dict`` while the
+    dataclass default was NW, so a config saved before the field existed came
+    back with a different normaliser than a freshly-constructed one.
+    """
+    rebuilt = IGLConfig.from_dict({"encoder": {}, "kernel": {}, "matryoshka": {}, "spectral": {}})
+    assert rebuilt.kernel == KernelConfig()
+    assert rebuilt.encoder == EncoderConfig()
+    assert rebuilt.matryoshka == MatryoshkaConfig()
+    assert rebuilt.spectral == SpectralConfig()

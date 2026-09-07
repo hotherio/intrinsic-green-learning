@@ -68,7 +68,7 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         operator: Kernel operator override (``None`` → use config or
             ``OperatorName.GAUSSIAN``).
         normalize: Φ normalization override (``None`` → use config or
-            ``NormalizeMode.SOFTMAX``).
+            the package default :data:`igl.NormalizeMode.NONE`).
         encoder_hidden: Encoder ``hidden`` shorthand (``int`` or tuple of
             per-layer widths). ``None`` defers to the encoder config.
         encoder_depth: Encoder depth shorthand.

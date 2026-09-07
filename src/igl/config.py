@@ -102,7 +102,7 @@ class KernelConfig:
     operator: OperatorName | tuple[OperatorName, ...] = OperatorName.GAUSSIAN
     sigma_log_range: tuple[float, float] = (-1.5, 1.5)
     anchor_init_std: float = 0.5
-    normalize: NormalizeModeLike = NormalizeMode.NW
+    normalize: NormalizeModeLike = NormalizeMode.NONE
     null_space: NullSpaceKindLike = NullSpaceKind.NONE
     polynomial_degree: int = 1
 
@@ -314,23 +314,33 @@ def _spectral_to_dict(spectral: SpectralConfig | None) -> dict[str, object] | No
     }
 
 
+# The ``from_dict`` fallbacks are read off the dataclasses rather than
+# re-typed here: a duplicated literal drifts (``normalize`` fell back to
+# SOFTMAX while the dataclass default was NW), and a config dict written
+# before a field existed then silently rebuilds with the wrong value.
+_ENCODER_DEFAULTS = EncoderConfig()
+_KERNEL_DEFAULTS = KernelConfig()
+_SPECTRAL_DEFAULTS = SpectralConfig()
+_MATRYOSHKA_DEFAULTS = MatryoshkaConfig()
+
+
 def _make_encoder_config(data: Mapping[str, object]) -> EncoderConfig:
-    hidden = data.get("hidden", 256)
+    hidden = data.get("hidden", _ENCODER_DEFAULTS.hidden)
     if isinstance(hidden, list):
         hidden = tuple(cast(list[int], hidden))
     elif not isinstance(hidden, int | tuple):
         raise IGLConfigError("encoder.hidden must be an int, tuple, or list of ints")
     return EncoderConfig(
-        kind=cast(EncoderKindLike, data.get("kind", EncoderKind.MLP)),
+        kind=cast(EncoderKindLike, data.get("kind", _ENCODER_DEFAULTS.kind)),
         hidden=cast(int | tuple[int, ...], hidden),
-        depth=_typed_get(data, "depth", 2),
-        norm=cast(NormTypeLike, data.get("norm", NormType.LAYER)),
-        activation=cast(ActivationTypeLike, data.get("activation", ActivationType.SILU)),
+        depth=_typed_get(data, "depth", _ENCODER_DEFAULTS.depth),
+        norm=cast(NormTypeLike, data.get("norm", _ENCODER_DEFAULTS.norm)),
+        activation=cast(ActivationTypeLike, data.get("activation", _ENCODER_DEFAULTS.activation)),
     )
 
 
 def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
-    operator_raw = data.get("operator", OperatorName.GAUSSIAN)
+    operator_raw = data.get("operator", _KERNEL_DEFAULTS.operator)
     if isinstance(operator_raw, list):
         operator: OperatorName | tuple[OperatorName, ...] = tuple(OperatorName(op) for op in cast(list[str], operator_raw))
     elif isinstance(operator_raw, OperatorName):
@@ -342,7 +352,7 @@ def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
     else:
         raise IGLConfigError("kernel.operator must be a string, list, or tuple of strings")
 
-    sigma_raw = data.get("sigma_log_range", (-1.5, 1.5))
+    sigma_raw = data.get("sigma_log_range", _KERNEL_DEFAULTS.sigma_log_range)
     if isinstance(sigma_raw, list):
         sigma_raw = tuple(cast(list[float], sigma_raw))
     if not isinstance(sigma_raw, tuple):
@@ -350,19 +360,19 @@ def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
     sigma_pair = cast(tuple[float, float], sigma_raw)
 
     return KernelConfig(
-        n_anchors=_typed_get(data, "n_anchors", 64),
-        n_scales=_typed_get(data, "n_scales", 4),
+        n_anchors=_typed_get(data, "n_anchors", _KERNEL_DEFAULTS.n_anchors),
+        n_scales=_typed_get(data, "n_scales", _KERNEL_DEFAULTS.n_scales),
         operator=operator,
         sigma_log_range=sigma_pair,
-        anchor_init_std=_typed_get(data, "anchor_init_std", 0.5),
-        normalize=cast(NormalizeModeLike, data.get("normalize", NormalizeMode.SOFTMAX)),
-        null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
-        polynomial_degree=_typed_get(data, "polynomial_degree", 1),
+        anchor_init_std=_typed_get(data, "anchor_init_std", _KERNEL_DEFAULTS.anchor_init_std),
+        normalize=cast(NormalizeModeLike, data.get("normalize", _KERNEL_DEFAULTS.normalize)),
+        null_space=cast(NullSpaceKindLike, data.get("null_space", _KERNEL_DEFAULTS.null_space)),
+        polynomial_degree=_typed_get(data, "polynomial_degree", _KERNEL_DEFAULTS.polynomial_degree),
     )
 
 
 def _make_spectral_config(data: Mapping[str, object]) -> SpectralConfig:
-    kind_raw = data.get("kind", SpectralKind.FOURIER_SINE)
+    kind_raw = data.get("kind", _SPECTRAL_DEFAULTS.kind)
     kind: SpectralKindLike | tuple[SpectralKindLike, ...]
     if isinstance(kind_raw, list):
         kind = tuple(SpectralKind(k) for k in cast(list[str], kind_raw))
@@ -375,36 +385,37 @@ def _make_spectral_config(data: Mapping[str, object]) -> SpectralConfig:
 
     return SpectralConfig(
         kind=kind,
-        n_modes=_typed_get(data, "n_modes", 16),
-        n_anchors=_typed_get(data, "n_anchors", 64),
-        null_space=cast(NullSpaceKindLike, data.get("null_space", NullSpaceKind.NONE)),
-        polynomial_degree=_typed_get(data, "polynomial_degree", 1),
-        epsilon=_typed_get(data, "epsilon", 1e-4),
-        anchor_init_std=_typed_get(data, "anchor_init_std", 0.25),
-        k_nn=_typed_get(data, "k_nn", 10),
-        refresh_every=_typed_get(data, "refresh_every", 200),
+        n_modes=_typed_get(data, "n_modes", _SPECTRAL_DEFAULTS.n_modes),
+        n_anchors=_typed_get(data, "n_anchors", _SPECTRAL_DEFAULTS.n_anchors),
+        null_space=cast(NullSpaceKindLike, data.get("null_space", _SPECTRAL_DEFAULTS.null_space)),
+        polynomial_degree=_typed_get(data, "polynomial_degree", _SPECTRAL_DEFAULTS.polynomial_degree),
+        epsilon=_typed_get(data, "epsilon", _SPECTRAL_DEFAULTS.epsilon),
+        anchor_init_std=_typed_get(data, "anchor_init_std", _SPECTRAL_DEFAULTS.anchor_init_std),
+        k_nn=_typed_get(data, "k_nn", _SPECTRAL_DEFAULTS.k_nn),
+        refresh_every=_typed_get(data, "refresh_every", _SPECTRAL_DEFAULTS.refresh_every),
     )
 
 
 def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
+    d = _MATRYOSHKA_DEFAULTS
     return MatryoshkaConfig(
-        epochs=_typed_get(data, "epochs", 1500),
-        batch_size=_typed_get(data, "batch_size", 256),
-        inner_batch_size=_typed_get(data, "inner_batch_size", 4096),
-        encoder_lr=_typed_get(data, "encoder_lr", 1e-3),
-        weight_decay=cast("float | None", data.get("weight_decay", None)),
-        source_l2=_typed_get(data, "source_l2", 1e-3),
-        grad_clip=_typed_get(data, "grad_clip", 1.0),
-        sampling=cast(SamplingModeLike, data.get("sampling", SamplingMode.UNIFORM)),
-        alpha=_typed_get(data, "alpha", 1.0),
-        scheduler=cast(SchedulerTypeLike, data.get("scheduler", SchedulerType.NONE)),
-        early_stop_patience=cast("int | None", data.get("early_stop_patience", 100)),
-        early_stop_min_epochs=_typed_get(data, "early_stop_min_epochs", 200),
-        noise_std=_typed_get(data, "noise_std", 0.0),
-        log_every=_typed_get(data, "log_every", 100),
-        verbose=_typed_get(data, "verbose", False),
-        sigma_max_diagnostic=_typed_get(data, "sigma_max_diagnostic", False),
-        skip_failing_batches=_typed_get(data, "skip_failing_batches", False),
+        epochs=_typed_get(data, "epochs", d.epochs),
+        batch_size=_typed_get(data, "batch_size", d.batch_size),
+        inner_batch_size=_typed_get(data, "inner_batch_size", d.inner_batch_size),
+        encoder_lr=_typed_get(data, "encoder_lr", d.encoder_lr),
+        weight_decay=cast("float | None", data.get("weight_decay", d.weight_decay)),
+        source_l2=_typed_get(data, "source_l2", d.source_l2),
+        grad_clip=_typed_get(data, "grad_clip", d.grad_clip),
+        sampling=cast(SamplingModeLike, data.get("sampling", d.sampling)),
+        alpha=_typed_get(data, "alpha", d.alpha),
+        scheduler=cast(SchedulerTypeLike, data.get("scheduler", d.scheduler)),
+        early_stop_patience=cast("int | None", data.get("early_stop_patience", d.early_stop_patience)),
+        early_stop_min_epochs=_typed_get(data, "early_stop_min_epochs", d.early_stop_min_epochs),
+        noise_std=_typed_get(data, "noise_std", d.noise_std),
+        log_every=_typed_get(data, "log_every", d.log_every),
+        verbose=_typed_get(data, "verbose", d.verbose),
+        sigma_max_diagnostic=_typed_get(data, "sigma_max_diagnostic", d.sigma_max_diagnostic),
+        skip_failing_batches=_typed_get(data, "skip_failing_batches", d.skip_failing_batches),
     )
 
 

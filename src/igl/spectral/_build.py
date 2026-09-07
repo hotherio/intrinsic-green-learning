@@ -78,6 +78,7 @@ def build_spectral_kernel(
         null_space=null,
         epsilon=config.epsilon,
         anchor_init_std=config.anchor_init_std,
+        domain_map=config.domain_map,
     )
 
 

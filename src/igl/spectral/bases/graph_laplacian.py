@@ -17,7 +17,11 @@ supplies an adjacency matrix ``W``. This module:
 
 3. Caches the eigenvectors **per graph node**. :meth:`evaluate` takes
    a node-index tensor (the only basis that doesn't take a real-valued
-   latent input — graph data has no other natural input).
+   latent input — graph data has no other natural input). Inside
+   :class:`igl.spectral.SpectralKernel` this means fixed integer anchors
+   (``anchors=node_ids, learnable_anchors=False``): a learnable real
+   anchor would be silently truncated to a node id and receive no
+   gradient, so non-integer input raises instead.
 """
 
 from __future__ import annotations
@@ -26,11 +30,11 @@ from typing import cast
 
 import numpy as np
 import scipy.sparse  # noqa: ICN001
-import scipy.sparse.linalg
 import torch
 from torch import nn
 
 from igl.exceptions import IGLConfigError
+from igl.spectral.bases._eigsolve import smallest_eigenpairs
 from igl.types import GraphLaplacianNorm, GraphLaplacianNormLike
 
 _DEGREE_FLOOR: float = 1e-12
@@ -73,6 +77,7 @@ class GraphLaplacianBasis(nn.Module):
     null_indices: tuple[int, ...]
     domain: tuple[float, float]
     n_nodes: int
+    is_index_basis: bool = True
 
     def __init__(
         self,
@@ -101,13 +106,8 @@ class GraphLaplacianBasis(nn.Module):
             )
 
         lap = _build_laplacian(adj_sparse, norm_enum)
-        eigvals, eigvecs = cast(
-            tuple[np.ndarray, np.ndarray],
-            scipy.sparse.linalg.eigsh(lap, k=n_modes, which="SM"),  # pyright: ignore[reportUnknownMemberType]
-        )
-        order = np.argsort(eigvals)
-        eigvals = np.clip(eigvals[order], epsilon, None)
-        eigvecs = eigvecs[:, order]
+        eigvals, eigvecs = smallest_eigenpairs(lap.tocsr(), n_modes)
+        eigvals = np.clip(eigvals, epsilon, None)
 
         self.n_modes = n_modes
         self.null_indices = (0,)
@@ -120,13 +120,25 @@ class GraphLaplacianBasis(nn.Module):
         """Return eigenfunction values at the given node indices.
 
         Args:
-            z: ``[N]`` long-tensor of node indices, or ``[N, 1]`` with
-                integer dtype.
+            z: ``[N]`` or ``[N, 1]`` tensor of node indices. A float tensor
+                is accepted when every value is an integer in range.
 
         Returns:
             ``[N, n_modes]`` eigenfunction values.
+
+        Raises:
+            IGLConfigError: For non-integer values or indices outside
+                ``[0, n_nodes)``.
         """
-        idx = z.long().view(-1)
+        flat = z.reshape(-1)
+        if flat.is_floating_point() and not bool(torch.all(flat == flat.round())):
+            raise IGLConfigError(
+                "GraphLaplacianBasis takes node indices; got non-integer values "
+                "(inside SpectralKernel pass anchors=node_ids with learnable_anchors=False)",
+            )
+        idx = flat.long()
+        if idx.numel() and (int(idx.min()) < 0 or int(idx.max()) >= self.n_nodes):
+            raise IGLConfigError(f"node indices must lie in [0, {self.n_nodes}); got [{int(idx.min())}, {int(idx.max())}]")
         eigvecs = cast(torch.Tensor, self._eigenvectors)
         return eigvecs[idx]
 

@@ -18,6 +18,8 @@ from igl.exceptions import IGLConfigError
 from igl.types import (
     ActivationType,
     ActivationTypeLike,
+    DomainMap,
+    DomainMapLike,
     EncoderKind,
     EncoderKindLike,
     NormalizeMode,
@@ -128,6 +130,7 @@ class SpectralConfig:
     polynomial_degree: int = 1
     epsilon: float = 1e-4
     anchor_init_std: float = 0.25
+    domain_map: DomainMapLike = DomainMap.AUTO
     # Learned-LB only:
     k_nn: int = 10
     refresh_every: int = 200
@@ -142,6 +145,7 @@ class SpectralConfig:
                 tuple(SpectralKind(k) for k in self.kind),
             )
         object.__setattr__(self, "null_space", NullSpaceKind(self.null_space))
+        object.__setattr__(self, "domain_map", DomainMap(self.domain_map))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -301,6 +305,7 @@ def _spectral_to_dict(spectral: SpectralConfig | None) -> dict[str, object] | No
         str(cast(SpectralKind, kind)) if isinstance(kind, str | SpectralKind) else [str(SpectralKind(k)) for k in kind]
     )
     null_space = cast(NullSpaceKind, spectral.null_space)
+    domain_map = cast(DomainMap, spectral.domain_map)
     return {
         "kind": kind_serial,
         "n_modes": spectral.n_modes,
@@ -309,6 +314,7 @@ def _spectral_to_dict(spectral: SpectralConfig | None) -> dict[str, object] | No
         "polynomial_degree": spectral.polynomial_degree,
         "epsilon": spectral.epsilon,
         "anchor_init_std": spectral.anchor_init_std,
+        "domain_map": str(domain_map),
         "k_nn": spectral.k_nn,
         "refresh_every": spectral.refresh_every,
     }
@@ -391,6 +397,7 @@ def _make_spectral_config(data: Mapping[str, object]) -> SpectralConfig:
         polynomial_degree=_typed_get(data, "polynomial_degree", _SPECTRAL_DEFAULTS.polynomial_degree),
         epsilon=_typed_get(data, "epsilon", _SPECTRAL_DEFAULTS.epsilon),
         anchor_init_std=_typed_get(data, "anchor_init_std", _SPECTRAL_DEFAULTS.anchor_init_std),
+        domain_map=cast(DomainMapLike, data.get("domain_map", _SPECTRAL_DEFAULTS.domain_map)),
         k_nn=_typed_get(data, "k_nn", _SPECTRAL_DEFAULTS.k_nn),
         refresh_every=_typed_get(data, "refresh_every", _SPECTRAL_DEFAULTS.refresh_every),
     )

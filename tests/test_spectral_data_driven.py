@@ -219,3 +219,49 @@ def test_multi_spectral_frozen_weights_are_buffer_not_parameter() -> None:
     # Still evaluate-able and produces the right shape.
     out = multi(torch.linspace(0.05, 0.95, 4))
     assert out.shape == (4, 6)  # noqa: PLR2004
+
+
+# ----- Nyström correctness and the joint kernel -----
+
+
+def test_learned_lb_nystroem_reproduces_the_eigenvectors_at_refresh_points() -> None:
+    """The extension at a refresh point must return the stored eigenvector row (scale 1, not 1/λ)."""
+    z = _torus_latents(400)
+    basis = LearnedLaplacianBasis(n_modes=6, k_nn=12)
+    basis.refresh(z)
+    out = basis(z)
+    stored = basis._eigenvectors  # noqa: SLF001
+    # Exact at the refresh points: the query rebuilds the graph's own symmetrised row.
+    torch.testing.assert_close(out, stored, rtol=1e-3, atol=1e-4)
+    # The null eigenvector of the symmetric normalised Laplacian is D^{1/2} 1, not the constant.
+    sqrt_degree = basis._degrees.sqrt()  # noqa: SLF001
+    a, b = out[:, 0], sqrt_degree
+    corr = torch.dot(a - a.mean(), b - b.mean()) / (a.std() * b.std() * (len(a) - 1))
+    assert abs(corr) > 0.99  # noqa: PLR2004
+
+
+def test_learned_lb_is_a_joint_basis_inside_the_spectral_kernel() -> None:
+    import warnings
+
+    from igl.spectral import ConstantNullSpace, SpectralKernel
+
+    z = _torus_latents(300)
+    basis = LearnedLaplacianBasis(n_modes=6, k_nn=12)
+    basis.refresh(z)
+    sk = SpectralKernel(latent_dim=z.shape[1], bases=basis, n_anchors=8, null_space=ConstantNullSpace())
+    assert sk.is_joint
+    out = sk(z[:10])
+    assert out.shape == (10, 9)
+    assert torch.isfinite(out).all()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        out.sum().backward()
+    assert sk.anchor_positions.grad is not None
+
+
+def test_learned_lb_rejects_mismatched_query_width() -> None:
+    z = _torus_latents(100)
+    basis = LearnedLaplacianBasis(n_modes=4, k_nn=8)
+    basis.refresh(z)
+    with pytest.raises(IGLConfigError, match="coordinates"):
+        basis(torch.randn(5, 3))

@@ -56,8 +56,10 @@ def test_spectral_kernel_gate_mask_neutralizes_dim() -> None:
     # When the second dim is masked, the kernel value should equal the
     # contribution from dim 0 only — verifiable by computing it manually.
     basis = sk._bases[0]  # noqa: SLF001
-    phi_z = basis(z[:, 0])
-    phi_s = basis(sk.anchor_positions[:, 0])
+    z_mapped = sk.map_to_domain(z)
+    anchors_mapped = sk.map_to_domain(sk.anchor_positions)
+    phi_z = basis(z_mapped[:, 0])
+    phi_s = basis(anchors_mapped[:, 0])
     eigvals = basis.eigenvalues.clamp(min=1e-4)
     expected = phi_z @ (phi_s / eigvals.unsqueeze(0)).T
     torch.testing.assert_close(out_masked, expected, rtol=1e-4, atol=1e-4)
@@ -133,3 +135,95 @@ def test_spectral_kernel_trains_end_to_end() -> None:
     )
     history = trainer.fit(module, x, y)
     assert len(history.train_loss) == 3  # noqa: PLR2004
+
+
+# ----- null modes, domain map, fixed anchors -----
+
+
+def test_spectral_kernel_excludes_null_modes_so_the_design_matrix_has_full_rank() -> None:
+    """Flooring λ₀ at ε handed the constant a weight of 1/ε and made Φ rank 1."""
+    from igl.spectral import FourierCosineBasis
+
+    torch.manual_seed(0)
+    with pytest.warns(RuntimeWarning, match="null modes"):
+        sk = SpectralKernel(latent_dim=2, bases=FourierCosineBasis(n_modes=8), n_anchors=16)
+    phi = sk(torch.randn(200, 2))
+    singular = torch.linalg.svdvals(phi)
+    # With the floor the null term was 1e4 x the rest: s1/s2 ~ 2e5 and rank 1 at 1e-3.
+    assert singular[0] / singular[1] < 100  # noqa: PLR2004
+    assert int(torch.linalg.matrix_rank(phi, rtol=1e-3)) >= 12  # noqa: PLR2004
+    # Each factor is zero-mean on its domain: the constant is gone from the expansion.
+    basis = sk._bases[0]  # noqa: SLF001
+    grid = torch.linspace(0.0, 1.0, 2001)
+    factor = basis(grid)[:, sk._keeps[0]]  # noqa: SLF001
+    assert factor.mean(dim=0).abs().max() < 1e-2  # noqa: PLR2004
+
+
+def test_spectral_kernel_null_space_silences_the_warning() -> None:
+    import warnings
+
+    from igl.spectral import ConstantNullSpace, FourierCosineBasis
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        SpectralKernel(latent_dim=2, bases=FourierCosineBasis(n_modes=8), n_anchors=8, null_space=ConstantNullSpace())
+
+
+@pytest.mark.parametrize("kind", ["fourier_sine", "fourier_cosine", "chebyshev", "legendre", "laguerre", "hermite"])
+def test_spectral_kernel_domain_map_lands_in_the_basis_domain(kind: str) -> None:
+    import warnings
+
+    from igl.config import SpectralConfig
+    from igl.spectral._build import build_spectral_kernel
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        sk = build_spectral_kernel(latent_dim=2, config=SpectralConfig(kind=kind, n_modes=6, n_anchors=8))  # type: ignore[arg-type]
+    z = torch.randn(64, 2) * 5.0
+    mapped = sk.map_to_domain(z)
+    lo, hi = sk._bases[0].domain  # noqa: SLF001
+    assert bool(torch.all(mapped >= lo)) and bool(torch.all(mapped <= hi))
+    # Polynomial bases no longer explode on unbounded latents.
+    assert torch.isfinite(sk(z)).all()
+    assert sk(z).abs().max() < 1e3  # noqa: PLR2004
+
+
+def test_spectral_kernel_domain_map_none_feeds_the_raw_latent() -> None:
+    sk = SpectralKernel(latent_dim=2, bases=FourierSineBasis(n_modes=4), n_anchors=4, domain_map="none")
+    z = torch.randn(5, 2)
+    torch.testing.assert_close(sk.map_to_domain(z), z)
+
+
+def test_spectral_kernel_fixed_anchors_are_a_buffer() -> None:
+    anchors = torch.zeros(6, 2)
+    sk = SpectralKernel(latent_dim=2, bases=FourierSineBasis(n_modes=4), anchors=anchors, learnable_anchors=False)
+    assert sk.n_anchors == 6  # noqa: PLR2004
+    assert not any(name == "anchor_positions" for name, _ in sk.named_parameters())
+    assert sk(torch.randn(3, 2)).shape == (3, 6)
+
+
+def test_spectral_kernel_graph_basis_needs_fixed_integer_anchors() -> None:
+    import numpy as np
+
+    from igl.spectral import GraphLaplacianBasis
+
+    adjacency = np.zeros((6, 6))
+    for i in range(5):
+        adjacency[i, i + 1] = adjacency[i + 1, i] = 1.0
+    basis = GraphLaplacianBasis(adjacency, n_modes=3)
+    with pytest.raises(IGLConfigError, match="learnable_anchors=False"):
+        SpectralKernel(latent_dim=1, bases=basis, n_anchors=4)
+    with pytest.raises(IGLConfigError, match="node indices"):
+        basis(torch.tensor([0.5, 1.0]))
+    node_ids = torch.arange(6, dtype=torch.float32).unsqueeze(1)
+    sk = SpectralKernel(latent_dim=1, bases=basis, anchors=node_ids, learnable_anchors=False)
+    out = sk(torch.tensor([[0.0], [3.0], [5.0]]))
+    assert out.shape == (3, 6)
+    assert torch.isfinite(out).all()
+
+
+def test_spectral_kernel_rejects_joint_basis_in_a_sequence() -> None:
+    from igl.spectral import LearnedLaplacianBasis
+
+    with pytest.raises(IGLConfigError, match="joint basis"):
+        SpectralKernel(latent_dim=2, bases=[LearnedLaplacianBasis(n_modes=4), FourierSineBasis(n_modes=4)])

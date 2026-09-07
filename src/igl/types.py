@@ -231,6 +231,25 @@ NullSpaceKindLiteral = Literal["none", "constant", "polynomial"]
 type NullSpaceKindLike = NullSpaceKind | NullSpaceKindLiteral
 
 
+class DomainMap(StrEnum):
+    """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
+
+    - ``AUTO`` (default): sigmoid onto a bounded interval, softplus onto a
+      half-line, identity on ℝ; index and joint bases are never mapped.
+    - ``NONE``: feed the raw latent (the closed-form polynomial bases then
+      blow up outside their domain).
+    """
+
+    AUTO = "auto"
+    NONE = "none"
+
+
+DomainMapLiteral = Literal["auto", "none"]
+"""Literal companion of :class:`DomainMap`."""
+
+type DomainMapLike = DomainMap | DomainMapLiteral
+
+
 class GraphLaplacianNorm(StrEnum):
     """Normalisation modes for the graph Laplacian."""
 
@@ -321,7 +340,12 @@ class SpectralBasis(Protocol):
         n_modes: Number of modes ``K`` exposed by the basis.
         eigenvalues: ``[K]`` tensor, sorted ascending.
         null_indices: Indices of modes with ``λ ≈ 0`` — the kernel's
-            null space.
+            null space. The kernel excludes them from its expansion.
+
+    Optional attributes the kernel reads with ``getattr``: ``domain``
+    (``(lo, hi)`` the basis is defined on, used by the domain map),
+    ``is_joint`` (the basis takes the whole ``[N, d]`` latent) and
+    ``is_index_basis`` (the basis takes node indices).
     """
 
     n_modes: int
@@ -421,6 +445,9 @@ __all__ = [
     "ActivationTypeLike",
     "ActivationTypeLiteral",
     "DimensionCurve",
+    "DomainMap",
+    "DomainMapLike",
+    "DomainMapLiteral",
     "EncoderKind",
     "EncoderKindLike",
     "EncoderKindLiteral",

@@ -233,3 +233,12 @@ def test_iglconfig_from_dict_missing_keys_fall_back_to_dataclass_defaults() -> N
     assert rebuilt.encoder == EncoderConfig()
     assert rebuilt.matryoshka == MatryoshkaConfig()
     assert rebuilt.spectral == SpectralConfig()
+
+
+def test_spectral_config_domain_map_round_trips() -> None:
+    from igl import DomainMap
+
+    assert SpectralConfig().domain_map is DomainMap.AUTO
+    cfg = IGLConfig(spectral=SpectralConfig(domain_map="none"))
+    assert IGLConfig.from_dict(cfg.to_dict()) == cfg
+    assert cfg.to_dict()["spectral"]["domain_map"] == "none"  # type: ignore[call-overload, index]

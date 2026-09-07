@@ -126,6 +126,29 @@ effective dimensions and a `hierarchy_holds` flag that's `True` iff the
 values appear in non-decreasing order. The bundled
 `examples/synthetic/moons_xor.py` demonstrates `True` out of the box.
 
+## Device branches: CPU, MPS, CUDA
+
+Training runs on one of three execution branches, selected once per fit from
+the module's device (see [`igl.device.select_backend`][igl.device.select_backend]):
+
+| branch | readout solve | Green kernel | Jacobian (orthogonality) | host transfers |
+|---|---|---|---|---|
+| CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
+| MPS | Cholesky of the normal equations + one refinement step, on device | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+
+The CPU branch keeps every number bit-identical release to release, which is
+what the SPD reproducibility tests pin. The device branches keep every tensor
+on the device: the per-batch loss is summed there, the readout solve reports
+failure through a device flag instead of a host check, snapshots for early
+stopping stay on the device, and the only thing that crosses to the host each
+epoch is one small tensor holding the training loss, the validation loss and
+metric, and the failure count. The kernel's contraction and the readout solve
+always run in full precision; `MatryoshkaConfig.matmul_precision` governs the
+rest on CUDA. The one documented exception is the AIRM loss's eigensolver,
+which synchronises on CUDA unless `AIRMLoss(matrix_method="iterative")`
+is chosen (matrix functions from products, solves and inverses only).
+
 ## The SPD extension
 
 For symmetric positive-definite (SPD) data — covariance matrices, EEG

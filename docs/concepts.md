@@ -146,8 +146,9 @@ epoch is one small tensor holding the training loss, the validation loss and
 metric, and the failure count. The kernel's contraction and the readout solve
 always run in full precision; `MatryoshkaConfig.matmul_precision` governs the
 rest on CUDA. The one documented exception is the AIRM loss's eigensolver,
-which synchronises on CUDA unless `AIRMLoss(matrix_method="iterative")`
-is chosen (matrix functions from products, solves and inverses only).
+which synchronises on CUDA and, because MPS has no eigensolver, runs on the
+CPU for MPS tensors, unless `AIRMLoss(matrix_method="iterative")` is chosen
+(matrix functions from products, solves and inverses only, on any device).
 
 ## The SPD extension
 

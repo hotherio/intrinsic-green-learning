@@ -46,8 +46,14 @@ def _eigh(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """``torch.linalg.eigh`` with proper static typing.
 
     The torch stubs return Unknown for the named-tuple decomposition; we cast
-    once here so downstream code stays clean.
+    once here so downstream code stays clean. MPS has no eigensolver, so on
+    that device the decomposition runs on the CPU and the factors move back
+    (one round trip per call; gradients flow through the copies). The
+    iterative method (:data:`MatrixMethod`) avoids the round trip entirely.
     """
+    if m.device.type == "mps":
+        eigvals, eigvecs = _eigh(m.cpu())
+        return eigvals.to(m.device), eigvecs.to(m.device)
     eigvals, eigvecs = cast(
         tuple[torch.Tensor, torch.Tensor],
         torch.linalg.eigh(m),  # pyright: ignore[reportUnknownMemberType]

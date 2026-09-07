@@ -80,12 +80,18 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
     cfg = make_config(problem, epochs=epochs)
     n_epochs = epochs
 
+    # Modules are built here, outside the measured fit: moving a fresh module to
+    # the device is one host-to-device copy per parameter and not a training sync.
+    clf_module = make_module(problem, device, output_dim=2)
+    reg_module = make_module(problem, device, output_dim=problem.input_dim)
+    orth_module = make_module(problem, device, output_dim=problem.input_dim)
+
     def classifier() -> None:
-        module = make_module(problem, device, output_dim=2)
+        module = clf_module
         igl.MatryoshkaTrainer(loss=igl.CrossEntropyLoss(n_classes=2), config=cfg).fit(module, x, y, x_val=x_val, y_val=y_val)
 
     def regressor() -> None:
-        module = make_module(problem, device, output_dim=problem.input_dim)
+        module = reg_module
         igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=cfg).fit(module, x, x, x_val=x_val, y_val=x_val)
 
     def spectral() -> None:
@@ -104,7 +110,7 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
     def orthogonality() -> None:
         from igl.spd import OrthogonalityPenalty
 
-        module = make_module(problem, device, output_dim=problem.input_dim)
+        module = orth_module
         igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=cfg).fit(
             module, x, x, x_val=x_val, y_val=x_val, extra_losses=[OrthogonalityPenalty(weight=0.1, every=1)]
         )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Sequence
 
+import numpy as np
 import pytest
 import torch
 
@@ -185,6 +186,20 @@ def test_estimator_fits_and_predicts_on_every_available_device(device: str) -> N
     cfg = igl.IGLConfig(matryoshka=MatryoshkaConfig(epochs=5, batch_size=64, inner_batch_size=160, early_stop_patience=None))
     clf = igl.IGLClassifier(max_dim=4, n_anchors=12, n_scales=2, random_state=0, config=cfg, device=device).fit(x, y.numpy())
     assert clf.score(x, y.numpy()) > 0.6
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+def test_reconstruction_estimators_fit_on_every_available_device(device: str) -> None:
+    """The distiller whitens targets on the device; the autoencoder reads its curve there."""
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal((160, 6)).astype(np.float32)
+    cfg = igl.IGLConfig(
+        max_dim=3, matryoshka=MatryoshkaConfig(epochs=2, batch_size=64, inner_batch_size=160, early_stop_patience=None)
+    )
+    distiller = igl.IGLDistiller(max_dim=3, config=cfg, random_state=0, device=device).fit(x)
+    assert distiller.reconstruct(x).shape == x.shape
+    auto = igl.IGLAutoencoder(max_dim=3, n_anchors=8, n_scales=2, config=cfg, random_state=0, device=device).fit(x)
+    assert auto.transform(x).shape == (160, 3)
 
 
 def test_cuda_backend_precision_context_toggles_tf32_and_restores() -> None:

@@ -41,6 +41,10 @@ class TargetWhitener:
     def __init__(self, metric: torch.Tensor | None = None, *, clamp: float = 1e-6) -> None:
         self.metric = metric
         self.clamp = clamp
+        # Fitted constants live where ``fit`` ran (the CPU for the estimators);
+        # ``transform`` on device tensors uses a copy moved once per device, so
+        # a training loop never pays a host-to-device copy per batch.
+        self._on_device: dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
     @property
     def is_fitted(self) -> bool:
@@ -69,17 +73,28 @@ class TargetWhitener:
         self.a_, self.a_inv_ = psd_sqrt_inv(metric, clamp=self.clamp)
         whitened = (y - self.mu_) @ self.a_
         self.y_scale_: float = max(float(whitened.std()), torch.finfo(torch.float32).tiny)
+        self._on_device = {}
         return self
+
+    def constants(self, device: torch.device) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return ``(mu_, a_, a_inv_)`` on ``device``, moved once and cached per device."""
+        self._check_fitted()
+        key = str(device)
+        cached = self._on_device.get(key)
+        if cached is None:
+            cached = (self.mu_.to(device), self.a_.to(device), self.a_inv_.to(device))
+            self._on_device[key] = cached
+        return cached
 
     def transform(self, y: torch.Tensor) -> torch.Tensor:
         """Whiten targets: center, rotate-and-scale by ``a_``, unit-scale."""
-        self._check_fitted()
-        return ((y.float() - self.mu_) @ self.a_) / self.y_scale_
+        mu, a, _ = self.constants(y.device)
+        return ((y.float() - mu) @ a) / self.y_scale_
 
     def inverse_transform(self, y_w: torch.Tensor) -> torch.Tensor:
         """Undo :meth:`transform`."""
-        self._check_fitted()
-        return (y_w.float() * self.y_scale_) @ self.a_inv_ + self.mu_
+        mu, _, a_inv = self.constants(y_w.device)
+        return (y_w.float() * self.y_scale_) @ a_inv + mu
 
     def state_dict(self) -> dict[str, torch.Tensor]:
         """Serialize the fitted constants as a flat tensor dict."""
@@ -103,6 +118,7 @@ class TargetWhitener:
         whitener.a_inv_ = state["a_inv"].clone()
         whitener.mu_ = state["mu"].clone()
         whitener.y_scale_ = float(state["y_scale"].item())
+        whitener._on_device = {}  # noqa: SLF001
         return whitener
 
     def _check_fitted(self) -> None:

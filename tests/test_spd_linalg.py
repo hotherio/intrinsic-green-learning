@@ -65,3 +65,47 @@ def test_unpack_sym_vec_round_trips_against_log_eig() -> None:
 def test_unpack_sym_vec_rejects_wrong_size() -> None:
     with pytest.raises(IGLConfigError, match="d=4"):
         unpack_sym_vec(torch.zeros(2, 9), d=4)
+
+
+def _eeg_like(b: int, d: int, span: float) -> torch.Tensor:
+    torch.manual_seed(0)
+    q, _ = torch.linalg.qr(torch.randn(b, d, d, dtype=torch.float64))
+    lam = torch.logspace(-span, 0, d, dtype=torch.float64)[None].expand(b, d) * (0.5 + torch.rand(b, d, dtype=torch.float64))
+    return q @ torch.diag_embed(lam) @ q.transpose(-1, -2)
+
+
+def _rel(a: torch.Tensor, b: torch.Tensor) -> float:
+    return float((a.double() - b.double()).abs().max() / b.double().abs().max())
+
+
+def test_iterative_matrix_functions_match_eigh_on_well_conditioned_spectra() -> None:
+    from igl.spd.linalg import matrix_exp_sym, matrix_log_sym, matrix_pow_sym
+
+    c = _eeg_like(6, 8, span=2.0).float()
+    assert _rel(matrix_log_sym(c, method="iterative"), matrix_log_sym(c.double())) < 1e-5
+    assert _rel(matrix_pow_sym(c, -0.5, method="iterative"), matrix_pow_sym(c.double(), -0.5)) < 1e-5
+    assert _rel(matrix_pow_sym(c, 0.5, method="iterative"), matrix_pow_sym(c.double(), 0.5)) < 1e-5
+    g = torch.randn(6, 8, 8)
+    s = 0.5 * (g + g.transpose(-1, -2))
+    assert _rel(matrix_exp_sym(s, method="iterative"), matrix_exp_sym(s.double())) < 1e-5
+
+
+def test_iterative_matrix_functions_sit_in_the_fp32_eigh_error_band_on_eeg_spectra() -> None:
+    """Six orders of magnitude: fp32 eigh itself is 5e-4..8e-3 from fp64; the iterative path is no worse."""
+    from igl.spd.linalg import matrix_log_sym, matrix_pow_sym
+
+    c = _eeg_like(8, 16, span=6.0)
+    ref_log = matrix_log_sym(c)
+    err_eigh = _rel(matrix_log_sym(c.float()), ref_log)
+    err_iter = _rel(matrix_log_sym(c.float(), method="iterative"), ref_log)
+    assert err_iter < max(3 * err_eigh, 5e-3), (err_iter, err_eigh)
+    ref_pow = matrix_pow_sym(c, -0.5)
+    assert _rel(matrix_pow_sym(c.float(), -0.5, method="iterative"), ref_pow) < 1e-2
+
+
+def test_iterative_power_rejects_unsupported_exponents() -> None:
+    from igl import IGLConfigError
+    from igl.spd.linalg import matrix_pow_sym
+
+    with pytest.raises(IGLConfigError, match="±0.5"):
+        matrix_pow_sym(torch.eye(3)[None], 0.25, method="iterative")

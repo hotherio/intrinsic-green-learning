@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
 import time
 import warnings
 from collections.abc import Callable, Iterator
@@ -25,6 +26,7 @@ from torch.profiler import ProfilerActivity, profile
 import igl
 from benchmarks.device._harness import machine_state, resolve_device, sync, write_result
 from benchmarks.device.workloads import PROBLEMS, make_config, make_data, make_module
+from igl.spd.linalg import MatrixMethod
 
 SYNC_OPS = ("aten::_local_scalar_dense", "aten::item", "aten::_to_copy", "aten::copy_")
 
@@ -32,6 +34,7 @@ SYNC_OPS = ("aten::_local_scalar_dense", "aten::item", "aten::_to_copy", "aten::
 def _fit_once(fit: Callable[[], Any], device: torch.device) -> dict[str, Any]:
     """Run ``fit`` under the profiler; return sync-op counts and, on CUDA, sync-debug warnings."""
     warn_count = 0
+    sites: dict[str, int] = {}
     cuda_sync_cm: contextlib.AbstractContextManager[Any] = contextlib.nullcontext()
     if device.type == "cuda":
         torch.cuda.set_sync_debug_mode("warn")
@@ -42,7 +45,12 @@ def _fit_once(fit: Callable[[], Any], device: torch.device) -> dict[str, Any]:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 yield
-            warn_count = sum(1 for w in caught if "synchroniz" in str(w.message).lower())
+            for w in caught:
+                if "synchroniz" not in str(w.message).lower():
+                    continue
+                warn_count += 1
+                site = f"{'/'.join(w.filename.rsplit('/', 3)[-3:])}:{w.lineno}"
+                sites[site] = sites.get(site, 0) + 1
 
         cuda_sync_cm = _count_warnings()
     activities = [ProfilerActivity.CPU] + ([ProfilerActivity.CUDA] if device.type == "cuda" else [])
@@ -59,7 +67,12 @@ def _fit_once(fit: Callable[[], Any], device: torch.device) -> dict[str, Any]:
             counts[event.key] += event.count
         if "Memcpy DtoH" in event.key or "memcpy_dtoh" in event.key.lower():
             memcpy_dtoh += event.count
-    return {"ops": counts, "memcpy_dtoh": memcpy_dtoh, "cuda_sync_warnings": warn_count}
+    return {
+        "ops": counts,
+        "memcpy_dtoh": memcpy_dtoh,
+        "cuda_sync_warnings": warn_count,
+        "cuda_sync_sites": dict(sorted(sites.items(), key=lambda kv: -kv[1])),
+    }
 
 
 def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], Any]]:
@@ -97,7 +110,7 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             module, x, x, x_val=x_val, y_val=x_val, extra_losses=[OrthogonalityPenalty(weight=0.1, every=1)]
         )
 
-    def airm() -> None:
+    def airm(method: MatrixMethod) -> None:
         from igl.data import make_spd_dataset
         from igl.spd import AIRMLoss, LogEigVectorizer
 
@@ -111,7 +124,26 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
             n_anchors=problem.n_anchors,
             n_scales=problem.n_scales,
         ).to(device)
-        igl.MatryoshkaTrainer(loss=AIRMLoss(latent_dim=4), config=cfg).fit(module, vec, vec)
+        igl.MatryoshkaTrainer(loss=AIRMLoss(latent_dim=4, matrix_method=method), config=cfg).fit(module, vec, vec)
+
+    def autoencoder() -> None:
+        # Estimator level: includes the sklearn wrapper's own data movement and post-fit reads.
+        igl.IGLAutoencoder(
+            max_dim=problem.max_dim,
+            n_anchors=problem.n_anchors,
+            n_scales=problem.n_scales,
+            config=igl.IGLConfig(max_dim=problem.max_dim, matryoshka=cfg),
+            device=str(device),
+            random_state=0,
+        ).fit(x.cpu().numpy())
+
+    def distiller() -> None:
+        igl.IGLDistiller(
+            max_dim=problem.max_dim,
+            config=igl.IGLConfig(max_dim=problem.max_dim, matryoshka=cfg),
+            device=str(device),
+            random_state=0,
+        ).fit(x.cpu().numpy())
 
     del n_epochs
     return {
@@ -119,7 +151,10 @@ def workloads(device: torch.device, *, epochs: int) -> dict[str, Callable[[], An
         "regressor_mse": regressor,
         "spectral_cosine": spectral,
         "orthogonality": orthogonality,
-        "airm": airm,
+        "airm": functools.partial(airm, "eigh"),
+        "airm_iterative": functools.partial(airm, "iterative"),
+        "autoencoder_estimator": autoencoder,
+        "distiller_estimator": distiller,
     }
 
 
@@ -149,6 +184,8 @@ def main() -> None:
             f"cuda_sync_warnings={counts['cuda_sync_warnings'] / args.epochs:6.1f}  ({batches_per_epoch} batches/epoch)",
             flush=True,
         )
+        for site, n in list(counts["cuda_sync_sites"].items())[:8]:
+            print(f"{'':21s} {n / args.epochs:6.1f}/epoch  {site}", flush=True)
     path = write_result(
         "syncs",
         {"epochs": args.epochs, "workloads": results},

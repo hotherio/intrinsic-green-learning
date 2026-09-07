@@ -19,7 +19,7 @@ from igl.core.encoder import LinearEncoder, MLPEncoder
 from igl.core.kernel import GreenKernel
 from igl.core.loss import CrossEntropyLoss, MSELoss
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
+from igl.core.solver import direct_solve_weights, solve_with_intercept
 from igl.core.trainer import EpochStats, MatryoshkaTrainer, TrainingHistory
 from igl.device import get_device
 from igl.exceptions import (
@@ -52,10 +52,16 @@ from igl.types import (
     ActivationTypeLike,
     ActivationTypeLiteral,
     DimensionCurve,
+    DomainMap,
+    DomainMapLike,
+    DomainMapLiteral,
     EncoderKind,
     EncoderKindLike,
     EncoderKindLiteral,
     EncoderProtocol,
+    FinalRefresh,
+    FinalRefreshLike,
+    FinalRefreshLiteral,
     GraphLaplacianNorm,
     GraphLaplacianNormLike,
     GraphLaplacianNormLiteral,
@@ -171,6 +177,7 @@ __all__ = [
     "PrefixForward",
     "TrainingHistory",
     "direct_solve_weights",
+    "solve_with_intercept",
     # Matryoshka / dimension discovery
     "PowerLawSampler",
     "UniformSampler",
@@ -199,10 +206,16 @@ __all__ = [
     "ActivationTypeLike",
     "ActivationTypeLiteral",
     "DimensionCurve",
+    "DomainMap",
+    "DomainMapLike",
+    "DomainMapLiteral",
     "EncoderKind",
     "EncoderKindLike",
     "EncoderKindLiteral",
     "EncoderProtocol",
+    "FinalRefresh",
+    "FinalRefreshLike",
+    "FinalRefreshLiteral",
     "GraphLaplacianNorm",
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",

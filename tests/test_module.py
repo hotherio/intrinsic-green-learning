@@ -196,3 +196,13 @@ def test_module_accepts_normalize_kwarg_as_string() -> None:
 
     module = IGLModule(input_dim=8, max_dim=4, output_dim=2, normalize="l2", n_anchors=8)
     assert module.normalize is NormalizeMode.L2
+
+
+def test_module_accepts_operator_kwarg_as_tuple() -> None:
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, operator=("gaussian", "helmholtz"), n_anchors=8, n_scales=2)  # type: ignore[arg-type]
+    assert module.green.operator_names == ("gaussian", "helmholtz")  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_module_rejects_unknown_operator_with_config_error() -> None:
+    with pytest.raises(IGLConfigError, match="unknown operator"):
+        IGLModule(input_dim=8, max_dim=4, output_dim=2, operator="not-a-kernel", n_anchors=8, n_scales=2)  # type: ignore[arg-type]

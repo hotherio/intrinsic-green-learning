@@ -79,10 +79,15 @@ type SamplingModeLike = SamplingMode | SamplingModeLiteral
 class NormalizeMode(StrEnum):
     """Row-wise normalization applied to the design matrix Φ before lstsq.
 
-    - ``NONE``: identity.
-    - ``SOFTMAX``: row-softmax.
+    - ``NONE`` (default): identity. The closed-form solve already scales its
+      ridge to Φ's column norms, so raw kernel values are a safe default for
+      every operator and basis.
+    - ``SOFTMAX``: row-softmax. Shift-invariant per row, so the overall
+      magnitude of a row (how close the point is to any anchor) is discarded.
     - ``L2``: L2-normalise each row.
-    - ``NW``: Nadaraya–Watson (divide each row by its sum, with a small epsilon).
+    - ``NW``: Nadaraya–Watson (divide each row by its sum, with a small
+      epsilon). Assumes non-negative rows; with an oscillatory operator or a
+      spectral basis a row sum can cross zero and the division blows up.
     """
 
     NONE = "none"
@@ -226,6 +231,44 @@ NullSpaceKindLiteral = Literal["none", "constant", "polynomial"]
 type NullSpaceKindLike = NullSpaceKind | NullSpaceKindLiteral
 
 
+class FinalRefresh(StrEnum):
+    """Which rows solve the readout once training ends.
+
+    - ``FULL`` (default): every training row, so the deployed readout has
+      seen the whole training set. Consumes no RNG.
+    - ``SUBSET``: the same ``inner_batch_size`` random subset the per-epoch
+      refresh uses (the pre-0.13 behaviour).
+    """
+
+    FULL = "full"
+    SUBSET = "subset"
+
+
+FinalRefreshLiteral = Literal["full", "subset"]
+"""Literal companion of :class:`FinalRefresh`."""
+
+type FinalRefreshLike = FinalRefresh | FinalRefreshLiteral
+
+
+class DomainMap(StrEnum):
+    """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
+
+    - ``AUTO`` (default): sigmoid onto a bounded interval, softplus onto a
+      half-line, identity on ℝ; index and joint bases are never mapped.
+    - ``NONE``: feed the raw latent (the closed-form polynomial bases then
+      blow up outside their domain).
+    """
+
+    AUTO = "auto"
+    NONE = "none"
+
+
+DomainMapLiteral = Literal["auto", "none"]
+"""Literal companion of :class:`DomainMap`."""
+
+type DomainMapLike = DomainMap | DomainMapLiteral
+
+
 class GraphLaplacianNorm(StrEnum):
     """Normalisation modes for the graph Laplacian."""
 
@@ -316,7 +359,12 @@ class SpectralBasis(Protocol):
         n_modes: Number of modes ``K`` exposed by the basis.
         eigenvalues: ``[K]`` tensor, sorted ascending.
         null_indices: Indices of modes with ``λ ≈ 0`` — the kernel's
-            null space.
+            null space. The kernel excludes them from its expansion.
+
+    Optional attributes the kernel reads with ``getattr``: ``domain``
+    (``(lo, hi)`` the basis is defined on, used by the domain map),
+    ``is_joint`` (the basis takes the whole ``[N, d]`` latent) and
+    ``is_index_basis`` (the basis takes node indices).
     """
 
     n_modes: int
@@ -416,11 +464,17 @@ __all__ = [
     "ActivationTypeLike",
     "ActivationTypeLiteral",
     "DimensionCurve",
+    "DomainMap",
+    "DomainMapLike",
+    "DomainMapLiteral",
     "EncoderKind",
     "EncoderKindLike",
     "EncoderKindLiteral",
     "EncoderProtocol",
     "ExtraLoss",
+    "FinalRefresh",
+    "FinalRefreshLike",
+    "FinalRefreshLiteral",
     "GraphLaplacianNorm",
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import torch
 
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
+from igl.core.solver import solve_with_intercept
 from igl.exceptions import IGLConfigError
 from igl.nn.module import IGLModule
 from igl.types import LossStrategy
@@ -76,10 +76,8 @@ def greedy_knockout(
     def score_with(mask: torch.Tensor) -> float:
         phi = module.green(z_full * mask.unsqueeze(0), gate_mask=mask)
         phi = normalize_phi(phi, module.normalize)
-        ones_col = torch.ones(phi.shape[0], 1, device=device, dtype=phi.dtype)
-        phi_aug = torch.cat([phi, ones_col], dim=-1)
-        weights = direct_solve_weights(phi_aug, target, l2=source_l2, on_nonfinite="raise").to(device)
-        return loss.curve_score(phi_aug @ weights, target)
+        weights, intercept = solve_with_intercept(phi, target, l2=source_l2, on_nonfinite="raise")
+        return loss.curve_score(phi @ weights.to(device) + intercept.to(device), target)
 
     active = torch.ones(d_max, device=device)
     curve: dict[int, float] = {d_max: score_with(active)}
@@ -106,9 +104,10 @@ def detect_knockout_knee(curve: dict[int, float], *, ratio: float = 2.0) -> int:
     """Locate the smallest number of active coordinates before the score blows up.
 
     Walking from few to many active coordinates, the knee is the first count
-    whose score is within ``ratio`` of the best score over the curve. A
-    single-point curve returns 1 only when it genuinely holds the best score
-    — the detector never fires unconditionally at ``n = 1``.
+    whose score is within ``ratio`` of the best score over the curve. When the
+    best score is exactly zero (a perfect error rate) no multiple of it can
+    serve as a tolerance, so the knee is the first count that attains zero.
+    The detector never fires unconditionally at ``n = 1``.
 
     Args:
         curve: ``{n_active: curve_score}`` (lower is better).
@@ -123,7 +122,7 @@ def detect_knockout_knee(curve: dict[int, float], *, ratio: float = 2.0) -> int:
         return next(iter(curve))
     counts = sorted(curve)
     best = min(curve.values())
-    floor = best * ratio if best > 0 else ratio - 1.0
+    floor = best * ratio if best > 0 else 0.0
     for count in counts:
         if curve[count] <= floor:
             return count

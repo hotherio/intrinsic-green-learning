@@ -141,4 +141,40 @@ def direct_solve_weights(
     return weights
 
 
-__all__ = ["direct_solve_weights"]
+@torch.no_grad()
+def solve_with_intercept(
+    phi: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    l2: float = 1e-3,
+    on_nonfinite: Literal["warn", "raise"] = "warn",
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Ridge solve with a free intercept, by centring.
+
+    Fits ``target ≈ Φ w + b`` with the ridge on ``w`` only: both sides are
+    centred, ``w`` solves the centred system through
+    :func:`direct_solve_weights`, and ``b = ȳ − Φ̄ w``. Appending a column of
+    ones instead has two defects: the column is collinear with a
+    row-normalised Φ (rows summing to one), and its norm dominates the mean
+    column norm the ridge is scaled by, so the anchors were shrunk harder at
+    evaluation than during training.
+
+    Args:
+        phi: Design matrix ``[N, R]``.
+        target: Targets ``[N, C]`` or ``[N]``.
+        l2: Tikhonov coefficient, forwarded to :func:`direct_solve_weights`.
+        on_nonfinite: Forwarded to :func:`direct_solve_weights`.
+
+    Returns:
+        ``(w, b)`` with ``w`` of shape ``[R, C]`` and ``b`` of shape ``[C]``,
+        on the device :func:`direct_solve_weights` returns.
+    """
+    target_2d = target if target.dim() > 1 else target.unsqueeze(-1)
+    phi_mean = phi.detach().float().mean(dim=0, keepdim=True)
+    target_mean = target_2d.detach().float().mean(dim=0, keepdim=True)
+    weights = direct_solve_weights(phi - phi_mean, target_2d - target_mean, l2=l2, on_nonfinite=on_nonfinite)
+    intercept = (target_mean.to(weights.device) - phi_mean.to(weights.device) @ weights).reshape(-1)
+    return weights, intercept
+
+
+__all__ = ["direct_solve_weights", "solve_with_intercept"]

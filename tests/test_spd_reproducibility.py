@@ -253,9 +253,9 @@ def test_issue_2_1__recon_spd_exposes_normalize_input_kwarg(
 # --- Issue 1.2 + 2.2: NormalizeMode default + wrapper kwarg + config threading
 
 
-def test_issue_1_2__kernel_config_default_normalize_is_nw() -> None:
-    """KernelConfig defaults to NormalizeMode.NW now."""
-    assert KernelConfig().normalize == NormalizeMode.NW
+def test_issue_1_2__kernel_config_default_normalize_is_none() -> None:
+    """KernelConfig defaults to NormalizeMode.NONE (raw Φ; row normalisations are opt-in)."""
+    assert KernelConfig().normalize == NormalizeMode.NONE
 
 
 def test_issue_2_2__recon_spd_explicit_normalize_kwarg(

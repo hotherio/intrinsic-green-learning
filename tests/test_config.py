@@ -2,7 +2,7 @@
 
 import pytest
 
-from igl import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig
+from igl import EncoderConfig, IGLConfig, KernelConfig, MatryoshkaConfig, SpectralConfig
 
 
 def test_default_iglconfig_is_constructable() -> None:
@@ -219,3 +219,34 @@ def test_iglconfig_to_dict_serialises_int_hidden() -> None:
 def test_iglconfig_to_dict_serialises_single_operator_as_string() -> None:
     cfg = IGLConfig(kernel=KernelConfig(operator="gaussian"))
     assert cfg.to_dict()["kernel"]["operator"] == "gaussian"  # type: ignore[call-overload, index]
+
+
+def test_iglconfig_from_dict_missing_keys_fall_back_to_dataclass_defaults() -> None:
+    """A dict without a field rebuilds with the dataclass default, not a re-typed literal.
+
+    Regression: ``normalize`` fell back to SOFTMAX in ``from_dict`` while the
+    dataclass default was NW, so a config saved before the field existed came
+    back with a different normaliser than a freshly-constructed one.
+    """
+    rebuilt = IGLConfig.from_dict({"encoder": {}, "kernel": {}, "matryoshka": {}, "spectral": {}})
+    assert rebuilt.kernel == KernelConfig()
+    assert rebuilt.encoder == EncoderConfig()
+    assert rebuilt.matryoshka == MatryoshkaConfig()
+    assert rebuilt.spectral == SpectralConfig()
+
+
+def test_spectral_config_domain_map_round_trips() -> None:
+    from igl import DomainMap
+
+    assert SpectralConfig().domain_map is DomainMap.AUTO
+    cfg = IGLConfig(spectral=SpectralConfig(domain_map="none"))
+    assert IGLConfig.from_dict(cfg.to_dict()) == cfg
+    assert cfg.to_dict()["spectral"]["domain_map"] == "none"  # type: ignore[call-overload, index]
+
+
+def test_matryoshka_config_final_refresh_defaults_to_full_and_round_trips() -> None:
+    from igl import FinalRefresh
+
+    assert MatryoshkaConfig().final_refresh is FinalRefresh.FULL
+    cfg = IGLConfig(matryoshka=MatryoshkaConfig(final_refresh="subset"))
+    assert IGLConfig.from_dict(cfg.to_dict()) == cfg

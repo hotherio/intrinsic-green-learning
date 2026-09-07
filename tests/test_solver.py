@@ -5,7 +5,7 @@ import warnings
 import pytest
 import torch
 
-from igl import IGLConvergenceError, direct_solve_weights
+from igl import IGLConvergenceError, direct_solve_weights, solve_with_intercept
 
 
 def test_solver_recovers_true_weights_when_well_posed() -> None:
@@ -90,3 +90,25 @@ def test_solver_warn_mode_is_default_on_non_finite_inputs() -> None:
     with pytest.warns(RuntimeWarning, match="non-finite inputs"):
         weights = direct_solve_weights(phi, y)
     assert torch.equal(weights, torch.zeros(3, 2))
+
+
+def test_solve_with_intercept_matches_a_ones_column_when_well_posed() -> None:
+    torch.manual_seed(0)
+    phi = torch.randn(80, 6)
+    w_true = torch.randn(6, 2)
+    b_true = torch.tensor([1.5, -2.0])
+    y = phi @ w_true + b_true
+    w, b = solve_with_intercept(phi, y, l2=1e-8)
+    torch.testing.assert_close(phi @ w + b, y, rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(b, b_true, rtol=1e-2, atol=1e-2)
+
+
+def test_solve_with_intercept_is_stable_on_row_normalised_phi() -> None:
+    """Rows summing to one make a ones column collinear with phi; centring has no such column."""
+    torch.manual_seed(0)
+    phi = torch.rand(50, 5)
+    phi = phi / phi.sum(dim=-1, keepdim=True)
+    y = phi[:, :1] * 3.0 + 0.5
+    w, b = solve_with_intercept(phi, y, l2=1e-6)
+    assert torch.isfinite(w).all() and torch.isfinite(b).all()
+    torch.testing.assert_close(phi @ w + b, y, rtol=1e-2, atol=1e-2)

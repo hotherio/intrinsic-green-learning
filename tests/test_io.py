@@ -47,6 +47,22 @@ def test_module_round_trip_is_bit_identical(tmp_path: Path, data: tuple[np.ndarr
         assert torch.equal(module(x_t), loaded(x_t))
 
 
+def test_bare_module_with_input_norm_round_trips(tmp_path: Path, data: tuple[np.ndarray, np.ndarray]) -> None:
+    """A bare module saved with normalize_input=True rebuilds with its input BatchNorm."""
+    x, _ = data
+    torch.manual_seed(0)
+    module = IGLModule(input_dim=8, max_dim=4, output_dim=2, n_anchors=8, n_scales=2, normalize_input=True)
+    module.eval()
+    save(module, tmp_path / "m.pt", config=_BARE)
+    loaded = load(tmp_path / "m.pt")
+    assert isinstance(loaded, IGLModule)
+    assert loaded.normalize_input is True
+    assert isinstance(next(iter(loaded.encoder.children())), torch.nn.BatchNorm1d)
+    x_t = torch.from_numpy(x.astype(np.float32))
+    with torch.no_grad():
+        assert torch.equal(module(x_t), loaded(x_t))
+
+
 def test_bare_module_without_config_raises(tmp_path: Path) -> None:
     module = IGLModule(input_dim=4, max_dim=2, output_dim=1, n_anchors=4, n_scales=2)
     with pytest.raises(IGLSerializationError, match="requires config="):
@@ -90,6 +106,8 @@ def test_estimator_extras_survive(tmp_path: Path, data: tuple[np.ndarray, np.nda
     assert loaded.effective_dimension_ == est.effective_dimension_
     assert loaded.dimension_curve_ == est.dimension_curve_
     assert loaded.history_.train_loss == est.history_.train_loss
+    assert loaded.history_.stop_reason == est.history_.stop_reason
+    assert loaded.history_.converged == est.history_.converged
 
 
 def test_estimator_save_rejects_explicit_config(tmp_path: Path, data: tuple[np.ndarray, np.ndarray]) -> None:

@@ -7,7 +7,13 @@ from igl.spectral._build import build_kernel_null_space, build_spectral_kernel
 __all__ = ["build_module_from_config"]
 
 
-def build_module_from_config(config: IGLConfig, *, input_dim: int, output_dim: int) -> IGLModule:
+def build_module_from_config(
+    config: IGLConfig,
+    *,
+    input_dim: int,
+    output_dim: int,
+    normalize_input: bool = False,
+) -> IGLModule:
     """Construct an :class:`IGLModule` from a fully-resolved :class:`IGLConfig`.
 
     Mirrors the estimator construction path (spectral kernel when
@@ -23,6 +29,10 @@ def build_module_from_config(config: IGLConfig, *, input_dim: int, output_dim: i
             in).
         input_dim: Ambient input dimension.
         output_dim: Output dimension.
+        normalize_input: Whether the saved module wrapped its encoder in an
+            input ``BatchNorm1d`` (recorded in the checkpoint's ``dims``
+            block). Without it the rebuilt module lacks the BatchNorm
+            buffers and the strict state-dict load fails.
 
     Returns:
         A freshly-initialized module with the configured architecture.
@@ -41,6 +51,7 @@ def build_module_from_config(config: IGLConfig, *, input_dim: int, output_dim: i
         operator=config.kernel.operator,  # pyright: ignore[reportArgumentType]
         encoder_config=config.encoder,
         normalize=config.kernel.normalize,
+        normalize_input=normalize_input,
         config=None,
         kernel=kernel,  # type: ignore[arg-type]
     )

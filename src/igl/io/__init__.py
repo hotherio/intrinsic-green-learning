@@ -182,6 +182,7 @@ def load(path: str | Path, *, allow_quick: bool = False, map_location: str | tor
         config,
         input_dim=cast(int, dims["input_dim"]),
         output_dim=cast(int, dims["output_dim"]),
+        normalize_input=bool(dims.get("normalize_input", False)),
     )
     module.load_state_dict(cast(dict[str, torch.Tensor], payload["state_dict"]), strict=True)
     module.eval()
@@ -261,6 +262,7 @@ def _estimator_extras(obj: _Estimator) -> dict[str, object]:
             "best_metric": history.best_metric,
             "stopped_epoch": history.stopped_epoch,
             "early_stopped": history.early_stopped,
+            "stop_reason": history.stop_reason,
         },
         "dimension_curve": dict(getattr(obj, "dimension_curve_", {})),
         "effective_dimension": getattr(obj, "effective_dimension_", None),
@@ -301,6 +303,8 @@ def _rebuild_estimator(
             best_metric=cast(float | None, history["best_metric"]),
             stopped_epoch=cast(int | None, history["stopped_epoch"]),
             early_stopped=cast(bool, history["early_stopped"]),
+            # Absent in checkpoints written before the field was serialised.
+            stop_reason=cast(str | None, history.get("stop_reason")),
         )
     curve = cast(dict[int, float], extras.get("dimension_curve") or {})
     if curve:

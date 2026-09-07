@@ -284,7 +284,9 @@ class _BaseIGLEstimator(BaseEstimator, Generic[_LossT]):
         """
         if validation_fraction is not None and 0.0 < validation_fraction < 1.0:
             n_val = max(1, int(len(x_tensor) * validation_fraction))
-            perm = np.random.RandomState(self.random_state or 0).permutation(len(x_tensor))
+            # ``random_state=None`` draws a fresh split (sklearn semantics);
+            # ``self.random_state or 0`` made None and 0 split identically.
+            perm = np.random.RandomState(self.random_state).permutation(len(x_tensor))
             val_idx = perm[:n_val]
             train_idx = perm[n_val:]
             x_train, x_val = x_tensor[train_idx], x_tensor[val_idx]

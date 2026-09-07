@@ -204,6 +204,11 @@ class SpectralKernel(nn.Module):
         ]
 
         self._keeps = _kept_modes(per_dim_bases, null_space_given=null_space is not None)
+        # Kept-mode indices as device buffers: indexing with a Python list
+        # uploads the indices on every call (a host synchronisation on CUDA).
+        # Non-persistent, so checkpoints written before this change still load.
+        for j, keep in enumerate(self._keeps):
+            self.register_buffer(f"_keep_index_{j}", torch.tensor(keep, dtype=torch.long), persistent=False)
 
         anchor_tensor = _resolve_anchors(
             anchors,
@@ -238,11 +243,15 @@ class SpectralKernel(nn.Module):
         columns = [_map_to_domain(z[:, j], self._domains[j]) for j in range(self.latent_dim)]
         return torch.stack(columns, dim=-1)
 
-    def _factor(self, basis: nn.Module, keep: list[int], z_col: torch.Tensor, s_col: torch.Tensor) -> torch.Tensor:
+    def _keep_index(self, j: int) -> torch.Tensor:
+        """Kept-mode indices of dimension ``j`` as a ``long`` tensor on the module's device."""
+        return cast(torch.Tensor, getattr(self, f"_keep_index_{j}"))
+
+    def _factor(self, basis: nn.Module, keep: torch.Tensor, z_col: torch.Tensor, s_col: torch.Tensor) -> torch.Tensor:
         """``Σ_{k∈keep} φ_k(z) φ_k(s) / max(λ_k, ε)`` as an ``[N, R]`` matrix."""
-        phi_z = basis(z_col)[:, keep]
-        phi_s = basis(s_col)[:, keep]
-        eigvals = cast(torch.Tensor, basis.eigenvalues)[keep].clamp(min=self.epsilon)
+        phi_z = cast(torch.Tensor, basis(z_col)).index_select(1, keep)
+        phi_s = cast(torch.Tensor, basis(s_col)).index_select(1, keep)
+        eigvals = cast(torch.Tensor, basis.eigenvalues).index_select(0, keep).clamp(min=self.epsilon)
         return phi_z @ (phi_s / eigvals.unsqueeze(0)).T
 
     def compute_design_matrix(
@@ -269,13 +278,13 @@ class SpectralKernel(nn.Module):
         anchors: torch.Tensor = self.anchor_positions  # [R, d]
 
         if self._joint:
-            kernel_main = self._factor(self._bases[0], self._keeps[0], z, anchors)
+            kernel_main = self._factor(self._bases[0], self._keep_index(0), z, anchors)
         else:
             z_mapped = self.map_to_domain(z)
             anchors_mapped = self.map_to_domain(anchors)
             kernel_main = torch.ones(z.shape[0], self.n_anchors, device=z.device, dtype=z.dtype)
             for j in range(self.latent_dim):
-                factor = self._factor(self._bases[j], self._keeps[j], z_mapped[:, j], anchors_mapped[:, j])
+                factor = self._factor(self._bases[j], self._keep_index(j), z_mapped[:, j], anchors_mapped[:, j])
                 if gate_mask is not None:
                     # Blend on the device instead of reading the mask on the host:
                     # a masked dimension contributes the neutral factor 1.

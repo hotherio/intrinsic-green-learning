@@ -250,6 +250,27 @@ FinalRefreshLiteral = Literal["full", "subset"]
 type FinalRefreshLike = FinalRefresh | FinalRefreshLiteral
 
 
+class MatmulPrecision(StrEnum):
+    """Matmul precision the CUDA branch holds during a fit.
+
+    - ``TF32`` (default): TensorFloat-32 for the encoder and kernel matmuls
+      (Ampere and later); the readout solve, its refinement and the kernel's
+      contraction always run in full precision.
+    - ``FP32``: no TF32 anywhere. Slower, closest to the CPU numbers.
+
+    Ignored on CPU and MPS.
+    """
+
+    TF32 = "tf32"
+    FP32 = "fp32"
+
+
+MatmulPrecisionLiteral = Literal["tf32", "fp32"]
+"""Literal companion of :class:`MatmulPrecision`."""
+
+type MatmulPrecisionLike = MatmulPrecision | MatmulPrecisionLiteral
+
+
 class DomainMap(StrEnum):
     """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
 
@@ -484,6 +505,9 @@ __all__ = [
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",
     "LossStrategy",
+    "MatmulPrecision",
+    "MatmulPrecisionLike",
+    "MatmulPrecisionLiteral",
     "MatryoshkaSampler",
     "NormType",
     "NormTypeLike",

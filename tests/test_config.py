@@ -250,3 +250,11 @@ def test_matryoshka_config_final_refresh_defaults_to_full_and_round_trips() -> N
     assert MatryoshkaConfig().final_refresh is FinalRefresh.FULL
     cfg = IGLConfig(matryoshka=MatryoshkaConfig(final_refresh="subset"))
     assert IGLConfig.from_dict(cfg.to_dict()) == cfg
+
+
+def test_matryoshka_config_matmul_precision_defaults_to_tf32_and_round_trips() -> None:
+    from igl import MatmulPrecision
+
+    assert MatryoshkaConfig().matmul_precision is MatmulPrecision.TF32
+    cfg = IGLConfig(matryoshka=MatryoshkaConfig(matmul_precision="fp32"))
+    assert IGLConfig.from_dict(cfg.to_dict()) == cfg

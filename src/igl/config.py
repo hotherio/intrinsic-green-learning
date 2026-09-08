@@ -175,6 +175,10 @@ class MatryoshkaConfig:
     skip_failing_batches: bool = False
     final_refresh: FinalRefreshLike = FinalRefresh.FULL
     matmul_precision: MatmulPrecisionLike = MatmulPrecision.TF32
+    # CUDA branch only: replay the batch step from a CUDA graph, and/or fuse it
+    # with torch.compile first (a few seconds of compilation per fit).
+    cuda_graphs: bool = True
+    torch_compile: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sampling", SamplingMode(self.sampling))
@@ -266,6 +270,8 @@ class IGLConfig:
                 "skip_failing_batches": self.matryoshka.skip_failing_batches,
                 "final_refresh": str(matryoshka_final_refresh),
                 "matmul_precision": str(matryoshka_precision),
+                "cuda_graphs": self.matryoshka.cuda_graphs,
+                "torch_compile": self.matryoshka.torch_compile,
             },
         }
 
@@ -437,6 +443,8 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         skip_failing_batches=_typed_get(data, "skip_failing_batches", d.skip_failing_batches),
         final_refresh=cast(FinalRefreshLike, data.get("final_refresh", d.final_refresh)),
         matmul_precision=cast(MatmulPrecisionLike, data.get("matmul_precision", d.matmul_precision)),
+        cuda_graphs=_typed_get(data, "cuda_graphs", d.cuda_graphs),
+        torch_compile=_typed_get(data, "torch_compile", d.torch_compile),
     )
 
 

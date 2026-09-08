@@ -123,7 +123,7 @@ def main() -> None:
         )
     )
 
-    print("\n## Op-level profile (one epoch of the medium problem)\n")
+    print("\n## Op-level profile (per epoch of the medium problem, a five-epoch fit)\n")
     rows = []
     tops: list[tuple[str, str, list[dict[str, Any]]]] = []
     for device in devices:

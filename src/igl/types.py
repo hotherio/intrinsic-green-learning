@@ -356,6 +356,11 @@ class LossStrategy(Protocol):
     as 0-d tensors on the prediction's device. The trainer and the dimension
     curve prefer them, so an epoch (or a whole curve) needs a single host
     transfer; without them each call costs one synchronisation.
+
+    A strategy that synchronises with the host inside ``loss`` (an eigensolver,
+    a ``.item()``) should expose ``graph_capturable = False`` so the CUDA branch
+    does not try to record the batch step into a CUDA graph; the default is
+    ``True``.
     """
 
     higher_is_better: bool

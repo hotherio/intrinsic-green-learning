@@ -135,7 +135,7 @@ the module's device (see [`igl.device.select_backend`][igl.device.select_backend
 |---|---|---|---|---|
 | CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
 | MPS | Cholesky of the normal equations + one refinement step, on device | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
-| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
 
 The CPU branch keeps every number bit-identical release to release, which is
 what the SPD reproducibility tests pin. The device branches keep every tensor
@@ -145,7 +145,15 @@ stopping stay on the device, and the only thing that crosses to the host each
 epoch is one small tensor holding the training loss, the validation loss and
 metric, and the failure count. The kernel's contraction and the readout solve
 always run in full precision; `MatryoshkaConfig.matmul_precision` governs the
-rest on CUDA. The one documented exception is the AIRM loss's eigensolver,
+rest on CUDA. Because the step never touches the host, the CUDA branch records
+it once into a CUDA graph and replays it for every full batch
+(`MatryoshkaConfig.cuda_graphs`, on by default; the last partial batch runs
+eagerly, and the step is re-recorded when a scheduler changes the learning
+rate). `MatryoshkaConfig.torch_compile` additionally fuses the step's kernels
+with `torch.compile` before recording, at the cost of a few seconds of
+compilation per fit. Both are ignored off CUDA, and both step aside for a loss
+that synchronises (`AIRMLoss` with `eigh`), for extra losses, and for a
+data-driven spectral basis. The one documented exception is the AIRM loss's eigensolver,
 which synchronises on CUDA and, because MPS has no eigensolver, runs on the
 CPU for MPS tensors, unless `AIRMLoss(matrix_method="iterative")` is chosen
 (matrix functions from products, solves and inverses only, on any device).

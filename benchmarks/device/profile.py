@@ -20,19 +20,21 @@ from benchmarks.device._harness import machine_state, resolve_device, run_dir, s
 from benchmarks.device.workloads import PROBLEMS, make_config, make_data, make_module
 
 
-def profile_epoch(problem_name: str, device: torch.device, *, rows: int = 25) -> dict[str, Any]:
+def profile_epoch(problem_name: str, device: torch.device, *, rows: int = 25, epochs: int = 5) -> dict[str, Any]:
+    """Profile an ``epochs``-epoch fit and report per-epoch figures (a graph capture, if any, amortised as in real use)."""
     problem = PROBLEMS[problem_name]
     x, y, x_val, y_val = make_data(problem, device)
     module = make_module(problem, device)
     trainer = igl.MatryoshkaTrainer(loss=igl.CrossEntropyLoss(n_classes=2), config=make_config(problem, epochs=1))
-    trainer.fit(module, x, y, x_val=x_val, y_val=y_val)  # warm-up epoch (allocator, kernels)
+    trainer.fit(module, x, y, x_val=x_val, y_val=y_val)  # warm-up fit (allocator, kernels)
+    trainer = igl.MatryoshkaTrainer(loss=igl.CrossEntropyLoss(n_classes=2), config=make_config(problem, epochs=epochs))
     activities = [ProfilerActivity.CPU] + ([ProfilerActivity.CUDA] if device.type == "cuda" else [])
     sync(device)
     wall0 = time.perf_counter()
     with profile(activities=activities, record_shapes=False, profile_memory=device.type == "cuda") as prof:
         trainer.fit(module, x, y, x_val=x_val, y_val=y_val)
         sync(device)
-    wall = time.perf_counter() - wall0
+    wall = (time.perf_counter() - wall0) / epochs
     averages = prof.key_averages()
     sort_key = "self_device_time_total" if device.type == "cuda" else "self_cpu_time_total"
     table = averages.table(sort_by=sort_key, row_limit=rows)
@@ -46,15 +48,20 @@ def profile_epoch(problem_name: str, device: torch.device, *, rows: int = 25) ->
                 "self_device_ms": getattr(event, "self_device_time_total", 0.0) / 1e3,
             }
         )
-    device_busy_ms = sum(getattr(e, "self_device_time_total", 0.0) for e in averages) / 1e3 if device.type == "cuda" else None
+    device_busy_ms = (
+        sum(getattr(e, "self_device_time_total", 0.0) for e in averages) / 1e3 / epochs if device.type == "cuda" else None
+    )
     trace = run_dir(device) / f"trace_{problem_name}.json"
     prof.export_chrome_trace(str(trace))
     return {
         "problem": problem_name,
+        "epochs": epochs,
         "wall_ms": wall * 1e3,
         "device_busy_ms": device_busy_ms,
         "device_busy_fraction": (device_busy_ms / (wall * 1e3)) if device_busy_ms is not None else None,
-        "kernel_launches": sum(e.count for e in averages if e.device_type.name != "CPU") if device.type == "cuda" else None,
+        "kernel_launches": (
+            sum(e.count for e in averages if e.device_type.name != "CPU") / epochs if device.type == "cuda" else None
+        ),
         "peak_device_mem_mb": (torch.cuda.max_memory_allocated() / 2**20) if device.type == "cuda" else None,
         "top_ops": top,
         "table": table,

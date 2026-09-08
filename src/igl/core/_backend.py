@@ -75,8 +75,15 @@ class Backend(Protocol):
         """Restore a :meth:`snapshot`."""
         ...  # pragma: no cover  # Protocol method body
 
-    def make_optimizer(self, params: Iterable[nn.Parameter], *, lr: float, weight_decay: float | None) -> AdamW:
-        """Build the AdamW optimizer for this device."""
+    def make_optimizer(
+        self,
+        params: Iterable[nn.Parameter],
+        *,
+        lr: float | torch.Tensor,
+        weight_decay: float | None,
+        capturable: bool = False,
+    ) -> AdamW:
+        """Build the AdamW optimizer for this device (``capturable`` and a tensor ``lr`` serve CUDA graph replay)."""
         ...  # pragma: no cover  # Protocol method body
 
     def precision(self) -> contextlib.AbstractContextManager[None]:
@@ -143,7 +150,14 @@ class _DeviceBackend:
     def restore(self, module: PrefixForward, snapshot: dict[str, torch.Tensor]) -> None:
         module.load_state_dict(snapshot)
 
-    def make_optimizer(self, params: Iterable[nn.Parameter], *, lr: float, weight_decay: float | None) -> AdamW:
+    def make_optimizer(
+        self,
+        params: Iterable[nn.Parameter],
+        *,
+        lr: float | torch.Tensor,
+        weight_decay: float | None,
+        capturable: bool = False,
+    ) -> AdamW:
         return AdamW(params, lr=lr, weight_decay=weight_decay) if weight_decay is not None else AdamW(params, lr=lr)
 
     def precision(self) -> contextlib.AbstractContextManager[None]:
@@ -185,7 +199,14 @@ class CpuBackend:
     def restore(self, module: PrefixForward, snapshot: dict[str, torch.Tensor]) -> None:
         module.load_state_dict(snapshot)
 
-    def make_optimizer(self, params: Iterable[nn.Parameter], *, lr: float, weight_decay: float | None) -> AdamW:
+    def make_optimizer(
+        self,
+        params: Iterable[nn.Parameter],
+        *,
+        lr: float | torch.Tensor,
+        weight_decay: float | None,
+        capturable: bool = False,
+    ) -> AdamW:
         return AdamW(params, lr=lr, weight_decay=weight_decay) if weight_decay is not None else AdamW(params, lr=lr)
 
     def precision(self) -> contextlib.AbstractContextManager[None]:
@@ -209,11 +230,18 @@ class CudaBackend(_DeviceBackend):
         self.tf32 = tf32
 
     def make_optimizer(
-        self, params: Iterable[nn.Parameter], *, lr: float, weight_decay: float | None
+        self,
+        params: Iterable[nn.Parameter],
+        *,
+        lr: float | torch.Tensor,
+        weight_decay: float | None,
+        capturable: bool = False,
     ) -> AdamW:  # pragma: no cover  # CUDA only
+        # ``capturable`` keeps the step counters on the device so the optimizer
+        # step can be recorded into a CUDA graph (see ``igl.core._graph``).
         if weight_decay is not None:
-            return AdamW(params, lr=lr, weight_decay=weight_decay, fused=True)
-        return AdamW(params, lr=lr, fused=True)
+            return AdamW(params, lr=lr, weight_decay=weight_decay, fused=True, capturable=capturable)
+        return AdamW(params, lr=lr, fused=True, capturable=capturable)
 
     def precision(self) -> contextlib.AbstractContextManager[None]:
         return _tf32(enabled=self.tf32)

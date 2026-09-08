@@ -156,6 +156,11 @@ class AIRMLoss:
         # whenever covs is relocated to a new device.
         self._cov_inv_half: torch.Tensor | None = None
 
+    @property
+    def graph_capturable(self) -> bool:
+        """Whether the loss can be recorded into a CUDA graph: only the iterative functions can (``eigh`` synchronises)."""
+        return self.matrix_method == "iterative"
+
     def target(self, y: torch.Tensor) -> torch.Tensor:
         """Pass-through: the log-Eig vector is already the lstsq target."""
         return y.float() if y.dim() > 1 else y.float().unsqueeze(-1)

@@ -102,3 +102,36 @@ def test_orth_penalty_near_zero_after_orthogonal_init() -> None:
     # A QR-orthogonal Linear maps to orthogonal columns; J = W and W W^T ≈ I,
     # so off-diagonals should be small.
     assert out.item() < 1e-6
+
+
+def test_vectorized_jacobian_matches_the_loop_and_its_gradients() -> None:
+    from igl import MLPEncoder
+    from igl.spd.orthogonality import jacobian, orthogonality_loss, pullback_metric
+
+    torch.manual_seed(0)
+    encoder = MLPEncoder(7, 3, hidden=16, depth=2)
+    x = torch.randn(5, 7)
+    j_loop = jacobian(encoder, x, output_dim=3, vectorized=False)
+    j_vmap = jacobian(encoder, x, output_dim=3, vectorized=True)
+    torch.testing.assert_close(j_vmap, j_loop, rtol=1e-5, atol=1e-6)
+    grads = []
+    for vectorized in (False, True):
+        encoder.zero_grad()
+        orthogonality_loss(pullback_metric(jacobian(encoder, x, output_dim=3, vectorized=vectorized))).backward()
+        grads.append([p.grad.clone() for p in encoder.parameters() if p.grad is not None])
+    for a, b in zip(grads[0], grads[1], strict=True):
+        torch.testing.assert_close(a, b, rtol=1e-4, atol=1e-6)
+
+
+def test_vectorized_jacobian_falls_back_to_the_loop_under_training_batchnorm() -> None:
+    from igl import MLPEncoder
+    from igl.spd.orthogonality import _batchnorm_in_training, jacobian
+
+    encoder = MLPEncoder(4, 2, hidden=8, depth=1, norm="batch")
+    encoder.train()
+    assert _batchnorm_in_training(encoder)
+    x = torch.randn(6, 4)
+    j = jacobian(encoder, x, output_dim=2, vectorized=True)
+    assert j.shape == (6, 2, 4)
+    encoder.eval()
+    assert not _batchnorm_in_training(encoder)

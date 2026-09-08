@@ -138,6 +138,9 @@ class LearnedLaplacianBasis(nn.Module):
                 f"refresh expects z of shape [M, d] with M > k_nn; got {tuple(z.shape)}",
             )
         device = z.device
+        if device.type == "cuda":  # pragma: no cover  # CUDA only
+            self._refresh_on_device(z)
+            return
         z_np = z.detach().cpu().numpy().astype(np.float64)
         n = z_np.shape[0]
 
@@ -183,6 +186,44 @@ class LearnedLaplacianBasis(nn.Module):
         # neighbourhood iff its squared distance to z_j is at most this radius.
         self._knn_radius_sq = torch.as_tensor(distances[:, -1] ** 2, dtype=torch.float32, device=device)  # type: ignore[assignment]
         self._sigma_sq = torch.tensor(sigma_sq, dtype=torch.float32, device=device)  # type: ignore[assignment]
+        self.is_refreshed = True
+
+    @torch.no_grad()
+    def _refresh_on_device(self, z: torch.Tensor) -> None:
+        """The refresh entirely in torch on the latents' device (CUDA).
+
+        Same graph as the scipy path (kNN Gaussian affinities, symmetrised,
+        symmetric normalised Laplacian), dense at these sizes, and a dense
+        ``torch.linalg.eigh``: one host synchronisation per refresh (the
+        eigensolver checks its status) instead of a round trip of the whole
+        latent batch through scipy.
+        """
+        z = z.detach()
+        n = z.shape[0]
+        d2 = torch.cdist(z, z, compute_mode="donot_use_mm_for_euclid_dist").pow(2)
+        d2.fill_diagonal_(float("inf"))
+        d2_k, idx = d2.topk(self.k_nn, dim=-1, largest=False)  # [n, k]
+        sigma_sq = d2_k[:, 0].median() + _MEDIAN_DIST_FLOOR
+        weights = torch.exp(-d2_k / (2.0 * sigma_sq))
+        w = torch.zeros(n, n, device=z.device, dtype=z.dtype).scatter_(1, idx, weights)
+        w = 0.5 * (w + w.T)
+        degrees = w.sum(dim=1)
+        d_inv_sqrt = 1.0 / torch.sqrt(degrees + _DEGREE_FLOOR)
+        lap = torch.eye(n, device=z.device, dtype=z.dtype) - d_inv_sqrt[:, None] * w * d_inv_sqrt[None, :]
+        eigvals, eigvecs = torch.linalg.eigh(lap)
+        k = min(self.n_modes, n - 2)
+        lam_raw, vecs = eigvals[:k], eigvecs[:, :k]
+        if k < self.n_modes:
+            pad = self.n_modes - k
+            lam_raw = torch.cat([lam_raw, lam_raw[-1:].expand(pad)])
+            vecs = torch.cat([vecs, vecs[:, -1:].expand(-1, pad)], dim=1)
+        self.eigenvalues = torch.clamp(lam_raw.float(), min=self.epsilon)  # type: ignore[assignment]
+        self._affinity_eigs = torch.clamp(1.0 - lam_raw.float(), min=self.epsilon)  # type: ignore[assignment]
+        self._refresh_points = z  # type: ignore[assignment]
+        self._eigenvectors = vecs.float()  # type: ignore[assignment]
+        self._degrees = degrees.float()  # type: ignore[assignment]
+        self._knn_radius_sq = d2_k[:, -1].float()  # type: ignore[assignment]
+        self._sigma_sq = sigma_sq.float()  # type: ignore[assignment]
         self.is_refreshed = True
 
     def evaluate(self, z: torch.Tensor, /) -> torch.Tensor:

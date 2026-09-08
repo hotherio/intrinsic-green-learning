@@ -164,3 +164,31 @@ def test_whitened_loss_trains_with_matryoshka_trainer() -> None:
     history = trainer.fit(module, y, y)
     assert len(history.train_loss) == 5
     assert all(torch.isfinite(torch.tensor(loss_value)) for loss_value in history.train_loss)
+
+
+def test_whitener_moves_its_constants_once_per_device() -> None:
+    from igl.whitening import TargetWhitener
+
+    torch.manual_seed(0)
+    y = torch.randn(32, 3)
+    whitener = TargetWhitener().fit(y)
+    first = whitener.constants(torch.device("cpu"))
+    again = whitener.constants(torch.device("cpu"))
+    assert all(a is b for a, b in zip(first, again, strict=True))
+    assert list(whitener._on_device) == ["cpu"]  # noqa: SLF001
+    whitener.fit(y)
+    assert whitener._on_device == {}  # noqa: SLF001
+
+
+@pytest.mark.skipif(not (torch.backends.mps.is_available() or torch.cuda.is_available()), reason="needs a device")
+def test_whitener_transforms_device_targets_like_cpu_targets() -> None:
+    from igl.whitening import TargetWhitener
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    torch.manual_seed(0)
+    y = torch.randn(32, 3)
+    whitener = TargetWhitener().fit(y)
+    on_device = whitener.transform(y.to(device))
+    assert on_device.device.type == device.type
+    torch.testing.assert_close(on_device.cpu(), whitener.transform(y), rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(whitener.inverse_transform(on_device).cpu(), y, rtol=1e-4, atol=1e-5)

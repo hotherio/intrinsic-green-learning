@@ -265,3 +265,28 @@ def test_learned_lb_rejects_mismatched_query_width() -> None:
     basis.refresh(z)
     with pytest.raises(IGLConfigError, match="coordinates"):
         basis(torch.randn(5, 3))
+
+
+def test_learned_lb_torch_refresh_matches_the_scipy_graph() -> None:
+    """The torch-native refresh (the CUDA branch) builds the same spectrum as the scipy path."""
+    z = _torus_latents(300)
+    scipy_basis = LearnedLaplacianBasis(n_modes=6, k_nn=12)
+    scipy_basis.refresh(z)
+    torch_basis = LearnedLaplacianBasis(n_modes=6, k_nn=12)
+    torch_basis._refresh_on_device(z)  # noqa: SLF001
+    assert torch_basis.is_refreshed
+    torch.testing.assert_close(torch_basis.eigenvalues, scipy_basis.eigenvalues, rtol=1e-4, atol=1e-5)
+    torch.testing.assert_close(torch_basis._degrees, scipy_basis._degrees, rtol=1e-4, atol=1e-5)  # noqa: SLF001
+    # Eigenvectors agree up to sign for the non-degenerate leading modes.
+    for mode in range(1, 3):
+        a, b = torch_basis._eigenvectors[:, mode], scipy_basis._eigenvectors[:, mode]  # noqa: SLF001
+        assert min((a - b).abs().max(), (a + b).abs().max()) < 1e-3
+
+
+def test_learned_lb_torch_refresh_pads_when_there_are_too_few_points() -> None:
+    z = _torus_latents(5)
+    basis = LearnedLaplacianBasis(n_modes=6, k_nn=3)
+    basis._refresh_on_device(z)  # noqa: SLF001
+    assert basis.is_refreshed
+    assert basis.eigenvalues.shape == (6,)
+    assert basis._eigenvectors.shape == (5, 6)  # noqa: SLF001

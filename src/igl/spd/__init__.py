@@ -6,7 +6,7 @@ Not flattened into the top-level ``igl`` namespace. Import explicitly::
 """
 
 from igl.spd.airm import AIRMLoss, airm_loss
-from igl.spd.linalg import matrix_exp_sym, matrix_log_sym, matrix_pow_sym, unpack_sym_vec
+from igl.spd.linalg import MatrixMethod, matrix_exp_sym, matrix_log_sym, matrix_pow_sym, unpack_sym_vec
 from igl.spd.log_eig import LogEigVectorizer
 from igl.spd.orthogonality import (
     OrthogonalityPenalty,
@@ -21,6 +21,7 @@ __all__ = [
     "AIRMLoss",
     "IGLReconSPDClassifier",
     "LogEigVectorizer",
+    "MatrixMethod",
     "OrthogonalityPenalty",
     "airm_loss",
     "init_encoder_orthogonal_",

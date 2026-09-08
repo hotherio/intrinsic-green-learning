@@ -80,3 +80,32 @@ def test_airm_strategy_promotes_1d_targets() -> None:
     y = torch.tensor([0.5, 0.3, 0.1])
     target = loss.target(y)
     assert target.shape == (3, 1)
+
+
+def test_airm_loss_iterative_method_matches_eigh() -> None:
+    from igl.data import make_spd_dataset
+    from igl.spd import AIRMLoss, LogEigVectorizer
+
+    covs, _ = make_spd_dataset(12, d=4, seed=0)
+    vec = torch.as_tensor(LogEigVectorizer().fit(covs.numpy()).transform(covs.numpy()), dtype=torch.float32)
+    pred = vec + 0.05 * torch.randn_like(vec)
+    eigh = AIRMLoss(latent_dim=4).loss(pred, vec)
+    iterative = AIRMLoss(latent_dim=4, matrix_method="iterative").loss(pred, vec)
+    torch.testing.assert_close(iterative, eigh, rtol=1e-3, atol=1e-5)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS only")
+def test_airm_loss_runs_on_mps_through_the_cpu_eigensolver() -> None:
+    from igl.data import make_spd_dataset
+    from igl.spd import AIRMLoss, LogEigVectorizer
+
+    covs, _ = make_spd_dataset(12, d=4, seed=0)
+    vec = torch.as_tensor(LogEigVectorizer().fit(covs.numpy()).transform(covs.numpy()), dtype=torch.float32)
+    pred = (vec + 0.05 * torch.randn_like(vec)).requires_grad_(True)
+    cpu = AIRMLoss(latent_dim=4).loss(pred, vec)
+    pred_mps = pred.detach().to("mps").requires_grad_(True)
+    mps = AIRMLoss(latent_dim=4).loss(pred_mps, vec.to("mps"))
+    assert mps.device.type == "mps"
+    torch.testing.assert_close(mps.cpu(), cpu, rtol=1e-4, atol=1e-5)
+    mps.backward()
+    assert pred_mps.grad is not None and torch.isfinite(pred_mps.grad).all()

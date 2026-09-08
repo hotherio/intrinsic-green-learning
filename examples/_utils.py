@@ -15,6 +15,15 @@ import numpy as np
 import torch
 
 
+def example_device() -> torch.device:
+    """Device the examples run on: ``IGL_EXAMPLE_DEVICE`` (``cpu``, ``mps``, ``cuda``), default ``cpu``.
+
+    The benchmark suite sets the variable to run every example end to end on
+    each device; users can do the same by hand.
+    """
+    return torch.device(os.environ.get("IGL_EXAMPLE_DEVICE", "cpu"))
+
+
 def set_seed(seed: int) -> None:
     """Seed Python, NumPy, and PyTorch RNGs.
 

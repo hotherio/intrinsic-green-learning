@@ -13,6 +13,7 @@ The trainer is agnostic to the task — pass any :class:`igl.types.LossStrategy`
 """
 
 import logging
+import math
 import re
 import warnings
 from collections.abc import Callable, Sequence
@@ -25,8 +26,9 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from igl.config import MatryoshkaConfig
+from igl.core._backend import Backend, select_backend
+from igl.core._graph import GraphRunner
 from igl.core.normalization import normalize_phi
-from igl.core.solver import direct_solve_weights
 from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
@@ -34,6 +36,7 @@ from igl.types import (
     ExtraLoss,
     FinalRefresh,
     LossStrategy,
+    MatmulPrecision,
     MatryoshkaSampler,
     PrefixForward,
     SamplingMode,
@@ -103,6 +106,19 @@ class TrainingHistory:
         return self.stop_reason == "plateau"
 
 
+def _gate_masks(d_max: int, device: torch.device) -> torch.Tensor:
+    """``[d_max + 1, d_max]`` table whose row ``k`` keeps the first ``k`` latent dimensions."""
+    budgets = torch.arange(d_max + 1, device=device).unsqueeze(1)
+    return (torch.arange(d_max, device=device).unsqueeze(0) < budgets).to(torch.float32)
+
+
+def _rows(x: torch.Tensor, y: torch.Tensor, idx: torch.Tensor | None) -> tuple[torch.Tensor, torch.Tensor]:
+    """Gather ``idx`` from both tensors, or return them untouched when ``idx`` is ``None``."""
+    if idx is None:
+        return x, y
+    return x[idx], y[idx]
+
+
 def _build_sampler(config: MatryoshkaConfig) -> MatryoshkaSampler:
     if config.sampling is SamplingMode.UNIFORM:
         return UniformSampler()
@@ -119,11 +135,16 @@ class MatryoshkaTrainer:
             regression, …).
         sampler: Optional explicit :class:`MatryoshkaSampler`. When ``None``,
             one is built from ``config.sampling`` and ``config.alpha``.
+        backend: Optional explicit :class:`igl.device.Backend` (the per-device
+            execution branch). When ``None``, :func:`igl.device.select_backend`
+            picks it from the module's device at :meth:`fit`. Tests inject a
+            counting double here.
     """
 
     config: MatryoshkaConfig
     loss: LossStrategy
     sampler: MatryoshkaSampler
+    backend: Backend | None
     current_batch_indices: torch.Tensor | None
 
     def __init__(
@@ -132,10 +153,12 @@ class MatryoshkaTrainer:
         loss: LossStrategy,
         config: MatryoshkaConfig | None = None,
         sampler: MatryoshkaSampler | None = None,
+        backend: Backend | None = None,
     ) -> None:
         self.config = config or MatryoshkaConfig()
         self.loss = loss
         self.sampler = sampler if sampler is not None else _build_sampler(self.config)
+        self.backend = backend
         # Per-batch seam: strategies that need to look up auxiliary data
         # indexed by the batch's positions in the original training tensor
         # (e.g. ``AIRMLoss(covs=...)``) read this. Set by ``_train_one_epoch``
@@ -178,6 +201,11 @@ class MatryoshkaTrainer:
         """
         config = self.config
         device = next(module.parameters()).device
+        backend = (
+            self.backend
+            if self.backend is not None
+            else select_backend(device, tf32=config.matmul_precision is MatmulPrecision.TF32)
+        )
         x_train = x_train.to(device)
         y_train = y_train.to(device)
         if x_val is not None:
@@ -193,27 +221,187 @@ class MatryoshkaTrainer:
             params: list[nn.Parameter] = list(module.encoder.parameters()) + list(module.green.parameters()) + [module.bias]
         else:
             params = list(module.parameters())
-        optimizer = (
-            AdamW(params, lr=config.encoder_lr, weight_decay=config.weight_decay)
-            if config.weight_decay is not None
-            else AdamW(params, lr=config.encoder_lr)
+        runner = self._graph_runner(module, backend, extra_losses=extra_losses, device=device, d_max=d_max, n_samples=n_samples)
+        optimizer = backend.make_optimizer(
+            params, lr=config.encoder_lr, weight_decay=config.weight_decay, capturable=runner is not None
         )
+        # Per-fit accumulators (zeroed every epoch): the same tensors for the whole
+        # fit so a captured graph keeps adding into them.
+        loss_sum = backend.loss_accumulator(device)
+        n_bad = torch.zeros((), dtype=torch.int64, device=device)
+        if runner is not None and isinstance(module, IGLModule):
+            runner.bind(
+                self._graph_step(
+                    module=module,
+                    backend=backend,
+                    optimizer=optimizer,
+                    params=params,
+                    x_train=x_train,
+                    y_train=y_train,
+                    runner=runner,
+                    loss_sum=loss_sum,
+                    n_bad=n_bad,
+                )
+            )
         scheduler = (
             CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1)
             if config.scheduler is SchedulerType.COSINE_WARM_RESTARTS
             else None
         )
+        if runner is not None:
+            # The scheduler keeps float base rates; the optimizer reads the
+            # runner's device tensor, which the recorded step reads at replay.
+            runner.sync_lr(optimizer)
 
         use_early_stop = config.early_stop_patience is not None and x_val is not None
+        history = TrainingHistory()
+
+        precision = backend.precision()
+        precision.__enter__()
+        try:
+            self._fit_epochs(
+                module=module,
+                backend=backend,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                params=params,
+                x_train=x_train,
+                y_train=y_train,
+                x_val=x_val,
+                y_val=y_val,
+                extra_losses=extra_losses,
+                on_epoch=on_epoch,
+                history=history,
+                d_max=d_max,
+                n_samples=n_samples,
+                use_early_stop=use_early_stop,
+                runner=runner,
+                loss_sum=loss_sum,
+                n_bad=n_bad,
+            )
+        finally:
+            precision.__exit__(None, None, None)
+        return history
+
+    def _graph_runner(
+        self,
+        module: IGLModule | PrefixForward,
+        backend: Backend,
+        *,
+        extra_losses: Sequence[ExtraLoss],
+        device: torch.device,
+        d_max: int,
+        n_samples: int,
+    ) -> GraphRunner | None:
+        """A :class:`GraphRunner` when the CUDA branch can replay the batch step, else ``None``.
+
+        Replay needs a step that never touches the host: an :class:`IGLModule`
+        (user ``PrefixForward`` modules are not vetted), no extra losses (they
+        may run on a schedule), a loss strategy that does not synchronise
+        (``graph_capturable``), and no data-driven spectral basis (its refresh
+        runs an eigensolver on a schedule).
+        """
+        config = self.config
+        if backend.name != "cuda" or not (config.cuda_graphs or config.torch_compile):
+            return None
+        if not isinstance(module, IGLModule) or extra_losses:
+            return None
+        if not bool(getattr(self.loss, "graph_capturable", True)):
+            return None
+        from igl.spectral.bases.learned_lb import LearnedLaplacianBasis
+
+        if any(isinstance(m, LearnedLaplacianBasis) for m in module.modules()):
+            return None
+        inner_n = min(config.inner_batch_size, n_samples)
+        return GraphRunner(  # pragma: no cover  # CUDA only
+            device=device,
+            lr=config.encoder_lr,
+            batch_size=config.batch_size,
+            inner_n=None if inner_n >= n_samples else inner_n,
+            d_max=d_max,
+            use_graph=config.cuda_graphs,
+            use_compile=config.torch_compile,
+        )
+
+    def _graph_step(
+        self,
+        *,
+        module: IGLModule,
+        backend: Backend,
+        optimizer: AdamW,
+        params: Sequence[nn.Parameter],
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        runner: GraphRunner,
+        loss_sum: torch.Tensor,
+        n_bad: torch.Tensor,
+    ) -> Callable[[], None]:  # pragma: no cover  # CUDA only
+        """The batch step over the runner's static buffers (what gets captured or compiled)."""
+        config = self.config
+
+        def step() -> None:
+            x_batch = x_train.index_select(0, runner.idx)
+            y_batch = y_train.index_select(0, runner.idx)
+            if config.noise_std > 0.0:
+                x_batch = x_batch + config.noise_std * torch.randn_like(x_batch)
+            self.current_batch_indices = runner.idx
+            try:
+                self._batch_step(
+                    module=module,
+                    backend=backend,
+                    optimizer=optimizer,
+                    params=params,
+                    x_train=x_train,
+                    y_train=y_train,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    inner_idx=runner.inner_idx,
+                    mask=runner.mask,
+                    k=0,
+                    n_rows=x_batch.shape[0],
+                    loss_sum=loss_sum,
+                    n_bad=n_bad,
+                    extra_losses=(),
+                    epoch=0,
+                    batch_idx=0,
+                )
+            finally:
+                self.current_batch_indices = None
+
+        return step
+
+    def _fit_epochs(  # noqa: PLR0912, PLR0913, PLR0915 (the epoch loop reads as one unit; splitting obscures it)
+        self,
+        *,
+        module: IGLModule | PrefixForward,
+        backend: Backend,
+        optimizer: AdamW,
+        scheduler: CosineAnnealingWarmRestarts | None,
+        params: Sequence[nn.Parameter],
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        x_val: torch.Tensor | None,
+        y_val: torch.Tensor | None,
+        extra_losses: Sequence[ExtraLoss],
+        on_epoch: Callable[[EpochStats], None] | None,
+        history: TrainingHistory,
+        d_max: int,
+        n_samples: int,
+        use_early_stop: bool,
+        runner: GraphRunner | None,
+        loss_sum: torch.Tensor,
+        n_bad: torch.Tensor,
+    ) -> None:
+        config = self.config
         best_metric: float = -float("inf") if self.loss.higher_is_better else float("inf")
         best_epoch: int = -1
         epochs_since_improvement: int = 0
-        best_state: dict[str, object] | None = None
-        history = TrainingHistory()
+        best_state: dict[str, torch.Tensor] | None = None
 
         for epoch in range(config.epochs):
-            epoch_loss = self._train_one_epoch(
+            n_bad_dev, n_skipped = self._train_one_epoch(
                 module=module,
+                backend=backend,
                 optimizer=optimizer,
                 params=params,
                 x_train=x_train,
@@ -223,21 +411,40 @@ class MatryoshkaTrainer:
                 history=history,
                 epoch=epoch,
                 extra_losses=extra_losses,
+                runner=runner,
+                loss_sum=loss_sum,
+                n_bad=n_bad,
             )
-            if not torch.isfinite(torch.tensor(epoch_loss)):
-                raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
-            history.train_loss.append(epoch_loss)
 
             if scheduler is not None:
                 scheduler.step()
+                if runner is not None:
+                    runner.sync_lr(optimizer)
 
-            val_loss, val_metric = self._validate_and_refresh(
+            val_loss_dev, val_metric_dev = self._validate_and_refresh(
                 module=module,
+                backend=backend,
                 x_train=x_train,
                 y_train=y_train,
                 x_val=x_val,
                 y_val=y_val,
             )
+            # The ONE host transfer of the epoch: everything early stopping, the
+            # divergence check, the history and the logs need, in a single read.
+            loss_sum_host, n_bad_host, val_loss, val_metric = backend.host_scalars(
+                [loss_sum, n_bad_dev, val_loss_dev, val_metric_dev]
+            )
+            # Skipped batches contributed nothing; do not let them drag the mean down.
+            epoch_loss = loss_sum_host / max(n_samples - n_skipped, 1)
+            n_bad_count = int(n_bad_host)
+            if not math.isfinite(epoch_loss):
+                raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss)
+            if n_bad_count > 0:
+                message = f"the readout solve failed in {n_bad_count} batch(es) of epoch {epoch + 1}"
+                if not config.skip_failing_batches:
+                    raise IGLConvergenceError(epoch=epoch + 1, last_loss=epoch_loss, message=message)
+                warnings.warn(f"{message}; those batches trained against the bias only", RuntimeWarning, stacklevel=2)
+            history.train_loss.append(epoch_loss)
             if x_val is not None:
                 history.val_loss.append(val_loss)
                 history.val_metric.append(val_metric)
@@ -248,7 +455,7 @@ class MatryoshkaTrainer:
                     best_metric = val_metric
                     best_epoch = epoch
                     epochs_since_improvement = 0
-                    best_state = self._snapshot(module)
+                    best_state = backend.snapshot(module)
                 else:
                     epochs_since_improvement += 1
 
@@ -283,26 +490,21 @@ class MatryoshkaTrainer:
             history.stop_reason = "max_epochs"
 
         if use_early_stop and best_state is not None:
-            self._restore(module, best_state)
+            backend.restore(module, best_state)
             history.best_epoch = best_epoch
             history.best_metric = best_metric
-            # Refresh source weights from the restored encoder.
-            self._validate_and_refresh(
-                module=module,
-                x_train=x_train,
-                y_train=y_train,
-                x_val=x_val,
-                y_val=y_val,
-            )
+            # Refresh source weights from the restored encoder (the same random
+            # subset draw as an epoch's refresh; no validation pass is needed).
+            module.eval()
+            if isinstance(module, IGLModule):
+                self._refresh_source_weights(module, backend, x_train, y_train)
 
         if isinstance(module, IGLModule) and config.final_refresh is FinalRefresh.FULL:
             # The deployed readout sees every training row, not the random
             # inner_batch_size subset the per-epoch refresh uses. No RNG is
             # consumed, so the encoder's training trajectory is unchanged.
             module.eval()
-            self._refresh_source_weights(module, x_train, y_train, device=device, full=True)
-
-        return history
+            self._refresh_source_weights(module, backend, x_train, y_train, full=True)
 
     def _emit_epoch(
         self,
@@ -341,10 +543,164 @@ class MatryoshkaTrainer:
                 "n/a" if stats.best_epoch is None else stats.best_epoch,
             )
 
-    def _train_one_epoch(  # noqa: PLR0915, PLR0912 (split would obscure single-epoch atomicity)
+    def _train_batch(  # noqa: PLR0913
         self,
         *,
         module: IGLModule | PrefixForward,
+        backend: Backend,
+        optimizer: AdamW,
+        params: Sequence[nn.Parameter],
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        idx: torch.Tensor,
+        x_batch: torch.Tensor,
+        y_batch: torch.Tensor,
+        mask: torch.Tensor,
+        k: int,
+        lstsq_n: int,
+        n_samples: int,
+        loss_sum: torch.Tensor,
+        n_bad: torch.Tensor,
+        extra_losses: Sequence[ExtraLoss],
+        epoch: int,
+        batch_idx: int,
+    ) -> int:
+        """One eager batch; returns the number of rows skipped (``0`` unless a linalg failure was skipped)."""
+        config = self.config
+        # Publish the batch indices so strategies indexed by the original
+        # tensor positions (e.g. ``AIRMLoss(covs=...)``) can look them up.
+        self.current_batch_indices = idx
+        try:
+            # Guard the loss + backward + step compound. AIRM on
+            # ill-conditioned EEG SPDs occasionally produces NaN
+            # gradients via eigh-backward or raises
+            # ``torch._C._LinAlgError`` outright; without this guard a
+            # single bad batch corrupts optimiser moments and flips
+            # training to a different basin (Issue 3.4 in the EEG
+            # reproducibility diagnostic). The guard is opt-in via
+            # ``config.skip_failing_batches`` so non-SPD users keep the
+            # loud-crash semantics.
+            try:
+                inner_idx = None
+                if isinstance(module, IGLModule):
+                    with torch.no_grad():
+                        inner_idx = backend.inner_subset(n_samples, lstsq_n, x_train.device)
+                self._batch_step(
+                    module=module,
+                    backend=backend,
+                    optimizer=optimizer,
+                    params=params,
+                    x_train=x_train,
+                    y_train=y_train,
+                    x_batch=x_batch,
+                    y_batch=y_batch,
+                    inner_idx=inner_idx,
+                    mask=mask,
+                    k=k,
+                    n_rows=int(idx.shape[0]),
+                    loss_sum=loss_sum,
+                    n_bad=n_bad,
+                    extra_losses=extra_losses,
+                    epoch=epoch,
+                    batch_idx=batch_idx,
+                )
+            except (RuntimeError, _LinAlgError) as exc:
+                # Only the linear-algebra family is skippable; a shape bug
+                # or an out-of-memory error must still surface.
+                if not config.skip_failing_batches or not _is_linalg_failure(exc):
+                    raise
+                optimizer.zero_grad()
+                return int(idx.shape[0])
+        finally:
+            self.current_batch_indices = None
+        return 0
+
+    def _batch_step(  # noqa: PLR0913
+        self,
+        *,
+        module: IGLModule | PrefixForward,
+        backend: Backend,
+        optimizer: AdamW,
+        params: Sequence[nn.Parameter],
+        x_train: torch.Tensor,
+        y_train: torch.Tensor,
+        x_batch: torch.Tensor,
+        y_batch: torch.Tensor,
+        inner_idx: torch.Tensor | None,
+        mask: torch.Tensor,
+        k: int,
+        n_rows: int,
+        loss_sum: torch.Tensor,
+        n_bad: torch.Tensor,
+        extra_losses: Sequence[ExtraLoss],
+        epoch: int,
+        batch_idx: int,
+    ) -> None:
+        """The tensor body of one batch: inner solve, outer forward, loss, backward, optimizer step.
+
+        No host interaction and no Python control flow on tensor values, so the
+        CUDA branch can record it into a graph (:class:`igl.core._graph.GraphRunner`).
+        """
+        config = self.config
+        device = x_train.device
+        optimizer.zero_grad()
+
+        if isinstance(module, IGLModule):
+            z = module.encoder(x_batch)
+            z_trunc = z * mask.unsqueeze(0)
+            phi = module.green(z_trunc, gate_mask=mask)
+            phi = normalize_phi(phi, module.normalize)
+
+            with torch.no_grad():
+                x_lstsq, y_lstsq = _rows(x_train, y_train, inner_idx)
+                z_lstsq = module.encoder(x_lstsq) * mask.unsqueeze(0)
+                phi_lstsq = module.green(z_lstsq, gate_mask=mask)
+                phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
+                target_lstsq = self.loss.target(y_lstsq) - module.bias.detach()
+                w_k, bad = backend.ridge_solve(phi_lstsq, target_lstsq, l2=config.source_l2)
+                w_k = w_k.to(device)
+                n_bad.add_(bad.to(device=device, dtype=torch.int64))
+
+            output = phi @ w_k + module.bias
+        else:
+            # PrefixForward path: no inner solve; plain gradient descent
+            # through the prefix-masked forward.
+            output = module(x_batch, gate_mask=mask)
+        target_batch = self.loss.target(y_batch)
+        task_loss = self.loss.loss(output, target_batch)
+
+        # Fold in any ExtraLoss regularizers (orthogonality,
+        # gate sparsity, etc.).
+        for extra in extra_losses:
+            if not isinstance(module, IGLModule):
+                break  # ExtraLoss regularizers are defined on the VP decomposition
+            if batch_idx % extra.every != 0:
+                continue
+            contribution = extra(
+                encoder=module.encoder,
+                x_batch=x_batch,
+                gate_mask=mask,
+                k=k,
+                epoch=epoch,
+                batch_idx=batch_idx,
+            )
+            if contribution is not None:
+                task_loss = task_loss + extra.weight * contribution
+
+        # torch's autograd entry points have partial stubs.
+        task_loss.backward()  # pyright: ignore[reportUnknownMemberType]
+
+        if config.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(params, config.grad_clip)
+        optimizer.step()  # pyright: ignore[reportUnknownMemberType]
+
+        loss_sum.add_(task_loss.detach().to(loss_sum.dtype) * n_rows)
+
+    def _train_one_epoch(  # noqa: PLR0915, PLR0912, PLR0913 (split would obscure single-epoch atomicity)
+        self,
+        *,
+        module: IGLModule | PrefixForward,
+        backend: Backend,
         optimizer: AdamW,
         params: Sequence[nn.Parameter],
         x_train: torch.Tensor,
@@ -354,103 +710,89 @@ class MatryoshkaTrainer:
         history: TrainingHistory,
         epoch: int,
         extra_losses: Sequence[ExtraLoss],
-    ) -> float:
+        runner: GraphRunner | None,
+        loss_sum: torch.Tensor,
+        n_bad: torch.Tensor,
+    ) -> tuple[torch.Tensor, int]:
+        """One epoch, without touching the host.
+
+        Accumulates the training loss into ``loss_sum`` (a 0-d device tensor,
+        float64 where the device has it) and the number of failed readout
+        solves into ``n_bad``; returns ``n_bad`` and the number of samples in
+        skipped batches (a Python int known to the host).
+        """
         config = self.config
         module.train()
         device = x_train.device
         perm = torch.randperm(n_samples, device=device)
-        epoch_loss = 0.0
+        # Summed on the device with the reference arithmetic (fp32 loss -> double,
+        # times the batch size, added) so the CPU history stays bit-identical.
+        loss_sum.zero_()
+        n_bad.zero_()
         k_sum = 0
         n_batches = 0
         n_skipped = 0
+        # Row k of the table is the gate mask for budget k: built once instead
+        # of two launches per batch. Values are the 0/1 floats they always were.
+        masks = _gate_masks(d_max, device)
+        lstsq_n = min(config.inner_batch_size, n_samples)
 
         for i in range(0, n_samples, config.batch_size):
             idx = perm[i : i + config.batch_size]
-            x_batch = x_train[idx]
-            y_batch = y_train[idx]
-            if config.noise_std > 0.0:
-                x_batch = x_batch + config.noise_std * torch.randn_like(x_batch)
-
-            k = self.sampler(d_max)
-            k_sum += k
-            n_batches += 1
-
-            optimizer.zero_grad()
-            mask = torch.zeros(d_max, device=device)
-            mask[:k] = 1.0
-
-            if isinstance(module, IGLModule):
-                z = module.encoder(x_batch)
-                z_trunc = z * mask.unsqueeze(0)
-                phi = module.green(z_trunc, gate_mask=mask)
-                phi = normalize_phi(phi, module.normalize)
-
-                with torch.no_grad():
-                    lstsq_n = min(config.inner_batch_size, n_samples)
-                    lstsq_idx = torch.randperm(n_samples, device=device)[:lstsq_n]
-                    z_lstsq = module.encoder(x_train[lstsq_idx]) * mask.unsqueeze(0)
-                    phi_lstsq = module.green(z_lstsq, gate_mask=mask)
-                    phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
-                    target_lstsq = self.loss.target(y_train[lstsq_idx]) - module.bias.detach()
-                    w_k = direct_solve_weights(phi_lstsq, target_lstsq, l2=config.source_l2).to(device)
-
-                output = phi @ w_k + module.bias
-            else:
-                # PrefixForward path: no inner solve; plain gradient descent
-                # through the prefix-masked forward.
-                output = module(x_batch, gate_mask=mask)
-            target_batch = self.loss.target(y_batch)
-            # Publish the batch indices so strategies indexed by the original
-            # tensor positions (e.g. ``AIRMLoss(covs=...)``) can look them up.
-            self.current_batch_indices = idx
-            try:
-                # Guard the loss + backward + step compound. AIRM on
-                # ill-conditioned EEG SPDs occasionally produces NaN
-                # gradients via eigh-backward or raises
-                # ``torch._C._LinAlgError`` outright; without this guard a
-                # single bad batch corrupts optimiser moments and flips
-                # training to a different basin (Issue 3.4 in the EEG
-                # reproducibility diagnostic). The guard is opt-in via
-                # ``config.skip_failing_batches`` so non-SPD users keep the
-                # loud-crash semantics.
+            if runner is not None and not runner.disabled and idx.shape[0] == config.batch_size:
+                # CUDA graph replay of a full batch: only the buffers are filled
+                # from Python; the recorded kernels do the rest.
+                k = self.sampler(d_max)
+                k_sum += k
+                n_batches += 1
+                inner_idx = backend.inner_subset(n_samples, lstsq_n, device)
                 try:
-                    task_loss = self.loss.loss(output, target_batch)
+                    runner.run(idx=idx, mask=masks[k], inner_idx=inner_idx)
+                    continue
+                except RuntimeError as exc:  # pragma: no cover  # CUDA only
+                    runner.disabled = True
+                    warnings.warn(
+                        f"CUDA graph capture of the batch step failed ({str(exc).splitlines()[0][:120]}); "
+                        "training continues eagerly",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    mask = masks[k]
+                    x_batch = x_train[idx]
+                    y_batch = y_train[idx]
+                    if config.noise_std > 0.0:
+                        x_batch = x_batch + config.noise_std * torch.randn_like(x_batch)
+            else:
+                x_batch = x_train[idx]
+                y_batch = y_train[idx]
+                if config.noise_std > 0.0:
+                    x_batch = x_batch + config.noise_std * torch.randn_like(x_batch)
 
-                    # Fold in any ExtraLoss regularizers (orthogonality,
-                    # gate sparsity, etc.).
-                    for extra in extra_losses:
-                        if not isinstance(module, IGLModule):
-                            break  # ExtraLoss regularizers are defined on the VP decomposition
-                        if (n_batches - 1) % extra.every != 0:
-                            continue
-                        contribution = extra(
-                            encoder=module.encoder,
-                            x_batch=x_batch,
-                            gate_mask=mask,
-                            k=k,
-                            epoch=epoch,
-                            batch_idx=n_batches - 1,
-                        )
-                        if contribution is not None:
-                            task_loss = task_loss + extra.weight * contribution
+                k = self.sampler(d_max)
+                k_sum += k
+                n_batches += 1
+                mask = masks[k]
 
-                    # torch's autograd entry points have partial stubs.
-                    task_loss.backward()  # pyright: ignore[reportUnknownMemberType]
-
-                    if config.grad_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(params, config.grad_clip)
-                    optimizer.step()  # pyright: ignore[reportUnknownMemberType]
-
-                    epoch_loss += float(task_loss.item()) * int(idx.shape[0])
-                except (RuntimeError, _LinAlgError) as exc:
-                    # Only the linear-algebra family is skippable; a shape bug
-                    # or an out-of-memory error must still surface.
-                    if not config.skip_failing_batches or not _is_linalg_failure(exc):
-                        raise
-                    optimizer.zero_grad()
-                    n_skipped += int(idx.shape[0])
-            finally:
-                self.current_batch_indices = None
+            n_skipped += self._train_batch(
+                module=module,
+                backend=backend,
+                optimizer=optimizer,
+                params=params,
+                x_train=x_train,
+                y_train=y_train,
+                idx=idx,
+                x_batch=x_batch,
+                y_batch=y_batch,
+                mask=mask,
+                k=k,
+                lstsq_n=lstsq_n,
+                n_samples=n_samples,
+                loss_sum=loss_sum,
+                n_bad=n_bad,
+                extra_losses=extra_losses,
+                epoch=epoch,
+                batch_idx=n_batches - 1,
+            )
 
         history.truncation_k.append(k_sum / max(n_batches, 1))
 
@@ -466,8 +808,7 @@ class MatryoshkaTrainer:
         if config.sigma_max_diagnostic and isinstance(module, IGLModule):
             self._sigma_max_diagnostic_step(module=module, x_train=x_train, device=device)
 
-        # Skipped batches contributed nothing; do not let them drag the mean down.
-        return epoch_loss / max(n_samples - n_skipped, 1)
+        return n_bad, n_skipped
 
     @staticmethod
     def _sigma_max_diagnostic_step(
@@ -509,17 +850,23 @@ class MatryoshkaTrainer:
         self,
         *,
         module: IGLModule | PrefixForward,
+        backend: Backend,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         x_val: torch.Tensor | None,
         y_val: torch.Tensor | None,
-    ) -> tuple[float, float]:
+    ) -> tuple[torch.Tensor | float, torch.Tensor | float]:
+        """Refresh the readout, then score the validation split without touching the host.
+
+        Returns the validation loss and metric as 0-d device tensors (or Python
+        floats when there is no validation split, or the strategy has no
+        ``metric_tensor``); the caller transfers them together.
+        """
         config = self.config
-        device = next(module.parameters()).device
         module.eval()
 
         if isinstance(module, IGLModule):
-            self._refresh_source_weights(module, x_train, y_train, device=device)
+            self._refresh_source_weights(module, backend, x_train, y_train)
 
         if x_val is None or y_val is None:
             return 0.0, 0.0
@@ -528,12 +875,19 @@ class MatryoshkaTrainer:
         # validation can hit the same eigh-backward NaN paths. On failure
         # surface a sentinel "worst possible" loss so early stopping treats
         # it as a non-improving epoch instead of crashing on a NaN.
+        metric_tensor = cast(
+            "Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None", getattr(self.loss, "metric_tensor", None)
+        )
         with torch.no_grad():
             try:
                 output = module(x_val)
                 target_val = self.loss.target(y_val)
-                val_loss = float(self.loss.loss(output, target_val).item())
-                val_metric = self.loss.metric(output, target_val)
+                val_loss: torch.Tensor | float = self.loss.loss(output, target_val).detach()
+                val_metric: torch.Tensor | float = (
+                    metric_tensor(output, target_val).detach()
+                    if metric_tensor is not None
+                    else self.loss.metric(output, target_val)
+                )
             except (RuntimeError, _LinAlgError) as exc:
                 if not config.skip_failing_batches or not _is_linalg_failure(exc):
                     raise
@@ -545,33 +899,32 @@ class MatryoshkaTrainer:
     def _refresh_source_weights(
         self,
         module: IGLModule,
+        backend: Backend,
         x_train: torch.Tensor,
         y_train: torch.Tensor,
         *,
-        device: torch.device,
         full: bool = False,
     ) -> None:
         """Re-solve the readout on a random ``inner_batch_size`` subset, or on every row when ``full``."""
         config = self.config
+        device = x_train.device
         with torch.no_grad():
             if full:
-                inner_idx = torch.arange(x_train.shape[0], device=device)
+                inner_idx: torch.Tensor | None = torch.arange(x_train.shape[0], device=device)
             else:
                 inner_n = min(config.inner_batch_size, x_train.shape[0])
-                inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
-            z_full = module.encoder(x_train[inner_idx])
+                inner_idx = backend.inner_subset(x_train.shape[0], inner_n, device)
+            x_inner, y_inner = _rows(x_train, y_train, inner_idx)
+            z_full = module.encoder(x_inner)
             phi_full = module.green(z_full)
             phi_full = normalize_phi(phi_full, module.normalize)
-            target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
-            # Guard a diverged encoder: a non-finite phi/target means training
-            # has blown up, and direct_solve_weights would crash *inside* its
-            # lstsq/SVD backend with an opaque torch LinAlgError. Skip the
-            # refresh and keep the last good source weights — the trainer's
-            # non-finite-loss check then raises a clean IGLConvergenceError on
-            # the next epoch instead of crashing. Bit-identical on healthy runs.
-            if torch.isfinite(phi_full).all() and torch.isfinite(target_full).all():
-                w_full = direct_solve_weights(phi_full, target_full, l2=config.source_l2).to(device)
-                module.set_source_weights(w_full)
+            target_full = self.loss.target(y_inner) - module.bias.detach()
+            # The backend decides how a suspect solve is handled: the CPU branch
+            # keeps its host guard (verbatim), the device branches keep the last
+            # good readout through a device flag. Either way the trainer's
+            # non-finite-loss check raises cleanly on the next epoch.
+            w_full = backend.refresh_weights(phi_full, target_full, l2=config.source_l2, current=module.source_weights)
+            module.set_source_weights(w_full.to(device))
 
     def _classify_stop(self, history: TrainingHistory) -> str:
         """Distinguish a validation plateau from a stop that fired mid-improvement."""
@@ -587,28 +940,6 @@ class MatryoshkaTrainer:
         threshold = _TREND_RELATIVE_TOLERANCE
         improving = relative_change > threshold if self.loss.higher_is_better else relative_change < -threshold
         return "improving_at_stop" if improving else "plateau"
-
-    @staticmethod
-    def _snapshot(module: IGLModule | PrefixForward) -> dict[str, object]:
-        if isinstance(module, IGLModule):
-            return {
-                "encoder": {k: v.detach().cpu().clone() for k, v in module.encoder.state_dict().items()},
-                "green": {k: v.detach().cpu().clone() for k, v in module.green.state_dict().items()},
-                "bias": module.bias.detach().cpu().clone(),
-            }
-        return {"state": {k: v.detach().cpu().clone() for k, v in module.state_dict().items()}}
-
-    @staticmethod
-    def _restore(module: IGLModule | PrefixForward, snapshot: dict[str, object]) -> None:
-        if isinstance(module, IGLModule):
-            encoder_state = cast(dict[str, torch.Tensor], snapshot["encoder"])
-            green_state = cast(dict[str, torch.Tensor], snapshot["green"])
-            bias = cast(torch.Tensor, snapshot["bias"])
-            module.encoder.load_state_dict(encoder_state)
-            module.green.load_state_dict(green_state)
-            module.bias.data.copy_(bias.to(module.bias.device))
-            return
-        module.load_state_dict(cast(dict[str, torch.Tensor], snapshot["state"]))
 
 
 __all__ = ["MatryoshkaTrainer", "TrainingHistory"]

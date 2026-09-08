@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from igl.exceptions import IGLConfigError
-from igl.spd.linalg import matrix_exp_sym, matrix_log_sym, matrix_pow_sym, unpack_sym_vec
+from igl.spd.linalg import MatrixMethod, matrix_exp_sym, matrix_log_sym, matrix_pow_sym, unpack_sym_vec
 
 if TYPE_CHECKING:
     from igl.core.trainer import MatryoshkaTrainer
@@ -35,6 +35,7 @@ def airm_loss(
     eps: float = 1e-8,
     reduction: str = "mean",
     c_inv_half: torch.Tensor | None = None,
+    method: MatrixMethod = "eigh",
 ) -> torch.Tensor:
     """Affine-Invariant Riemannian Metric² between batched SPD matrices.
 
@@ -50,6 +51,8 @@ def airm_loss(
             training loop and pass it here — bit-identical to computing it
             inline (per-matrix ``eigh`` is independent of batching), but skips
             one of the three per-batch ``eigh`` calls.
+        method: How the matrix functions are computed; see
+            :data:`igl.spd.linalg.MatrixMethod`.
 
     Returns:
         Scalar (mean/sum) or per-sample AIRM² values.
@@ -58,9 +61,9 @@ def airm_loss(
         IGLConfigError: For an unknown ``reduction`` value.
     """
     if c_inv_half is None:
-        c_inv_half = matrix_pow_sym(c, -0.5, eps=eps)
+        c_inv_half = matrix_pow_sym(c, -0.5, eps=eps, method=method)
     a = c_inv_half @ c_hat @ c_inv_half
-    log_a = matrix_log_sym(a, eps=eps)
+    log_a = matrix_log_sym(a, eps=eps, method=method)
     sq_per_sample = (log_a**2).sum(dim=(-1, -2))
     if reduction == "mean":
         return sq_per_sample.mean()
@@ -107,6 +110,10 @@ class AIRMLoss:
         trainer: The :class:`MatryoshkaTrainer` instance the loss is attached
             to. Required when ``covs`` is set. Stored as a back-reference so
             the loss can read ``trainer.current_batch_indices`` per batch.
+        matrix_method: ``"eigh"`` (default) or ``"iterative"`` for the matrix
+            exp / log / inverse square root; see
+            :data:`igl.spd.linalg.MatrixMethod`. The iterative form performs no
+            host synchronisation on CUDA.
 
     Attributes:
         higher_is_better: Always ``False`` — AIRM² is a distance.
@@ -118,6 +125,7 @@ class AIRMLoss:
     jitter: float
     covs: torch.Tensor | None
     trainer: MatryoshkaTrainer | None
+    matrix_method: MatrixMethod
 
     def __init__(
         self,
@@ -127,6 +135,7 @@ class AIRMLoss:
         jitter: float = 1e-5,
         covs: torch.Tensor | None = None,
         trainer: MatryoshkaTrainer | None = None,
+        matrix_method: MatrixMethod = "eigh",
     ) -> None:
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
@@ -141,10 +150,16 @@ class AIRMLoss:
         self.jitter = jitter
         self.covs = covs
         self.trainer = trainer
+        self.matrix_method = matrix_method
         # Lazily-filled cache of C^{-1/2} for the (constant) data covariances,
         # so the training path skips one of three per-batch eigh calls. Reset
         # whenever covs is relocated to a new device.
         self._cov_inv_half: torch.Tensor | None = None
+
+    @property
+    def graph_capturable(self) -> bool:
+        """Whether the loss can be recorded into a CUDA graph: only the iterative functions can (``eigh`` synchronises)."""
+        return self.matrix_method == "iterative"
 
     def target(self, y: torch.Tensor) -> torch.Tensor:
         """Pass-through: the log-Eig vector is already the lstsq target."""
@@ -153,7 +168,7 @@ class AIRMLoss:
     def _to_spd(self, vec: torch.Tensor) -> torch.Tensor:
         """Lift a log-Eig vector back to an SPD matrix (no jitter — round-trip path)."""
         sym = unpack_sym_vec(vec, self.latent_dim)
-        return matrix_exp_sym(sym)
+        return matrix_exp_sym(sym, method=self.matrix_method)
 
     def _pred_to_spd(self, vec: torch.Tensor) -> torch.Tensor:
         """Lift the predicted log-Eig vector back to an SPD matrix, jitter inside the exp.
@@ -168,7 +183,7 @@ class AIRMLoss:
         sym = unpack_sym_vec(vec, self.latent_dim)
         if self.jitter > 0:
             sym = sym + self._jitter_eye(sym.device, sym.dtype)
-        return matrix_exp_sym(sym)
+        return matrix_exp_sym(sym, method=self.matrix_method)
 
     def _jitter_eye(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         return self.jitter * torch.eye(self.latent_dim, device=device, dtype=dtype)
@@ -207,18 +222,26 @@ class AIRMLoss:
             # matrix_pow_sym(c, -0.5): per-matrix eigh is independent of batching.
             if self._cov_inv_half is None:
                 c_full = self.covs + self._jitter_eye(self.covs.device, self.covs.dtype) if self.jitter > 0 else self.covs
-                self._cov_inv_half = matrix_pow_sym(c_full, -0.5, eps=self.eps)
+                self._cov_inv_half = matrix_pow_sym(c_full, -0.5, eps=self.eps, method=self.matrix_method)
             c_inv_half = self._cov_inv_half.index_select(0, idx)
             c_hat = self._pred_to_spd(pred)
-            return airm_loss(c, c_hat, eps=self.eps, reduction="mean", c_inv_half=c_inv_half)
+            return airm_loss(c, c_hat, eps=self.eps, reduction="mean", c_inv_half=c_inv_half, method=self.matrix_method)
         c = self._to_spd(target)
         if self.jitter > 0:
             c = c + self._jitter_eye(c.device, c.dtype)
         c_hat = self._pred_to_spd(pred)
-        return airm_loss(c, c_hat, eps=self.eps, reduction="mean")
+        return airm_loss(c, c_hat, eps=self.eps, reduction="mean", method=self.matrix_method)
+
+    def metric_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """AIRM² as a 0-d tensor on ``pred``'s device."""
+        return self.loss(pred, target)
 
     def metric(self, pred: torch.Tensor, target: torch.Tensor) -> float:
-        return float(self.loss(pred, target).item())
+        return float(self.metric_tensor(pred, target).item())
+
+    def curve_score_tensor(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """AIRM² as a 0-d tensor on ``pred``'s device."""
+        return self.metric_tensor(pred, target)
 
     def curve_score(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Dimension-curve score = AIRM² (already lower-is-better and not saturating)."""

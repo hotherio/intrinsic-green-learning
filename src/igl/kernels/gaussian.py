@@ -14,7 +14,20 @@ class _Gaussian:
         return log_abs, torch.ones_like(d)
 
 
+def _squared_distance(d: torch.Tensor) -> torch.Tensor:
+    return d * d
+
+
+def _inverse_two_sigma_squared(sigma: torch.Tensor) -> torch.Tensor:
+    return 1.0 / (2 * sigma**2 + KERNEL_EPS)
+
+
 gaussian = _Gaussian()
-register_operator("gaussian", gaussian, is_oscillatory=gaussian.is_oscillatory)
+register_operator(
+    "gaussian",
+    gaussian,
+    is_oscillatory=gaussian.is_oscillatory,
+    separable=(_squared_distance, _inverse_two_sigma_squared),
+)
 
 __all__ = ["gaussian"]

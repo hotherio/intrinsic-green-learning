@@ -24,6 +24,8 @@ from igl.types import (
     EncoderKindLike,
     FinalRefresh,
     FinalRefreshLike,
+    MatmulPrecision,
+    MatmulPrecisionLike,
     NormalizeMode,
     NormalizeModeLike,
     NormType,
@@ -172,11 +174,17 @@ class MatryoshkaConfig:
     sigma_max_diagnostic: bool = False
     skip_failing_batches: bool = False
     final_refresh: FinalRefreshLike = FinalRefresh.FULL
+    matmul_precision: MatmulPrecisionLike = MatmulPrecision.TF32
+    # CUDA branch only: replay the batch step from a CUDA graph, and/or fuse it
+    # with torch.compile first (a few seconds of compilation per fit).
+    cuda_graphs: bool = True
+    torch_compile: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sampling", SamplingMode(self.sampling))
         object.__setattr__(self, "scheduler", SchedulerType(self.scheduler))
         object.__setattr__(self, "final_refresh", FinalRefresh(self.final_refresh))
+        object.__setattr__(self, "matmul_precision", MatmulPrecision(self.matmul_precision))
 
 
 def _operator_to_serial(value: OperatorName | tuple[OperatorName, ...]) -> str | list[str]:
@@ -217,6 +225,7 @@ class IGLConfig:
         matryoshka_sampling = cast(SamplingMode, self.matryoshka.sampling)
         matryoshka_scheduler = cast(SchedulerType, self.matryoshka.scheduler)
         matryoshka_final_refresh = cast(FinalRefresh, self.matryoshka.final_refresh)
+        matryoshka_precision = cast(MatmulPrecision, self.matryoshka.matmul_precision)
 
         hidden_serial: int | list[int]
         hidden_serial = self.encoder.hidden if isinstance(self.encoder.hidden, int) else list(self.encoder.hidden)
@@ -260,6 +269,9 @@ class IGLConfig:
                 "sigma_max_diagnostic": self.matryoshka.sigma_max_diagnostic,
                 "skip_failing_batches": self.matryoshka.skip_failing_batches,
                 "final_refresh": str(matryoshka_final_refresh),
+                "matmul_precision": str(matryoshka_precision),
+                "cuda_graphs": self.matryoshka.cuda_graphs,
+                "torch_compile": self.matryoshka.torch_compile,
             },
         }
 
@@ -430,6 +442,9 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         sigma_max_diagnostic=_typed_get(data, "sigma_max_diagnostic", d.sigma_max_diagnostic),
         skip_failing_batches=_typed_get(data, "skip_failing_batches", d.skip_failing_batches),
         final_refresh=cast(FinalRefreshLike, data.get("final_refresh", d.final_refresh)),
+        matmul_precision=cast(MatmulPrecisionLike, data.get("matmul_precision", d.matmul_precision)),
+        cuda_graphs=_typed_get(data, "cuda_graphs", d.cuda_graphs),
+        torch_compile=_typed_get(data, "torch_compile", d.torch_compile),
     )
 
 

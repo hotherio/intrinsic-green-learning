@@ -19,7 +19,7 @@ the run directory; otherwise only CSV / JSON outputs are written.
 import warnings
 
 import igl
-from examples._utils import git_short_sha, make_run_dir, save_curve, set_seed
+from examples._utils import example_device, git_short_sha, make_run_dir, save_curve, set_seed
 from igl.data import make_swiss_roll
 
 EXAMPLE_NAME = "swiss_roll_recon"
@@ -50,6 +50,7 @@ def main() -> None:
         "encoder_hidden": (64, 32),
         "random_state": 42,
         "config": config,
+        "device": example_device(),
     }
 
     print("=" * 60)

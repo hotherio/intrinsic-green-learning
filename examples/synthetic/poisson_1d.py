@@ -25,7 +25,7 @@ import warnings
 import torch
 
 import igl
-from examples._utils import git_short_sha, make_run_dir, save_curve, set_seed
+from examples._utils import example_device, git_short_sha, make_run_dir, save_curve, set_seed
 from igl.spectral import (
     ConstantNullSpace,
     FourierCosineBasis,
@@ -47,7 +47,8 @@ def _make_problem() -> tuple[torch.Tensor, torch.Tensor]:
     a_const = 0.4
     b = 1.0
     u = 0.5 * a_const * x**2 + (b / math.pi**2) * torch.cos(math.pi * x)
-    return x, u
+    device = example_device()
+    return x.to(device), u.to(device)
 
 
 def _train(
@@ -92,7 +93,7 @@ def main() -> None:
             output_dim=1,
             kernel=gk_local,
             normalize_input=False,
-        )
+        ).to(example_device())
         mse_local = _train(mod_local, x, u)
         pred_local = mod_local(x).detach()
         bias_local = (pred_local - u).mean().item()
@@ -113,7 +114,7 @@ def main() -> None:
             output_dim=1,
             kernel=gk_null,
             normalize_input=False,
-        )
+        ).to(example_device())
         mse_null = _train(mod_null, x, u)
         pred_null = mod_null(x).detach()
         bias_null = (pred_null - u).mean().item()
@@ -134,7 +135,7 @@ def main() -> None:
             output_dim=1,
             kernel=spk,
             normalize_input=False,
-        )
+        ).to(example_device())
         mse_spec = _train(mod_spec, x, u)
         pred_spec = mod_spec(x).detach()
         bias_spec = (pred_spec - u).mean().item()

@@ -22,7 +22,7 @@ Run with::
 import warnings
 
 import igl
-from examples._utils import git_short_sha, make_run_dir, save_curve, set_seed
+from examples._utils import example_device, git_short_sha, make_run_dir, save_curve, set_seed
 from igl.data import embed_in_high_dim, make_moons
 
 EXAMPLE_NAME = "moons_xor"
@@ -58,6 +58,7 @@ def main() -> None:
         "encoder_hidden": (96, 48),
         "random_state": 42,
         "config": fast,
+        "device": example_device(),
     }
 
     print("=" * 60)

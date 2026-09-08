@@ -227,3 +227,36 @@ def test_spectral_kernel_rejects_joint_basis_in_a_sequence() -> None:
 
     with pytest.raises(IGLConfigError, match="joint basis"):
         SpectralKernel(latent_dim=2, bases=[LearnedLaplacianBasis(n_modes=4), FourierSineBasis(n_modes=4)])
+
+
+def test_spectral_kernel_gate_mask_never_reads_the_mask_on_the_host(mocker: object) -> None:
+    import sys
+
+    original = torch.Tensor.item
+    calls: list[str] = []
+
+    def spy(self: torch.Tensor) -> object:
+        calls.append(sys._getframe(1).f_code.co_filename.rsplit("/", 1)[-1])  # noqa: SLF001
+        return original(self)
+
+    getattr(mocker, "patch").object(torch.Tensor, "item", new=spy)  # noqa: B009
+    sk = SpectralKernel(latent_dim=3, bases=FourierSineBasis(n_modes=4), n_anchors=5)
+    out = sk(torch.rand(6, 3), gate_mask=torch.tensor([1.0, 0.0, 1.0]))
+    assert out.shape == (6, 5)
+    assert "kernel.py" not in calls, calls
+
+
+def test_spectral_kernel_keeps_its_mode_indices_as_non_persistent_buffers() -> None:
+    from igl.spectral import FourierCosineBasis, SpectralKernel
+
+    kernel = SpectralKernel(latent_dim=2, bases=FourierCosineBasis(n_modes=5), n_anchors=4)
+    assert kernel._keep_index(0).tolist() == kernel._keeps[0]  # noqa: SLF001
+    assert kernel._keep_index(0).dtype == torch.long  # noqa: SLF001
+    assert not any(name.startswith("_keep_index_") for name in kernel.state_dict())
+    z = torch.randn(7, 2)
+    phi = kernel(z)
+    assert phi.shape[0] == 7
+    # Legacy checkpoints (no such buffers) still load.
+    fresh = SpectralKernel(latent_dim=2, bases=FourierCosineBasis(n_modes=5), n_anchors=4)
+    fresh.load_state_dict(kernel.state_dict())
+    torch.testing.assert_close(fresh(z), phi)

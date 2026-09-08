@@ -250,6 +250,27 @@ FinalRefreshLiteral = Literal["full", "subset"]
 type FinalRefreshLike = FinalRefresh | FinalRefreshLiteral
 
 
+class MatmulPrecision(StrEnum):
+    """Matmul precision the CUDA branch holds during a fit.
+
+    - ``TF32`` (default): TensorFloat-32 for the encoder and kernel matmuls
+      (Ampere and later); the readout solve, its refinement and the kernel's
+      contraction always run in full precision.
+    - ``FP32``: no TF32 anywhere. Slower, closest to the CPU numbers.
+
+    Ignored on CPU and MPS.
+    """
+
+    TF32 = "tf32"
+    FP32 = "fp32"
+
+
+MatmulPrecisionLiteral = Literal["tf32", "fp32"]
+"""Literal companion of :class:`MatmulPrecision`."""
+
+MatmulPrecisionLike = MatmulPrecision | MatmulPrecisionLiteral
+
+
 class DomainMap(StrEnum):
     """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
 
@@ -329,6 +350,17 @@ class LossStrategy(Protocol):
             (e.g. accuracy), ``False`` when minimised (e.g. MSE, AIRM).
             ``curve_score()`` is always lower-is-better regardless of this
             flag.
+
+    A strategy may also define ``metric_tensor(pred, target) -> Tensor`` and
+    ``curve_score_tensor(pred, target) -> Tensor`` returning the same values
+    as 0-d tensors on the prediction's device. The trainer and the dimension
+    curve prefer them, so an epoch (or a whole curve) needs a single host
+    transfer; without them each call costs one synchronisation.
+
+    A strategy that synchronises with the host inside ``loss`` (an eigensolver,
+    a ``.item()``) should expose ``graph_capturable = False`` so the CUDA branch
+    does not try to record the batch step into a CUDA graph; the default is
+    ``True``.
     """
 
     higher_is_better: bool
@@ -479,6 +511,9 @@ __all__ = [
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",
     "LossStrategy",
+    "MatmulPrecision",
+    "MatmulPrecisionLike",
+    "MatmulPrecisionLiteral",
     "MatryoshkaSampler",
     "NormType",
     "NormTypeLike",

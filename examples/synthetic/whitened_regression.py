@@ -24,7 +24,7 @@ import json
 import torch
 import torch.nn.functional as F  # noqa: N812
 
-from examples._utils import make_run_dir, set_seed
+from examples._utils import example_device, make_run_dir, set_seed
 from igl import IGLDistiller, IGLModule, MatryoshkaConfig, MatryoshkaTrainer, MSELoss
 from igl.whitening import TargetWhitener, WhitenedMSELoss, fisher_pullback
 
@@ -44,22 +44,24 @@ def main() -> None:
 
     # States with anisotropic variance: the top variance directions carry
     # little of what the head reads (the paper's dissociation, in miniature).
+    device = example_device()
     scales = torch.linspace(3.0, 0.1, state_dim)
-    states = torch.randn(n_samples, state_dim) * scales
+    states = (torch.randn(n_samples, state_dim) * scales).to(device)
     w = torch.randn(vocab, state_dim) / state_dim**0.5
     w[:, :4] *= 0.05  # the head barely reads the four highest-variance directions
+    w = w.to(device)
 
     config = MatryoshkaConfig(epochs=200, batch_size=128, early_stop_patience=None)
     results: dict[str, dict[int, float]] = {}
 
     for name in ("plain_mse", "fisher_whitened"):
         set_seed(42)
-        module = IGLModule(input_dim=state_dim, max_dim=max_dim, output_dim=state_dim, n_anchors=32, n_scales=3)
+        module = IGLModule(input_dim=state_dim, max_dim=max_dim, output_dim=state_dim, n_anchors=32, n_scales=3).to(device)
         if name == "plain_mse":
             loss = MSELoss()
             unwhiten = None
         else:
-            whitener = TargetWhitener(fisher_pullback(w, states, n_sub=n_samples)).fit(states)
+            whitener = TargetWhitener(fisher_pullback(w.cpu(), states.cpu(), n_sub=n_samples)).fit(states.cpu())
             loss = WhitenedMSELoss(whitener)
             unwhiten = whitener.inverse_transform
         MatryoshkaTrainer(loss=loss, config=config).fit(module, states, states)
@@ -67,12 +69,12 @@ def main() -> None:
         curve: dict[int, float] = {}
         with torch.no_grad():
             for k in (2, 4, 8, max_dim):
-                mask = torch.zeros(max_dim)
+                mask = torch.zeros(max_dim, device=device)
                 mask[:k] = 1.0
-                y_hat = module(states, gate_mask=mask)
+                y_hat = module(states, gate_mask=mask).cpu()
                 if unwhiten is not None:
                     y_hat = unwhiten(y_hat)
-                curve[k] = _downstream_kl(w, states, y_hat)
+                curve[k] = _downstream_kl(w.cpu(), states.cpu(), y_hat)
         results[name] = curve
         print(f"{name}: " + "  ".join(f"k={k}: KL={v:.4f}" for k, v in curve.items()))
 
@@ -80,12 +82,13 @@ def main() -> None:
     set_seed(42)
     distiller = IGLDistiller(
         max_dim=max_dim,
-        metric=fisher_pullback(w, states, n_sub=n_samples),
+        metric=fisher_pullback(w.cpu(), states.cpu(), n_sub=n_samples),
         config=None,
         random_state=42,
+        device=device,
     )
-    distiller.fit(states.numpy())
-    kl_estimator = _downstream_kl(w, states, torch.from_numpy(distiller.reconstruct(states.numpy(), k=4)))
+    distiller.fit(states.cpu().numpy())
+    kl_estimator = _downstream_kl(w.cpu(), states.cpu(), torch.from_numpy(distiller.reconstruct(states.cpu().numpy(), k=4)))
     print(f"IGLDistiller (k=4): KL={kl_estimator:.4f}  effective_dimension_={distiller.effective_dimension_}")
 
     run_dir = make_run_dir(EXAMPLE_NAME)

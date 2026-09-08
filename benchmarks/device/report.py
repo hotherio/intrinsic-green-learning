@@ -123,6 +123,36 @@ def main() -> None:
         )
     )
 
+    print("\n## Op-level profile (one epoch of the medium problem)\n")
+    rows = []
+    tops: list[tuple[str, str, list[dict[str, Any]]]] = []
+    for device in devices:
+        for sha in shas:
+            res = load(sha, device, "profile_medium")
+            if not res:
+                continue
+            rows.append(
+                [
+                    device,
+                    sha,
+                    res["wall_ms"],
+                    res["device_busy_ms"],
+                    res["device_busy_fraction"],
+                    res["kernel_launches"],
+                    res["peak_device_mem_mb"],
+                ]
+            )
+            tops.append((device, sha, res["top_ops"]))
+    print(table(["device", "commit", "wall ms", "device busy ms", "busy fraction", "kernel launches", "peak device MB"], rows))
+    for device, sha, ops in tops:
+        print(f"\n### top ops by self device time, {device} @ {sha}\n")
+        print(
+            table(
+                ["op", "calls", "self cpu ms", "self device ms"],
+                [[o["op"][:48], o["count"], o["self_cpu_ms"], o["self_device_ms"]] for o in ops[:8]],
+            )
+        )
+
     print("\n## Components\n")
     for device in devices:
         for sha in shas:

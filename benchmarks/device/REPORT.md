@@ -611,6 +611,54 @@ The synchronisation census reads exactly one host transfer per epoch in graph mo
 capture's own host copies were removed: `torch.full` and `fill_` instead of
 `torch.tensor` and `as_tensor` for the learning rate).
 
+## Follow-up round: MPS readout solve, CPU thread cap, CUDA default batch size
+
+Three candidates from the per-device assessment after v0.14.0, each measured at the fit
+level (`epoch_modes.py`, median epoch after the first, device-synced) and with the region
+timer and the examples.
+
+**MPS hybrid readout solve: a negative result, not shipped in the trainer.** In isolation,
+forming the Gram on the device and factoring the `R × R` system in float64 on the CPU is
+3× faster than Metal's Cholesky at `R = 256` (0.9 vs 2.8 ms, 1e-6 prediction error). In
+the training loop it is slower: the device-to-host copy drains the asynchronous Metal
+queue every batch, and the pipelining lost costs more than the solve saved.
+
+| MPS, fit epoch wall | on-device solve (v0.14.0) | hybrid solve |
+|---|---|---|
+| small | 35.2 ms | 42.1 ms |
+| medium | 80.5 ms | 88.7 ms |
+| large | 232.7 ms | 226.1 ms |
+| examples (moons / swiss / torus / whitened / Poisson) | 21.7 / 19.7 / 45.0 / 46.5 / 54.4 s | 24.5 / 22.3 / 54.0 / 55.4 / 63.6 s |
+
+`MpsBackend` keeps the on-device solve; the hybrid (`ridge_solve_hybrid`) only serves the
+one-off public `direct_solve_weights` on MPS, where the previous path was a CPU `lstsq`
+fallback. After the revert the fit-level timer reads 35.4 / 80.9 / 234.0 ms and the
+examples 22.2 / 19.9 / 45.9 / 47.1 / 52.8 s, back on v0.14.0's numbers within noise. The lesson generalises: a per-call micro-benchmark that synchronises after every
+call cannot see the cost of breaking an asynchronous queue.
+
+**CPU thread cap (`MatryoshkaConfig.cpu_threads`, opt-in).** Torch's default on the M4 Max
+is 12 intra-op threads; small tensors oversubscribe them.
+
+| CPU, fit epoch wall | default (12) | 4 threads | 6 threads | 8 threads |
+|---|---|---|---|---|
+| small | 37.3 ms | 26.9 ms | 29.5 ms | 34.6 ms |
+| medium | 220.8 ms | 211.6 ms | 197.7 ms | 209.7 ms |
+| large | 956 ms | 1049 ms | 955 ms | 939 ms |
+
+Six threads is the safe cap on this machine (21% and 10% faster on small and medium, no
+loss on large; four threads costs 10% on large). It stays off by default because the
+thread count changes the order of BLAS reductions: the reference trajectory differs at
+the 5e-5 level in the weights, so results are no longer bit-identical to the default's.
+
+**CUDA default batch size 1024** (`MatryoshkaConfig.batch_size` left at `None` resolves to
+1024 on CUDA and 256 elsewhere; an explicit value is used as given). The per-batch cost on
+the H100 is flat in the batch size (2.9 ms eager, 0.6 ms replayed, at every problem size),
+so an epoch with a quarter of the steps costs about a quarter. The examples that do not
+set a batch size take the new default on CUDA; their wall times and headline outputs
+under it are recorded below once the GPU is free.
+
+<!-- CUDA-BATCH-1024 -->
+
 ## Status
 
 Complete. CUDA on the H100 (idle GPU, 2026-09-08): full suite for the baseline and HEAD,

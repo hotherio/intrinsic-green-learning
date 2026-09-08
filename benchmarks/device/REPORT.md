@@ -16,6 +16,8 @@ Versions measured:
 | `4823d23` | item 5: spectral gate blend on the device |
 | `b03bb29` | item 6: vectorised Jacobian for the orthogonality penalty |
 | `c0f9ced` | items 7–9 plus the whitener, SPD unpack and spectral-index fixes found by the census |
+| `2259436` | as above plus the MPS eigensolver fallback (the library measured as "HEAD" below) |
+| `08d5efc` | eager follow-up after the profile: gate masks from a per-epoch table, no inner permutation on device branches |
 
 Machines: Apple M4 Max (CPU and MPS, torch 2.12, Python 3.14) and a RunPod H100 80 GB
 (torch 2.8.0+cu128, Python 3.12). Timing runs only count when the machine is quiet
@@ -264,7 +266,15 @@ kernel, and the Cholesky solve (0.56 ms factorisation + 0.66 ms solve per epoch)
 device is busy 12% of the epoch, down from 38%, because the wall time (290 → 195 ms) is
 now set by Python and launch overhead rather than by GPU work: at these problem sizes the
 H100 idles between kernels. That is the next lever (CUDA graphs or `torch.compile` over the
-batch step) and is outside this change.
+batch step, measured in the section below).
+
+The two cheap eager items the profile pointed at were then applied (`08d5efc`): the gate
+mask built from a per-epoch table instead of two launches per batch, and no per-batch
+device permutation for the inner solve when the subset is the whole set. Same profile,
+same GPU: wall 195 → 168 ms per epoch, launches 4033 → 3699, device busy 24.2 → 22.2 ms;
+the region timer barely moves (its own synchronisations hide launch savings), the census
+still reads one synchronisation per epoch, and the CPU branch keeps its permutation and
+stays bit-identical (`tests/test_spd_reproducibility.py`).
 
 ## Component benchmarks
 

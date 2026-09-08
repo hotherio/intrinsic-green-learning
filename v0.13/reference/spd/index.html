@@ -1265,6 +1265,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#igl.spd.airm.AIRMLoss.graph_capturable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        graph_capturable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#igl.spd.airm.AIRMLoss.curve_score" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1276,10 +1287,32 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#igl.spd.airm.AIRMLoss.curve_score_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        curve_score_tensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#igl.spd.airm.AIRMLoss.loss" class="md-nav__link">
     <span class="md-ellipsis">
       
         loss
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.spd.airm.AIRMLoss.metric_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metric_tensor
       
     </span>
   </a>
@@ -1976,14 +2009,18 @@
 
 
 <h2 id="igl.spd.linalg.matrix_log_sym" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_log_sym</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_log_sym</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;eigh&#39;</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-        <p>Batched matrix logarithm of SPD matrices via eigendecomposition.</p>
+        <p>Batched matrix logarithm of SPD matrices.</p>
+<p>The iterative method scales by the mean eigenvalue, takes <code>2^k</code>-th roots
+by Denman–Beavers until the spectrum sits near 1, evaluates
+<code>log(I + X) = 2 atanh(X (2I + X)^{-1})</code> by its series, and undoes the
+scaling (inverse scaling and squaring).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2022,11 +2059,27 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Eigenvalue clamp for numerical safety (default <code>1e-8</code>).</p>
+                <p>Eigenvalue clamp for numerical safety (<code>eigh</code> method only).</p>
               </div>
             </td>
             <td>
                   <code>1e-08</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>method</code>
+            </td>
+            <td>
+                  <code><span title="igl.spd.linalg.MatrixMethod">MatrixMethod</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>See :data:<code>MatrixMethod</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;eigh&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -2063,15 +2116,17 @@
 
 
 <h2 id="igl.spd.linalg.matrix_exp_sym" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_exp_sym</span><span class="p">(</span><span class="n">s</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_exp_sym</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;eigh&#39;</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-        <p>Batched matrix exponential of symmetric matrices via eigendecomposition.</p>
-<p>For a real symmetric <code>S = U Λ U^T</code>, <code>exp(S) = U diag(exp Λ) U^T</code>.</p>
+        <p>Batched matrix exponential of symmetric matrices.</p>
+<p>For a real symmetric <code>S = U Λ U^T</code>, <code>exp(S) = U diag(exp Λ) U^T</code>; the
+iterative method is a fixed-order scaling-and-squaring Taylor expansion
+(matrix products only, no host synchronisation).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2099,6 +2154,22 @@
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>method</code>
+            </td>
+            <td>
+                  <code><span title="igl.spd.linalg.MatrixMethod">MatrixMethod</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>See :data:<code>MatrixMethod</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;eigh&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -2135,15 +2206,17 @@
 
 
 <h2 id="igl.spd.linalg.matrix_pow_sym" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_pow_sym</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">matrix_pow_sym</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;eigh&#39;</span><span class="p">)</span></code>
 
 </h2>
 
 
     <div class="doc doc-contents first">
 
-        <p>Batched real-power of SPD matrices via eigendecomposition.</p>
-<p>For SPD <code>C</code> and real <code>p</code>, <code>C^p = U diag(Λ^p) U^T</code>.</p>
+        <p>Batched real-power of SPD matrices.</p>
+<p>For SPD <code>C</code> and real <code>p</code>, <code>C^p = U diag(Λ^p) U^T</code>. The iterative
+method supports <code>p = -0.5</code> and <code>p = 0.5</code> (Denman–Beavers on the
+trace-scaled matrix) and raises for other exponents.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2198,11 +2271,27 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Eigenvalue clamp.</p>
+                <p>Eigenvalue clamp (<code>eigh</code> method only).</p>
               </div>
             </td>
             <td>
                   <code>1e-08</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>method</code>
+            </td>
+            <td>
+                  <code><span title="igl.spd.linalg.MatrixMethod">MatrixMethod</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>See :data:<code>MatrixMethod</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;eigh&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -2225,6 +2314,29 @@
             <td>
               <div class="doc-md-description">
                 <p><code>[B, d, d]</code> SPD matrices.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.exceptions.IGLConfigError" href="../exceptions/#igl.exceptions.IGLConfigError">IGLConfigError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For the iterative method with an exponent other than <code>±0.5</code>.</p>
               </div>
             </td>
           </tr>
@@ -2520,7 +2632,7 @@ input SPD matrix.</p>
 
 
 <h2 id="igl.spd.airm.airm_loss" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">airm</span><span class="o">.</span><span class="n">airm_loss</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">c_hat</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">,</span> <span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">c_inv_half</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">airm</span><span class="o">.</span><span class="n">airm_loss</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">c_hat</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-08</span><span class="p">,</span> <span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">c_inv_half</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;eigh&#39;</span><span class="p">)</span></code>
 
 </h2>
 
@@ -2625,6 +2737,23 @@ one of the three per-batch <code>eigh</code> calls.</p>
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>method</code>
+            </td>
+            <td>
+                  <code><span title="igl.spd.linalg.MatrixMethod">MatrixMethod</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How the matrix functions are computed; see
+:data:<code>igl.spd.linalg.MatrixMethod</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;eigh&#39;</code>
             </td>
           </tr>
       </tbody>
@@ -2814,6 +2943,25 @@ the loss can read <code>trainer.current_batch_indices</code> per batch.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>matrix_method</code>
+            </td>
+            <td>
+                  <code><span title="igl.spd.linalg.MatrixMethod">MatrixMethod</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"eigh"</code> (default) or <code>"iterative"</code> for the matrix
+exp / log / inverse square root; see
+:data:<code>igl.spd.linalg.MatrixMethod</code>. The iterative form performs no
+host synchronisation on CUDA.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;eigh&#39;</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2858,6 +3006,27 @@ the loss can read <code>trainer.current_batch_indices</code> per batch.</p>
 
 
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="igl.spd.airm.AIRMLoss.graph_capturable" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">graph_capturable</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the loss can be recorded into a CUDA graph: only the iterative functions can (<code>eigh</code> synchronises).</p>
+    </div>
+
+</div>
+
 
 
 <div class="doc doc-object doc-function">
@@ -2872,6 +3041,23 @@ the loss can read <code>trainer.current_batch_indices</code> per batch.</p>
     <div class="doc doc-contents ">
 
         <p>Dimension-curve score = AIRM² (already lower-is-better and not saturating).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.spd.airm.AIRMLoss.curve_score_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>AIRM² as a 0-d tensor on <code>pred</code>'s device.</p>
 
     </div>
 
@@ -2900,6 +3086,23 @@ the val/eval path is the original round-trip (its small numerical
 noise only affects monitoring, not gradients).</p>
 <p>On the predicted side, jitter is added to the symmetric matrix
 <em>before</em> <code>matrix_exp_sym</code> (see :meth:<code>_pred_to_spd</code>).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.spd.airm.AIRMLoss.metric_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">metric_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>AIRM² as a 0-d tensor on <code>pred</code>'s device.</p>
 
     </div>
 
@@ -3049,7 +3252,7 @@ batch is expensive.</p>
 
 
 <h2 id="igl.spd.orthogonality.jacobian" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">orthogonality</span><span class="o">.</span><span class="n">jacobian</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output_dim</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">spd</span><span class="o">.</span><span class="n">orthogonality</span><span class="o">.</span><span class="n">jacobian</span><span class="p">(</span><span class="n">encoder</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">output_dim</span><span class="p">,</span> <span class="n">vectorized</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h2>
 
@@ -3059,6 +3262,11 @@ batch is expensive.</p>
         <p>Compute <code>J[b, j, i] = ∂encoder(x_b)_j / ∂x_b_i</code> keeping the autograd graph.</p>
 <p>Used to drive the orthogonality penalty: the resulting Jacobian gradient
 flows back to the encoder parameters so the penalty actually updates them.</p>
+<p>Two implementations give the same Jacobian: a loop of <code>output_dim</code>
+backward passes (the reference, bit-identical on CPU) and a vectorised
+<code>vmap(jacrev)</code> that is 2-5x faster (measured on MPS and an H100) and
+launches far fewer kernels. The vectorised form is taken off-CPU unless a
+BatchNorm layer is training, in which case the loop is required.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3118,6 +3326,22 @@ flows back to the encoder parameters so the penalty actually updates them.</p>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>vectorized</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Force one implementation; <code>None</code> picks by device.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>

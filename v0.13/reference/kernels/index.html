@@ -1763,6 +1763,20 @@ uses this to decide whether sign tracking is needed.</p>
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.kernels._registry.Operator.separable">separable</span></code></td>
+            <td>
+                  <code><span title="igl.kernels._registry.SeparableParts">SeparableParts</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional <code>(f, g)</code> pair with <code>log|G(d, σ)| = -f(d) · g(σ)</code>
+(e.g. Gaussian: <code>f = d²</code>, <code>g = 1 / (2σ² + ε)</code>). When present the
+kernel layer can contract the product over latent dimensions as one
+matrix product instead of materialising an <code>[N, R, K, d]</code> tensor.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -1796,7 +1810,7 @@ uses this to decide whether sign tracking is needed.</p>
 
 
 <h2 id="igl.kernels._registry.register_operator" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">register_operator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_oscillatory</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">register_operator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_oscillatory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">separable</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h2>
 
@@ -1863,6 +1877,23 @@ uses this to decide whether sign tracking is needed.</p>
             </td>
             <td>
                   <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>separable</code>
+            </td>
+            <td>
+                  <code><span title="igl.kernels._registry.SeparableParts">SeparableParts</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional <code>(f, g)</code> pair with <code>log|G(d, σ)| = -f(d) · g(σ)</code>
+enabling the kernel layer's contracted fast path.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>

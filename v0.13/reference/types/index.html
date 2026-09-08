@@ -1950,6 +1950,15 @@ flag.</p>
           </tr>
       </tbody>
     </table>
+        <p>A strategy may also define <code>metric_tensor(pred, target) -&gt; Tensor</code> and
+<code>curve_score_tensor(pred, target) -&gt; Tensor</code> returning the same values
+as 0-d tensors on the prediction's device. The trainer and the dimension
+curve prefer them, so an epoch (or a whole curve) needs a single host
+transfer; without them each call costs one synchronisation.</p>
+<p>A strategy that synchronises with the host inside <code>loss</code> (an eigensolver,
+a <code>.item()</code>) should expose <code>graph_capturable = False</code> so the CUDA branch
+does not try to record the batch step into a CUDA graph; the default is
+<code>True</code>.</p>
 
 
 

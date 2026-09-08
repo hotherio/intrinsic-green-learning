@@ -856,6 +856,72 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#execution-branches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution branches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.device.select_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        select_backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.device.Backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.device.CpuBackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CpuBackend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.device.MpsBackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MpsBackend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#igl.device.CudaBackend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CudaBackend
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1664,9 +1730,10 @@
     <div class="doc doc-contents first">
 
         <p>Return the best available torch device.</p>
-<p>Preference order: Apple <code>mps</code>, then <code>cuda</code>, then <code>cpu</code>. The
-closed-form solver always runs on CPU regardless (<code>torch.linalg.lstsq</code>
-is unreliable on MPS); tensors round-trip transparently.</p>
+<p>Preference order: Apple <code>mps</code>, then <code>cuda</code>, then <code>cpu</code>. Each device
+type has its own execution branch (see :func:<code>select_backend</code>): the CPU
+branch is the bit-exact reference, the MPS and CUDA branches keep every
+tensor on the device and solve the readout with an on-device Cholesky.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -1690,6 +1757,309 @@ is unreliable on MPS); tensors round-trip transparently.</p>
           </tr>
       </tbody>
     </table>
+
+    </div>
+
+</div><h2 id="execution-branches">Execution branches</h2>
+<p>Training selects one backend per fit from the module's device. The backend
+owns everything that differs between devices: the readout solve, the Green
+kernel path, the optimizer construction, snapshots for early stopping, the
+matmul precision context, and the single host transfer per epoch. See
+<a href="../../concepts/#device-branches-cpu-mps-cuda">Device branches</a> for the table.</p>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="igl.device.select_backend" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_backend</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+        <p>The backend for <code>device</code>: <code>CpuBackend</code>, <code>MpsBackend</code> or <code>CudaBackend</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>device</code>
+            </td>
+            <td>
+                  <code><span title="torch.device">device</span> | <a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The device the module lives on.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>tf32</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the CUDA backend enables TF32 matmuls during a fit.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+<th>Name</th>          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+<td><code>A</code></td>            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.core._backend.Backend" href="#igl.device.Backend">Backend</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.device.Backend" class="doc doc-heading">
+            <code>igl.device.Backend</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-external" title="typing.Protocol" href="https://docs.python.org/3/library/typing.html#typing.Protocol">Protocol</a></code></p>
+
+
+        <p>The per-device branch of the training loop.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.device.Backend.name">name</span></code></td>
+            <td>
+                  <code><span title="igl.core._backend.BackendName">BackendName</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The device type this backend serves.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.device.Backend.kernel_path">kernel_path</span></code></td>
+            <td>
+                  <code><span title="igl.core._backend.KernelPath">KernelPath</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which formulation the Green kernel uses on this device.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.device.CpuBackend" class="doc doc-heading">
+            <code>igl.device.CpuBackend</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+
+
+        <p>The reference branch: bit-identical to the pre-backend code.</p>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.device.MpsBackend" class="doc doc-heading">
+            <code>igl.device.MpsBackend</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="igl.core._backend._DeviceBackend">_DeviceBackend</span></code></p>
+
+
+        <p>Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).</p>
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="igl.device.CudaBackend" class="doc doc-heading">
+            <code>igl.device.CudaBackend</code>
+
+
+</h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="igl.core._backend._DeviceBackend">_DeviceBackend</span></code></p>
+
+
+        
+
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+  </div>
 
     </div>
 

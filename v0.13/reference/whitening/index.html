@@ -1273,6 +1273,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        constants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#igl.whitening.TargetWhitener.fit" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1349,6 +1360,28 @@
     <span class="md-ellipsis">
       
         curve_score
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.curve_score_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        curve_score_tensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.metric_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metric_tensor
       
     </span>
   </a>
@@ -1510,6 +1543,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#igl.whitening.TargetWhitener.constants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        constants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#igl.whitening.TargetWhitener.fit" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1586,6 +1630,28 @@
     <span class="md-ellipsis">
       
         curve_score
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.curve_score_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        curve_score_tensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.whitening.WhitenedMSELoss.metric_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metric_tensor
       
     </span>
   </a>
@@ -2219,6 +2285,23 @@ whitener degrades to centering plus unit scaling.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="igl.whitening.TargetWhitener.constants" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">constants</span><span class="p">(</span><span class="n">device</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return <code>(mu_, a_, a_inv_)</code> on <code>device</code>, moved once and cached per device.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="igl.whitening.TargetWhitener.fit" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
 
@@ -2498,6 +2581,40 @@ optimized quantity is the second-order expansion of the downstream KL.</p>
     <div class="doc doc-contents ">
 
         <p>Whitened MSE — already non-saturating, so identical to :meth:<code>metric</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.WhitenedMSELoss.curve_score_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whitened MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="igl.whitening.WhitenedMSELoss.metric_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">metric_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whitened MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
 
     </div>
 
@@ -3896,6 +4013,23 @@ whitener degrades to centering plus unit scaling.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="igl.whitening.TargetWhitener.constants" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">constants</span><span class="p">(</span><span class="n">device</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return <code>(mu_, a_, a_inv_)</code> on <code>device</code>, moved once and cached per device.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="igl.whitening.TargetWhitener.fit" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">fit</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
 
@@ -4175,6 +4309,40 @@ optimized quantity is the second-order expansion of the downstream KL.</p>
     <div class="doc doc-contents ">
 
         <p>Whitened MSE — already non-saturating, so identical to :meth:<code>metric</code>.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.WhitenedMSELoss.curve_score_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whitened MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.whitening.WhitenedMSELoss.metric_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">metric_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whitened MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
 
     </div>
 

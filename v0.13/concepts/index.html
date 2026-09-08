@@ -652,6 +652,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#device-branches-cpu-mps-cuda" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device branches: CPU, MPS, CUDA
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-spd-extension" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1900,6 +1911,63 @@ takes any number of dimension curves (keyed by task name) and returns a
 effective dimensions and a <code>hierarchy_holds</code> flag that's <code>True</code> iff the
 values appear in non-decreasing order. The bundled
 <code>examples/synthetic/moons_xor.py</code> demonstrates <code>True</code> out of the box.</p>
+<h2 id="device-branches-cpu-mps-cuda">Device branches: CPU, MPS, CUDA</h2>
+<p>Training runs on one of three execution branches, selected once per fit from
+the module's device (see <a class="autorefs autorefs-internal" href="../reference/device/#igl.device.select_backend"><code>igl.device.select_backend</code></a>):</p>
+<table>
+<thead>
+<tr>
+<th>branch</th>
+<th>readout solve</th>
+<th>Green kernel</th>
+<th>Jacobian (orthogonality)</th>
+<th>host transfers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td><code>lstsq</code> on the stacked system (the bit-exact reference)</td>
+<td>log-space reference path</td>
+<td>loop of backward passes</td>
+<td>free</td>
+</tr>
+<tr>
+<td>MPS</td>
+<td>Cholesky of the normal equations + one refinement step, on device</td>
+<td>contracted fast path</td>
+<td><code>vmap(jacrev)</code></td>
+<td>one stacked read per epoch</td>
+</tr>
+<tr>
+<td>CUDA</td>
+<td>same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph</td>
+<td>contracted fast path</td>
+<td><code>vmap(jacrev)</code></td>
+<td>one stacked read per epoch</td>
+</tr>
+</tbody>
+</table>
+<p>The CPU branch keeps every number bit-identical release to release, which is
+what the SPD reproducibility tests pin. The device branches keep every tensor
+on the device: the per-batch loss is summed there, the readout solve reports
+failure through a device flag instead of a host check, snapshots for early
+stopping stay on the device, and the only thing that crosses to the host each
+epoch is one small tensor holding the training loss, the validation loss and
+metric, and the failure count. The kernel's contraction and the readout solve
+always run in full precision; <code>MatryoshkaConfig.matmul_precision</code> governs the
+rest on CUDA. Because the step never touches the host, the CUDA branch records
+it once into a CUDA graph and replays it for every full batch
+(<code>MatryoshkaConfig.cuda_graphs</code>, on by default; the last partial batch runs
+eagerly, and the step is re-recorded when a scheduler changes the learning
+rate). <code>MatryoshkaConfig.torch_compile</code> additionally fuses the step's kernels
+with <code>torch.compile</code> before recording, at the cost of a few seconds of
+compilation per fit. Both are ignored off CUDA, and both step aside for a loss
+that synchronises (<code>AIRMLoss</code> with <code>eigh</code>), for extra losses, and for a
+data-driven spectral basis. The one documented exception is the AIRM loss's eigensolver,
+which synchronises on CUDA and, because MPS has no eigensolver, runs on the
+CPU for MPS tensors, unless <code>AIRMLoss(matrix_method="iterative")</code> is chosen
+(matrix functions from products, solves and inverses only, on any device).</p>
 <h2 id="the-spd-extension">The SPD extension</h2>
 <p>For symmetric positive-definite (SPD) data — covariance matrices, EEG
 epochs, clinical correlations — Euclidean MSE is not the right loss

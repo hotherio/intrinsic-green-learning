@@ -1001,6 +1001,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#igl.core.loss.CrossEntropyLoss.curve_score_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        curve_score_tensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#igl.core.loss.CrossEntropyLoss.loss" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1016,6 +1027,17 @@
     <span class="md-ellipsis">
       
         metric
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.core.loss.CrossEntropyLoss.metric_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metric_tensor
       
     </span>
   </a>
@@ -1055,6 +1077,28 @@
     <span class="md-ellipsis">
       
         curve_score
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.core.loss.MSELoss.curve_score_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        curve_score_tensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#igl.core.loss.MSELoss.metric_tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        metric_tensor
       
     </span>
   </a>
@@ -2505,6 +2549,25 @@ doesn't otherwise carry.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>kernel_path</code>
+            </td>
+            <td>
+                  <code><span title="igl.core.kernel.KernelPathLiteral">KernelPathLiteral</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>"auto"</code> (default) takes the reference formulation on
+CPU and the fast one on MPS and CUDA; <code>"reference"</code> or <code>"fast"</code>
+force one (the fast path applies only to separable operators;
+the others always use the reference formulation).</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;auto&#39;</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2551,7 +2614,7 @@ doesn't otherwise carry.</p>
 
 
 <h3 id="igl.core.kernel.GreenKernel.compute_design_matrix" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_design_matrix</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">compute_design_matrix</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -2606,6 +2669,22 @@ Used by Matryoshka random truncation during training. Passing
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><span title="igl.core.kernel.KernelPathLiteral">KernelPathLiteral</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Override of the constructor's <code>kernel_path</code> for this call.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -2640,7 +2719,7 @@ Used by Matryoshka random truncation during training. Passing
 
 
 <h3 id="igl.core.kernel.GreenKernel.forward" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">forward</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">gate_mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h3>
 
@@ -3040,6 +3119,23 @@ rate is discrete and gives sharper transitions.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="igl.core.loss.CrossEntropyLoss.curve_score_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>0/1 error rate as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="igl.core.loss.CrossEntropyLoss.loss" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">loss</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
 
@@ -3066,6 +3162,23 @@ rate is discrete and gives sharper transitions.</p>
     <div class="doc doc-contents ">
 
         <p>Top-1 classification accuracy.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.core.loss.CrossEntropyLoss.metric_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">metric_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Top-1 classification accuracy as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
 
     </div>
 
@@ -3175,6 +3288,40 @@ rate is discrete and gives sharper transitions.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="igl.core.loss.MSELoss.curve_score_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">curve_score_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="igl.core.loss.MSELoss.metric_tensor" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">metric_tensor</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span></code>
+
+</h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>MSE as a 0-d tensor on <code>pred</code>'s device (no host sync).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="igl.core.loss.MSELoss.target" class="doc doc-heading">
             <code class="highlight language-python"><span class="n">target</span><span class="p">(</span><span class="n">y</span><span class="p">)</span></code>
 
@@ -3271,6 +3418,25 @@ regression, …).</p>
               <div class="doc-md-description">
                 <p>Optional explicit :class:<code>MatryoshkaSampler</code>. When <code>None</code>,
 one is built from <code>config.sampling</code> and <code>config.alpha</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>backend</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="igl.core._backend.Backend" href="../device/#igl.device.Backend">Backend</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional explicit :class:<code>igl.device.Backend</code> (the per-device
+execution branch). When <code>None</code>, :func:<code>igl.device.select_backend</code>
+picks it from the module's device at :meth:<code>fit</code>. Tests inject a
+counting double here.</p>
               </div>
             </td>
             <td>

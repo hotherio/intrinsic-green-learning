@@ -220,7 +220,10 @@ four run 1.4–1.8× faster end to end (moons 27.9 → 20.2 s, swiss roll 24.8 �
 55.0 → 30.7 s, Poisson 56.9 → 38.9 s) with the same headline outputs except the torus
 classifier, whose accuracy moves from 0.9960 to 0.9940 and whose `d_eff` reads 2 instead
 of 1 at the first budget: on CUDA the training trajectory is not bit-identical (TF32
-matmuls, a different solver), as documented; the CPU branch is.
+matmuls, a different solver), as documented; the CPU branch is. With the eager follow-up
+(`08d5efc`, final code) the same six examples take 17.8, 15.6, 32.8, 38.4, 37.4 and 11.1 s
+(moons, swiss roll, torus, whitened regression, Poisson, save/load) with the torus
+classifier back at 0.9960 and `d_eff` 1, 3, 3.
 
 ## Op-level profile
 

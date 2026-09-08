@@ -122,6 +122,29 @@ train on CUDA or MPS at all before the whitener fix (its constants stayed on the
 estimator rows include the eight parameter uploads of module construction inside `fit`
 and the post-fit reads (`d_eff`, dimension curve, the final solve's failure flag).
 
+On MPS the same census counts `aten::_local_scalar_dense` (every `.item()` is a host
+synchronisation on Apple silicon too) and `aten::_to_copy`; the sync-debug counter is CUDA
+only:
+
+| device | commit | workload | scalar_dense/epoch | to_copy/epoch | memcpy DtoH/epoch | cuda sync warnings/epoch | sites (per epoch) |
+|---|---|---|---|---|---|---|---|
+| mps | 6c66262 | classifier_ce | 242.00 | 749.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | 6c66262 | regressor_mse | 242.00 | 730.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | 6c66262 | spectral_cosine | 332.00 | 1267.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | 6c66262 | orthogonality | 248.00 | 856.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | 6c66262 | airm | - | - | - | - | skipped: NotImplementedError("The operator 'aten::_linalg_eigh.eigenv |
+| mps | 6c66262 | airm_iterative | - | - | - | - | skipped: TypeError("AIRMLoss.__init__() got an unexpected keyword arg |
+| mps | 6c66262 | autoencoder_estimator | 234.00 | 676.50 | 0.00e+00 | 0.00e+00 |  |
+| mps | 6c66262 | distiller_estimator | - | - | - | - | skipped: RuntimeError('Expected all tensors to be on the same device, |
+| mps | v0.14.0 | classifier_ce | 218.00 | 707.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | regressor_mse | 218.00 | 688.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | spectral_cosine | 338.00 | 1367.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | orthogonality | 218.00 | 742.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | airm | 258.00 | 950.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | airm_iterative | 124122.00 | 2414.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | autoencoder_estimator | 214.00 | 622.00 | 0.00e+00 | 0.00e+00 |  |
+| mps | v0.14.0 | distiller_estimator | 216.50 | 644.00 | 0.00e+00 | 0.00e+00 |  |
+
 Which primitives synchronise on CUDA (H100, torch 2.8, one call each, measured with the
 same debug mode; used to choose the replacements):
 
@@ -192,16 +215,86 @@ synchronisations without changing this timer (differences of ±0.2 ms in `loss_b
 between the later columns are within the run-to-run noise on the shared host). End to end
 the medium problem's batch is 1.7× faster and the large one's 2.9×.
 
-**CPU and MPS (M4 Max):** the baseline MPS column was taken at load 3.3; the HEAD and
-ablation MPS columns and the whole CPU matrix are pending a quiet machine (the first
-attempt ran into the other session's jobs, load 12, and was discarded).
+**MPS, M4 Max** (load 2.5–4.4 during every run, the benchmark's own threads included;
+`v0.14.0` is main, the library of `4866d9e` plus a type-alias change):
+
+| device | commit | problem | outer_fwd | inner_encode | inner_kernel | solve | loss_bwd_step | total |
+|---|---|---|---|---|---|---|---|---|
+| mps | 6c66262 | small | 2.41 | 2.67 | 2.20 | 3.12 | 6.40 | 16.79 |
+| mps | 6c66262 | medium | 1.49 | 1.60 | 5.03 | 5.06 | 4.48 | 17.65 |
+| mps | 6c66262 | large | 4.53 | 3.62 | 21.15 | 11.26 | 12.56 | 53.12 |
+| mps | 34d11bd | small | 0.56 | 0.54 | 0.42 | 1.30 | 1.82 | 4.64 |
+| mps | 34d11bd | medium | 0.59 | 0.67 | 2.07 | 3.41 | 1.83 | 8.57 |
+| mps | 34d11bd | large | 1.33 | 0.76 | 6.90 | 6.63 | 2.43 | 18.04 |
+| mps | 620cf27 | small | 0.47 | 0.54 | 0.37 | 1.30 | 1.87 | 4.55 |
+| mps | 620cf27 | medium | 0.61 | 0.81 | 1.29 | 3.55 | 2.03 | 8.30 |
+| mps | 620cf27 | large | 0.77 | 0.81 | 2.38 | 6.58 | 2.11 | 12.66 |
+| mps | 68fa992 | small | 0.75 | 1.22 | 0.71 | 1.53 | 2.56 | 6.78 |
+| mps | 68fa992 | medium | 0.54 | 0.71 | 1.13 | 3.51 | 1.86 | 7.75 |
+| mps | 68fa992 | large | 0.69 | 0.70 | 2.03 | 6.43 | 1.93 | 11.79 |
+| mps | 4823d23 | small | 0.44 | 0.53 | 0.36 | 1.28 | 1.76 | 4.37 |
+| mps | 4823d23 | medium | 0.51 | 0.66 | 1.05 | 3.47 | 1.86 | 7.55 |
+| mps | 4823d23 | large | 0.69 | 0.73 | 2.05 | 6.42 | 1.97 | 11.86 |
+| mps | b03bb29 | small | 0.48 | 0.57 | 0.38 | 1.29 | 2.09 | 4.81 |
+| mps | b03bb29 | medium | 0.54 | 0.78 | 1.25 | 3.51 | 1.94 | 8.03 |
+| mps | b03bb29 | large | 0.69 | 0.73 | 2.06 | 6.41 | 1.91 | 11.80 |
+| mps | 08d5efc | small | 0.42 | 0.53 | 0.35 | 1.24 | 1.80 | 4.34 |
+| mps | 08d5efc | medium | 0.52 | 0.67 | 1.06 | 3.47 | 1.90 | 7.62 |
+| mps | 08d5efc | large | 0.71 | 0.74 | 2.06 | 6.52 | 1.97 | 12.00 |
+| mps | v0.14.0 | small | 0.44 | 0.55 | 0.36 | 1.28 | 1.78 | 4.40 |
+| mps | v0.14.0 | medium | 0.51 | 0.66 | 1.06 | 3.55 | 1.93 | 7.72 |
+| mps | v0.14.0 | large | 0.68 | 0.72 | 2.05 | 6.61 | 1.99 | 12.05 |
+
+Apple silicon tells the same story with different weights: the readout solve (a CPU
+`lstsq` round trip at v0.13.0) and the kernel are the batch. Item 1 takes the large batch
+from 53.1 to 18.0 ms and item 2 to 12.7 ms; the later items are flat, as on CUDA. The
+device solve stays the largest region on MPS (6.6 ms of 12 on the large problem: the
+Cholesky and triangular solves run through Metal Performance Shaders at fp32) and is the
+next thing to look at on this device. Per batch, main is 3.8×, 2.3× and 4.4× faster than
+v0.13.0 on the three sizes. The two runs of main agree within 2% (a first run at a
+15-minute load average of 6.7 came out uniformly 2× slower and was discarded).
+
+**CPU, M4 Max** (the bit-identical reference branch; load 2.8–5.9):
+
+| device | commit | problem | outer_fwd | inner_encode | inner_kernel | solve | loss_bwd_step | total |
+|---|---|---|---|---|---|---|---|---|
+| cpu | 6c66262 | small | 0.59 | 0.64 | 1.15 | 0.41 | 1.49 | 4.28 |
+| cpu | 6c66262 | medium | 1.52 | 1.93 | 5.39 | 2.95 | 3.38 | 15.17 |
+| cpu | 6c66262 | large | 3.84 | 2.13 | 16.78 | 5.97 | 7.34 | 36.06 |
+| cpu | 34d11bd | small | 0.60 | 0.65 | 1.16 | 0.40 | 1.51 | 4.32 |
+| cpu | 34d11bd | medium | 1.53 | 1.89 | 5.35 | 2.59 | 3.52 | 14.88 |
+| cpu | 34d11bd | large | 3.84 | 2.10 | 16.85 | 6.06 | 7.55 | 36.40 |
+| cpu | 620cf27 | small | 0.54 | 0.65 | 0.86 | 0.40 | 1.49 | 3.94 |
+| cpu | 620cf27 | medium | 1.17 | 1.88 | 3.67 | 2.57 | 3.14 | 12.43 |
+| cpu | 620cf27 | large | 2.73 | 2.08 | 11.64 | 5.95 | 7.26 | 29.65 |
+| cpu | 68fa992 | small | 0.52 | 0.63 | 0.84 | 0.38 | 1.42 | 3.80 |
+| cpu | 68fa992 | medium | 1.24 | 1.90 | 3.85 | 2.61 | 3.39 | 12.99 |
+| cpu | 68fa992 | large | 2.71 | 2.07 | 11.42 | 5.99 | 7.25 | 29.44 |
+| cpu | 4823d23 | small | 0.54 | 0.65 | 0.85 | 0.39 | 1.48 | 3.92 |
+| cpu | 4823d23 | medium | 1.19 | 1.85 | 3.76 | 2.57 | 3.22 | 12.60 |
+| cpu | 4823d23 | large | 2.77 | 2.05 | 11.42 | 5.96 | 7.14 | 29.34 |
+| cpu | b03bb29 | small | 0.53 | 0.64 | 0.86 | 0.39 | 1.48 | 3.90 |
+| cpu | b03bb29 | medium | 1.26 | 1.89 | 3.81 | 2.59 | 3.31 | 12.86 |
+| cpu | b03bb29 | large | 2.67 | 2.10 | 11.49 | 5.97 | 7.29 | 29.52 |
+| cpu | 08d5efc | small | 0.53 | 0.64 | 0.87 | 0.39 | 1.48 | 3.93 |
+| cpu | 08d5efc | medium | 1.24 | 1.97 | 3.92 | 2.59 | 3.38 | 13.11 |
+| cpu | 08d5efc | large | 2.73 | 2.04 | 11.67 | 5.82 | 7.15 | 29.41 |
+| cpu | v0.14.0 | small | 0.51 | 0.62 | 0.82 | 0.40 | 1.38 | 3.73 |
+| cpu | v0.14.0 | medium | 1.21 | 2.00 | 3.73 | 2.53 | 3.25 | 12.73 |
+| cpu | v0.14.0 | large | 2.75 | 2.14 | 11.62 | 6.02 | 7.38 | 29.91 |
+
+On the CPU only item 2's exact sign skipping is allowed to change anything, and that is
+what the columns show: the kernel region drops from 5.4 to 3.7 ms (medium) and 16.8 to
+11.6 ms (large), every other region is unchanged within noise, and every later item is
+flat. Main is 1.15–1.2× faster per batch than v0.13.0 on the CPU.
 
 ## End-to-end examples (wall seconds and headline outputs)
 
 Each bundled example runs as a subprocess with `IGL_EXAMPLE_DEVICE` set; wall time,
 peak RSS and the example's printed headline numbers are recorded.
 
-**CUDA, H100** (the last column is the final library, graph replay on by default):
+**CUDA, H100** (the last column is the final library, graph replay on by default; the
+MPS and CPU tables follow the CUDA paragraph):
 
 | device | example | 6c66262 | 34d11bd | 620cf27 | 68fa992 | 4823d23 | b03bb29 | 08d5efc | 4866d9e | headlines (first) |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -223,6 +316,42 @@ with the same headline outputs (accuracy, `d_eff`, R², MSE, round-trip error). 
 examples use the cosine warm-restart scheduler, which is why the learning rate lives in a
 device tensor the recorded step reads: an earlier version re-recorded the graph on every
 rate change and made these examples 2–3× slower instead.
+
+**MPS, M4 Max** (no graph replay on MPS; the wins are the device solve and the kernel path):
+
+| device | example | 6c66262 | 34d11bd | 620cf27 | 68fa992 | 4823d23 | b03bb29 | 08d5efc | v0.14.0 | headlines (first) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mps | moons_xor | 53.7 | - | - | - | - | - | - | 21.7 | {'acc': ['1.000'], 'd_eff': ['1', '3', '3', '1', '3', '3'], 'r2': ['1.000'], 'hierarchy': ['True']} |
+| mps | poisson_1d | 208.6 | - | - | - | - | - | - | 54.4 | {'mse': ['0.00000', '0.00000', '0.00000', '0.00000', '0.00000', '0.00000']} |
+| mps | save_load | 7.7 | - | - | - | - | - | - | 11.3 | {} |
+| mps | swiss_roll_recon | 35.0 | - | - | - | - | - | - | 19.7 | {'r2': ['0.997']} |
+| mps | torus_classification | 128.7 | - | - | - | - | - | - | 45.0 | {'acc': ['0.9960'], 'd_eff': ['1', '3', '3']} |
+| mps | whitened_regression | 61.3 | - | - | - | - | - | - | 46.5 | {'kl': ['2.5124', '2.0802', '0.5746', '0.1727']} |
+
+Moons 53.7 → 21.7 s, swiss roll 35.0 → 19.7 s, torus 128.7 → 45.0 s, Poisson 208.6 → 54.4 s
+(2.5–3.8×), and the two distiller examples run instead of crashing. On MPS the training
+trajectory is not the CPU's (fp32 device solve, fast kernel path, float32 accumulation),
+and two headline readings move with it: the torus classifier reads 0.9920 and `d_eff`
+1, 4, 4 (v0.13.0 on MPS: 0.9960 and 1, 3, 3), and the moons example's nested-budget check
+reads `False` with `d_eff` 1, 4, 3 (v0.13.0: `True` with 1, 3, 3) while its accuracy and
+R² stay 1.000. Those are different local optima of the same problem, not accuracy losses;
+the CPU and CUDA runs of the same examples keep their readings.
+
+**CPU, M4 Max:**
+
+| device | example | 6c66262 | 34d11bd | 620cf27 | 68fa992 | 4823d23 | b03bb29 | 08d5efc | v0.14.0 | headlines (first) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cpu | moons_xor | 24.3 | - | - | - | - | - | - | 20.6 | {'acc': ['1.000'], 'd_eff': ['1', '4', '4', '1', '4', '4'], 'r2': ['1.000'], 'hierarchy': ['True']} |
+| cpu | poisson_1d | 25.4 | - | - | - | - | - | - | 25.0 | {'mse': ['0.00000', '0.00000', '0.00000', '0.00000', '0.00000', '0.00000']} |
+| cpu | save_load | 12.7 | - | - | - | - | - | - | 11.6 | {'roundtrip': ['0.00e+00']} |
+| cpu | swiss_roll_recon | 15.9 | - | - | - | - | - | - | 13.8 | {'r2': ['0.998']} |
+| cpu | torus_classification | 83.8 | - | - | - | - | - | - | 67.2 | {'acc': ['0.9980'], 'd_eff': ['11', '3', '3']} |
+| cpu | whitened_regression | 99.7 | - | - | - | - | - | - | 81.7 | {'kl': ['1.7005', '1.3271', '0.5272', '0.1737', '1.0501', '0.8264', '0.2217', '0.0429', '1.1264']} |
+
+Every headline output is identical to v0.13.0 on the CPU (checked field by field across
+the six examples: accuracy, `d_eff`, R², MSE, KL, round-trip error), which is the
+end-to-end form of the bit-identity claim; the examples run 1.0–1.25× faster (torus
+83.8 → 67.2 s, whitened regression 99.7 → 81.7 s), the kernel's share of their time.
 
 ## Op-level profile
 
@@ -286,6 +415,9 @@ between kernels. The graph replay (`4866d9e`) removes that overhead: 68 ms per e
 same kernels executed (the profiler still counts them, 3681 per epoch) but launched as one
 graph per batch, GPU time 11 ms. What remains is the GPU's own time for many tiny
 kernels, which fusion reduces further (next section).
+
+On the Mac the same five-epoch profile gives, per epoch of the medium problem, 157 → 102 ms
+on MPS and 276 → 249 ms on the CPU (the CPU's change being the kernel path only).
 
 ## Component benchmarks
 
@@ -352,6 +484,100 @@ prediction error versus 3.7e-7 for the float64 SVD, well below the training loss
 noise floor. The Jacobian table is the orthogonality penalty's loop versus
 `vmap(jacrev)`: 6.1× faster at input dimension 2080 with an identical loss.
 
+**MPS, M4 Max** (the component benchmark's error metric is computed on the CPU; MPS has no
+float64, which is why the baseline's first attempt at this table failed):
+
+### mps @ 6c66262
+
+| d | fwd current | fwd einsum | fwd+bwd current | fwd+bwd einsum | rel err |
+|---|---|---|---|---|---|
+| 8 | 1.29 | 1.04 | 4.26 | 2.39 | 1.12e-07 |
+| 16 | 1.98 | 1.13 | 8.06 | 2.58 | 1.29e-07 |
+
+| n | r | c | method | ms | rel pred err |
+|---|---|---|---|---|---|
+| 4096 | 64 | 2 | package_lstsq | 3.52 | 1.42e-06 |
+| 4096 | 64 | 2 | cholesky_refined | 0.91 | 3.35e-06 |
+| 4096 | 64 | 512 | package_lstsq | 8.64 | 3.86e-06 |
+| 4096 | 64 | 512 | cholesky_refined | 0.88 | 4.49e-05 |
+| 4096 | 256 | 2000 | package_lstsq | 42.00 | 5.82e-05 |
+| 4096 | 256 | 2000 | cholesky_refined | 3.04 | 1.48e-04 |
+
+| batch | input_dim | latent_dim | loop ms | vmap ms | |Δloss| |
+|---|---|---|---|---|---|
+| 256 | 10 | 4 | 4.60 | 2.37 | 0.00e+00 |
+| 256 | 2080 | 16 | 14.30 | 6.06 | 0.00e+00 |
+
+### mps @ v0.14.0
+
+| d | fwd current | fwd einsum | fwd+bwd current | fwd+bwd einsum | rel err |
+|---|---|---|---|---|---|
+| 8 | 1.06 | 0.98 | 2.54 | 2.37 | 0.00e+00 |
+| 16 | 1.12 | 1.10 | 2.74 | 2.58 | 0.00e+00 |
+
+| n | r | c | method | ms | rel pred err |
+|---|---|---|---|---|---|
+| 4096 | 64 | 2 | package_lstsq | 3.18 | 1.42e-06 |
+| 4096 | 64 | 2 | cholesky_refined | 0.77 | 3.35e-06 |
+| 4096 | 64 | 512 | package_lstsq | 8.70 | 3.86e-06 |
+| 4096 | 64 | 512 | cholesky_refined | 0.82 | 4.49e-05 |
+| 4096 | 256 | 2000 | package_lstsq | 40.69 | 4.92e-06 |
+| 4096 | 256 | 2000 | cholesky_refined | 3.02 | 1.48e-04 |
+
+| batch | input_dim | latent_dim | loop ms | vmap ms | |Δloss| |
+|---|---|---|---|---|---|
+| 256 | 10 | 4 | 2.25 | 1.91 | 0.00e+00 |
+| 256 | 2080 | 16 | 5.96 | 5.89 | 0.00e+00 |
+
+**CPU, M4 Max:**
+
+### cpu @ 6c66262
+
+| d | fwd current | fwd einsum | fwd+bwd current | fwd+bwd einsum | rel err |
+|---|---|---|---|---|---|
+| 8 | 4.20 | 2.58 | 13.62 | 7.12 | 1.21e-07 |
+| 16 | 6.33 | 3.31 | 22.62 | 9.06 | 1.39e-07 |
+
+| n | r | c | method | ms | rel pred err |
+|---|---|---|---|---|---|
+| 4096 | 64 | 2 | package_lstsq | 2.40 | 1.42e-06 |
+| 4096 | 64 | 2 | cholesky_refined | 0.17 | 6.59e-05 |
+| 4096 | 64 | 512 | package_lstsq | 7.97 | 3.86e-06 |
+| 4096 | 64 | 512 | cholesky_refined | 1.43 | 1.24e-04 |
+| 4096 | 256 | 2000 | package_lstsq | 38.47 | 4.94e-05 |
+| 4096 | 256 | 2000 | cholesky_refined | 8.59 | 1.29e-04 |
+
+| batch | input_dim | latent_dim | loop ms | vmap ms | |Δloss| |
+|---|---|---|---|---|---|
+| 256 | 10 | 4 | 19.24 | 6.93 | 0.00e+00 |
+| 256 | 2080 | 16 | 109.03 | 37.06 | 0.00e+00 |
+
+### cpu @ v0.14.0
+
+| d | fwd current | fwd einsum | fwd+bwd current | fwd+bwd einsum | rel err |
+|---|---|---|---|---|---|
+| 8 | 2.93 | 2.55 | 12.36 | 7.06 | 1.21e-07 |
+| 16 | 4.98 | 3.24 | 20.52 | 9.14 | 1.39e-07 |
+
+| n | r | c | method | ms | rel pred err |
+|---|---|---|---|---|---|
+| 4096 | 64 | 2 | package_lstsq | 2.27 | 1.42e-06 |
+| 4096 | 64 | 2 | cholesky_refined | 0.17 | 6.59e-05 |
+| 4096 | 64 | 512 | package_lstsq | 8.16 | 3.86e-06 |
+| 4096 | 64 | 512 | cholesky_refined | 1.38 | 1.24e-04 |
+| 4096 | 256 | 2000 | package_lstsq | 38.32 | 4.94e-05 |
+| 4096 | 256 | 2000 | cholesky_refined | 8.98 | 1.29e-04 |
+
+| batch | input_dim | latent_dim | loop ms | vmap ms | |Δloss| |
+|---|---|---|---|---|---|
+| 256 | 10 | 4 | 18.66 | 7.17 | 0.00e+00 |
+| 256 | 2080 | 16 | 112.33 | 35.36 | 0.00e+00 |
+
+On MPS the device solve is 3–8× faster than the CPU `lstsq` round trip at the same
+prediction error scale, and the Jacobian's `vmap` form is used off-CPU only; on the CPU the
+loop and the reference kernel formulation stay (the fast path is a device-branch choice).
+
+
 ## CUDA graph replay of the batch step (implemented) and `torch.compile` fusion (opt-in)
 
 After the synchronisation work the batch step was launch-bound: about 250 kernels per
@@ -387,8 +613,9 @@ capture's own host copies were removed: `torch.full` and `fill_` instead of
 
 ## Status
 
-CUDA: complete (H100 idle, 2026-09-08: full suite for the baseline and HEAD, region timer
-and census for each intermediate commit, profiler and epoch modes and examples for the
-graph-replay commit). CPU and MPS: the baseline
-MPS run is in; HEAD and the ablation on MPS and the whole CPU matrix are re-run
-automatically when the Mac load is under 6 and will replace this paragraph.
+Complete. CUDA on the H100 (idle GPU, 2026-09-08): full suite for the baseline and HEAD,
+region timer and census for each intermediate commit, profiler, epoch modes and the
+examples for the graph-replay commit. MPS and CPU on the M4 Max (2026-09-08 09:22–09:52
+UTC, load 2–6 with the benchmark's own threads, no other process above 120% CPU): baseline,
+each intermediate commit and main (`v0.14.0`), with one contaminated MPS batch discarded
+and re-measured.

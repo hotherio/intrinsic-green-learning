@@ -71,9 +71,7 @@ def eval_dimension_curve(
         return results
 
     z_full = module.encoder(x_val)
-    score_tensor = cast(
-        "Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None", getattr(loss, "curve_score_tensor", None)
-    )
+    score_tensor = cast(Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None, getattr(loss, "curve_score_tensor", None))
     scores: list[torch.Tensor] = []
     for k in range(1, d_max + 1):
         mask = torch.zeros(d_max, device=device)

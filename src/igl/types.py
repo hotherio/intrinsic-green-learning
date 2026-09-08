@@ -268,7 +268,7 @@ class MatmulPrecision(StrEnum):
 MatmulPrecisionLiteral = Literal["tf32", "fp32"]
 """Literal companion of :class:`MatmulPrecision`."""
 
-type MatmulPrecisionLike = MatmulPrecision | MatmulPrecisionLiteral
+MatmulPrecisionLike = MatmulPrecision | MatmulPrecisionLiteral
 
 
 class DomainMap(StrEnum):

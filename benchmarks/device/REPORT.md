@@ -18,6 +18,7 @@ Versions measured:
 | `c0f9ced` | items 7–9 plus the whitener, SPD unpack and spectral-index fixes found by the census |
 | `2259436` | as above plus the MPS eigensolver fallback (the library measured as "HEAD" below) |
 | `08d5efc` | eager follow-up after the profile: gate masks from a per-epoch table, no inner permutation on device branches |
+| `4866d9e` | the batch step replayed from a CUDA graph on the CUDA branch (`cuda_graphs`, default on), optional `torch_compile` fusion; the final library in this change |
 
 Machines: Apple M4 Max (CPU and MPS, torch 2.12, Python 3.14) and a RunPod H100 80 GB
 (torch 2.8.0+cu128, Python 3.12). Timing runs only count when the machine is quiet
@@ -200,84 +201,91 @@ attempt ran into the other session's jobs, load 12, and was discarded).
 Each bundled example runs as a subprocess with `IGL_EXAMPLE_DEVICE` set; wall time,
 peak RSS and the example's printed headline numbers are recorded.
 
-**CUDA, H100:**
+**CUDA, H100** (the last column is the final library, graph replay on by default):
 
-| device | example | 6c66262 | 34d11bd | 620cf27 | 68fa992 | 4823d23 | b03bb29 | 2259436 | headlines (first) |
-|---|---|---|---|---|---|---|---|---|---|
-| cuda | moons_xor | 27.9 | - | - | - | - | - | 20.2 | {'acc': ['1.000'], 'd_eff': ['1', '3', '3', '1', '3', '3'], 'r2': ['1.000'], 'hierarchy': ['True']} |
-| cuda | poisson_1d | 56.9 | - | - | - | - | - | 38.9 | {'mse': ['0.00000', '0.00000', '0.00000', '0.00000', '0.00000', '0.00000']} |
-| cuda | save_load | 4.0 | - | - | - | - | - | 11.2 | {} |
-| cuda | swiss_roll_recon | 24.8 | - | - | - | - | - | 17.7 | {'r2': ['0.999']} |
-| cuda | torus_classification | 55.0 | - | - | - | - | - | 30.7 | {'acc': ['0.9960'], 'd_eff': ['1', '3', '3']} |
-| cuda | whitened_regression | 20.6 | - | - | - | - | - | 39.7 | {'kl': ['2.3803', '1.7501', '0.5782', '0.1738']} |
+| device | example | 6c66262 | 34d11bd | 620cf27 | 68fa992 | 4823d23 | b03bb29 | 08d5efc | 4866d9e | headlines (first) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cuda | moons_xor | 27.9 | - | - | - | - | - | 17.8 | 7.3 | {'acc': ['1.000'], 'd_eff': ['1', '3', '3', '1', '3', '3'], 'r2': ['1.000'], 'hierarchy': ['True']} |
+| cuda | poisson_1d | 56.9 | - | - | - | - | - | 37.4 | 11.3 | {'mse': ['0.00000', '0.00000', '0.00000', '0.00000', '0.00000', '0.00000']} |
+| cuda | save_load | 4.0 | - | - | - | - | - | 11.1 | 9.3 | {} |
+| cuda | swiss_roll_recon | 24.8 | - | - | - | - | - | 15.6 | 7.2 | {'r2': ['0.999']} |
+| cuda | torus_classification | 55.0 | - | - | - | - | - | 32.8 | 10.0 | {'acc': ['0.9960'], 'd_eff': ['1', '3', '3']} |
+| cuda | whitened_regression | 20.6 | - | - | - | - | - | 38.4 | 19.1 | {'kl': ['2.3803', '1.7501', '0.5782', '0.1738']} |
 
 Two examples could not run on CUDA (or MPS) at v0.13.0 at all: `whitened_regression` and
 `save_load` both use `IGLDistiller`, whose target whitener kept its constants on the CPU;
-their baseline wall times are the time to the crash, and their HEAD headlines are the
-first ones on a GPU. `save_load` additionally needed the checkpoint writer to stop
-requiring an installed distribution (`igl.__version__` is recorded instead). The other
-four run 1.4–1.8× faster end to end (moons 27.9 → 20.2 s, swiss roll 24.8 → 17.7 s, torus
-55.0 → 30.7 s, Poisson 56.9 → 38.9 s) with the same headline outputs except the torus
-classifier, whose accuracy moves from 0.9960 to 0.9940 and whose `d_eff` reads 2 instead
-of 1 at the first budget: on CUDA the training trajectory is not bit-identical (TF32
-matmuls, a different solver), as documented; the CPU branch is. With the eager follow-up
-(`08d5efc`, final code) the same six examples take 17.8, 15.6, 32.8, 38.4, 37.4 and 11.1 s
-(moons, swiss roll, torus, whitened regression, Poisson, save/load) with the torus
-classifier back at 0.9960 and `d_eff` 1, 3, 3.
+their baseline wall times are the time to the crash. `save_load` additionally needed the
+checkpoint writer to stop requiring an installed distribution (`igl.__version__` is
+recorded instead). With the eager work alone (`08d5efc`) the other four ran 1.4–1.8×
+faster; with the graph replay (`4866d9e`) they run 3.4–5.5× faster than v0.13.0 end to end
+(moons 27.9 → 7.3 s, swiss roll 24.8 → 7.2 s, torus 55.0 → 10.0 s, Poisson 56.9 → 11.3 s)
+with the same headline outputs (accuracy, `d_eff`, R², MSE, round-trip error). The
+examples use the cosine warm-restart scheduler, which is why the learning rate lives in a
+device tensor the recorded step reads: an earlier version re-recorded the graph on every
+rate change and made these examples 2–3× slower instead.
 
 ## Op-level profile
 
-`torch.profiler` over one epoch of the medium problem with CPU and CUDA activities
-(Chrome traces are written next to the JSONs).
+`torch.profiler` over a five-epoch fit of the medium problem with CPU and CUDA
+activities, figures per epoch (Chrome traces are written next to the JSONs). The
+five-epoch protocol amortises the one graph capture the way real training does; the
+baseline and `08d5efc` were re-profiled under the same protocol.
 
 | device | commit | wall ms | device busy ms | busy fraction | kernel launches | peak device MB |
 |---|---|---|---|---|---|---|
-| cuda | 6c66262 | 290.54 | 109.27 | 0.38 | 7646 | 150.65 |
-| cuda | 2259436 | 195.31 | 24.16 | 0.12 | 4033 | 94.35 |
+| cuda | 6c66262 | 261.08 | 105.33 | 0.40 | 7508.00 | 150.65 |
+| cuda | 08d5efc | 177.67 | 21.72 | 0.12 | 3663.00 | 94.32 |
+| cuda | 4866d9e | 68.46 | 11.04 | 0.16 | 3681.00 | 157.87 |
 
 ### top ops by self device time, cuda @ 6c66262
 
 | op | calls | self cpu ms | self device ms |
 |---|---|---|---|
-| aten::_linalg_svd | 17 | 3.12 | 37.71 |
-| void gesvdbj_batch_32x16<double, double>(long, i | 513 | 0.00e+00 | 19.30 |
-| void geqr2_gmem_domino<double, double, 9>(int, i | 17 | 0.00e+00 | 9.29 |
-| Optimizer.step#AdamW.step | 16 | 0.00e+00 | 4.87 |
-| void svd_column_rotate_batch<double, 5, 3>(long, | 1026 | 0.00e+00 | 3.55 |
-| aten::sum | 262 | 1.77 | 2.52 |
-| void svd_row_rotate_batch_32x16<double>(long, in | 513 | 0.00e+00 | 2.34 |
-| aten::mul | 594 | 3.08 | 1.51 |
+| aten::_linalg_svd | 85 | 13.02 | 182.12 |
+| void gesvdbj_batch_32x16<double, double>(long, i | 2451 | 0.00e+00 | 92.03 |
+| void geqr2_gmem_domino<double, double, 9>(int, i | 85 | 0.00e+00 | 46.17 |
+| Optimizer.step#AdamW.step | 80 | 0.00e+00 | 18.10 |
+| void svd_column_rotate_batch<double, 5, 3>(long, | 4902 | 0.00e+00 | 16.89 |
+| aten::sum | 1310 | 8.31 | 12.56 |
+| void svd_row_rotate_batch_32x16<double>(long, in | 2451 | 0.00e+00 | 11.13 |
+| aten::mul | 2970 | 14.60 | 7.52 |
 
-### top ops by self device time, cuda @ 2259436
+### top ops by self device time, cuda @ 08d5efc
 
 | op | calls | self cpu ms | self device ms |
 |---|---|---|---|
-| Optimizer.step#AdamW.step | 16 | 0.00e+00 | 1.61 |
-| aten::mm | 181 | 2.59 | 1.14 |
-| aten::mul | 657 | 3.09 | 1.03 |
-| aten::sum | 162 | 1.01 | 0.91 |
-| aten::randperm | 36 | 0.51 | 0.77 |
-| aten::_fused_adamw_ | 16 | 0.12 | 0.75 |
-| void at::native::(anonymous namespace)::multi_te | 16 | 0.00e+00 | 0.75 |
-| void at::native::reduce_kernel<128, 4, at::nativ | 112 | 0.00e+00 | 0.66 |
+| Optimizer.step#AdamW.step | 80 | 0.00e+00 | 5.78 |
+| aten::mm | 905 | 12.49 | 5.68 |
+| aten::mul | 3285 | 15.77 | 5.14 |
+| aten::sum | 810 | 5.11 | 4.55 |
+| aten::_fused_adamw_ | 80 | 0.64 | 3.76 |
+| void at::native::(anonymous namespace)::multi_te | 80 | 0.00e+00 | 3.76 |
+| void at::native::reduce_kernel<128, 4, at::nativ | 560 | 0.00e+00 | 3.30 |
+| aten::_cholesky_solve_helper | 170 | 2.36 | 3.29 |
 
-The baseline epoch spent 72% of its GPU time in a float64 batched SVD (`aten::_linalg_svd`,
-37.7 ms per epoch: the readout `lstsq` solved in double on the device) and launched 7646
-kernels. At HEAD the GPU time per epoch drops from 52.2 to 11.3 ms and the launches to
-4033; the largest remaining items are the fused AdamW step, the matmuls of the encoder and
-kernel, and the Cholesky solve (0.56 ms factorisation + 0.66 ms solve per epoch). The
-device is busy 12% of the epoch, down from 38%, because the wall time (290 → 195 ms) is
-now set by Python and launch overhead rather than by GPU work: at these problem sizes the
-H100 idles between kernels. That is the next lever (CUDA graphs or `torch.compile` over the
-batch step, measured in the section below).
+### top ops by self device time, cuda @ 4866d9e
 
-The two cheap eager items the profile pointed at were then applied (`08d5efc`): the gate
-mask built from a per-epoch table instead of two launches per batch, and no per-batch
-device permutation for the inner solve when the subset is the whole set. Same profile,
-same GPU: wall 195 → 168 ms per epoch, launches 4033 → 3699, device busy 24.2 → 22.2 ms;
-the region timer barely moves (its own synchronisations hide launch savings), the census
-still reads one synchronisation per epoch, and the CPU branch keeps its permutation and
-stays bit-identical (`tests/test_spd_reproducibility.py`).
+| op | calls | self cpu ms | self device ms |
+|---|---|---|---|
+| void at::native::(anonymous namespace)::multi_te | 80 | 0.00e+00 | 3.81 |
+| void at::native::reduce_kernel<128, 4, at::nativ | 560 | 0.00e+00 | 3.19 |
+| void kernel<getrf_wo_pivot_params_<float, 0, 256 | 85 | 0.00e+00 | 2.50 |
+| void cublasLt::splitKreduce_kernel<32, 16, int,  | 655 | 0.00e+00 | 2.19 |
+| void at::native::elementwise_kernel<128, 2, at:: | 1230 | 0.00e+00 | 2.18 |
+| void at::native::(anonymous namespace)::vectoriz | 340 | 0.00e+00 | 2.01 |
+| void kernel_trsm_l_mul32<float, 8, false, true,  | 170 | 0.00e+00 | 1.51 |
+| void at::native::vectorized_elementwise_kernel<4 | 975 | 0.00e+00 | 1.50 |
+
+The baseline epoch spent 72% of its GPU time in a float64 batched SVD (`aten::_linalg_svd`:
+the readout `lstsq` solved in double on the device) and launched about 7500 kernels from
+the host. The eager work (`08d5efc`) cuts the GPU time per epoch from 105 to 22 ms and the
+launches to 3660; the largest remaining items are the fused AdamW step, the matmuls of the
+encoder and kernel, and the Cholesky solve. The device is then busy 12% of the epoch
+because the wall time (261 → 178 ms) is set by Python and launch overhead: the H100 idles
+between kernels. The graph replay (`4866d9e`) removes that overhead: 68 ms per epoch, the
+same kernels executed (the profiler still counts them, 3681 per epoch) but launched as one
+graph per batch, GPU time 11 ms. What remains is the GPU's own time for many tiny
+kernels, which fusion reduces further (next section).
 
 ## Component benchmarks
 
@@ -344,30 +352,43 @@ prediction error versus 3.7e-7 for the float64 SVD, well below the training loss
 noise floor. The Jacobian table is the orthogonality penalty's loop versus
 `vmap(jacrev)`: 6.1× faster at input dimension 2080 with an identical loss.
 
-## The next lever, measured (not part of this change)
+## CUDA graph replay of the batch step (implemented) and `torch.compile` fusion (opt-in)
 
-After this work the batch step is launch-bound: about 250 kernels per batch and 2.5–2.9 ms
-at every problem size. `benchmarks/device/launch_bound.py` rebuilds the trainer's batch
-step from the library's pieces over static buffers and times what removes the launch
-overhead, on the H100 with the HEAD library (medians of 50 batches, device-synced):
+After the synchronisation work the batch step was launch-bound: about 250 kernels per
+batch and 2.5–2.9 ms at every problem size, the GPU busy 12% of the epoch.
+`benchmarks/device/launch_bound.py` first rebuilt the step over static buffers to measure
+what removes the launch overhead (medium: eager 2.54 ms, whole-step CUDA graph replay
+0.74 ms, `torch.compile` fusion alone 1.72 ms; large: 2.55 / 0.92 / 1.81 ms). The library
+now does the same inside the CUDA branch (`igl.core._graph.GraphRunner`): static index,
+gate-mask and learning-rate buffers, two eager warm-up batches, one capture per fit,
+replay for every full batch, the last partial batch eager; the fused AdamW is built
+`capturable` and reads the learning rate from a device tensor, so a scheduler step copies a
+value instead of forcing a re-capture. The runner steps aside for `PrefixForward` modules,
+extra losses, a loss that synchronises (`AIRMLoss` with `eigh`) and data-driven spectral
+bases, and falls back to eager training with a warning if a capture is refused.
 
-| problem | eager | whole-step CUDA graph replay | `torch.compile` (fusion only) | `torch.compile` reduce-overhead |
-|---|---|---|---|---|
-| medium | 2.54 ms | **0.74 ms** (3.4×) | 1.72 ms (1.5×) | not measurable: cudagraph trees reject a step that carries its own backward (torch 2.8) |
-| large | 2.55 ms | **0.92 ms** (2.8×) | 1.81 ms (1.4×) | same |
+Epoch wall of `MatryoshkaTrainer.fit` per mode (`epoch_modes.py`; H100, medians of five
+epochs after the first, device-synced; the first-epoch column carries the warm-up and
+capture, or the compilation):
 
-Against v0.13.0 (4.98 and 8.93 ms) the graph replay would be 6.7× and 9.7× per batch. The
-whole-step capture is possible only because the step no longer synchronises with the host
-(the census above), and it stays inside the CUDA backend: static shapes (the last partial
-batch runs eagerly or is padded), static index and gate buffers the sampler fills, the
-optimizer built with `capturable=True`, the eigh-based AIRM loss excluded (its eigensolver
-synchronises; the iterative method captures). Fusion alone (`torch.compile` default mode)
-is worth 1.5× and could stack on top of the graph, but costs 2–6 s of compile per fit and
-graph-breaks at the precision context switches; the graph capture has neither cost.
+| problem | eager | graph (default) | compile only | graph + compile | first epoch: graph / compile / both |
+|---|---|---|---|---|---|
+| small (1024 × 8) | 21.9 ms | **4.37 ms** (5.0×) | 16.0 ms | **3.18 ms** (6.9×) | 0.11 s / 3.5 s / 0.39 s |
+| medium (4096 × 16) | 42.8 ms | **10.3 ms** (4.2×) | 31.4 ms | **8.19 ms** (5.2×) | 0.16 s / 1.5 s / 0.31 s |
+| large (16384 × 64) | 86.5 ms | **31.1 ms** (2.8×) | 65.1 ms | **21.9 ms** (4.0×) | 0.21 s / 1.5 s / 0.30 s |
+
+The final training loss agrees across modes to 1e-3 (the parity tests in
+`tests/test_cuda_graphs.py` assert this on the H100). Fusion on its own is worth 1.3–1.4×
+and costs seconds of compilation per fit; on top of the graph it takes another 20–30% off
+at 0.3–0.4 s per fit, so it stays opt-in (`MatryoshkaConfig.torch_compile`) for long fits.
+The synchronisation census reads exactly one host transfer per epoch in graph mode (the
+capture's own host copies were removed: `torch.full` and `fill_` instead of
+`torch.tensor` and `as_tensor` for the learning rate).
 
 ## Status
 
-CUDA: complete (H100 idle, 2026-09-08 06:43–06:53 UTC, full suite for the baseline and
-HEAD, region timer and census for each intermediate commit). CPU and MPS: the baseline
+CUDA: complete (H100 idle, 2026-09-08: full suite for the baseline and HEAD, region timer
+and census for each intermediate commit, profiler and epoch modes and examples for the
+graph-replay commit). CPU and MPS: the baseline
 MPS run is in; HEAD and the ablation on MPS and the whole CPU matrix are re-run
 automatically when the Mac load is under 6 and will replace this paragraph.

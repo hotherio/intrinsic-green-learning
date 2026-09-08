@@ -37,3 +37,11 @@ def test_workload_factories_agree_on_shapes() -> None:
     assert x_val.shape[1] == problem.input_dim and y_val.shape[0] == x_val.shape[0]
     assert module.max_dim == problem.max_dim
     assert make_config(problem, epochs=1).epochs == 1
+
+
+def test_cuda_only_benchmarks_import_and_refuse_other_devices() -> None:
+    import importlib
+
+    for name in ("epoch_modes", "launch_bound"):
+        module = importlib.import_module(f"benchmarks.device.{name}")
+        assert callable(module.main)

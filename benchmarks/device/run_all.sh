@@ -9,3 +9,4 @@ $PY -m benchmarks.device.syncs --no-gate
 $PY -m benchmarks.device.components --no-gate
 $PY -m benchmarks.device.profile --no-gate
 $PY -m benchmarks.device.e2e --no-gate
+if [ "$DEV" = cuda ]; then $PY -m benchmarks.device.epoch_modes --no-gate; $PY -m benchmarks.device.launch_bound --no-gate; fi

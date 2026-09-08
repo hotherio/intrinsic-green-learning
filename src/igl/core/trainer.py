@@ -105,6 +105,19 @@ class TrainingHistory:
         return self.stop_reason == "plateau"
 
 
+def _gate_masks(d_max: int, device: torch.device) -> torch.Tensor:
+    """``[d_max + 1, d_max]`` table whose row ``k`` keeps the first ``k`` latent dimensions."""
+    budgets = torch.arange(d_max + 1, device=device).unsqueeze(1)
+    return (torch.arange(d_max, device=device).unsqueeze(0) < budgets).to(torch.float32)
+
+
+def _rows(x: torch.Tensor, y: torch.Tensor, idx: torch.Tensor | None) -> tuple[torch.Tensor, torch.Tensor]:
+    """Gather ``idx`` from both tensors, or return them untouched when ``idx`` is ``None``."""
+    if idx is None:
+        return x, y
+    return x[idx], y[idx]
+
+
 def _build_sampler(config: MatryoshkaConfig) -> MatryoshkaSampler:
     if config.sampling is SamplingMode.UNIFORM:
         return UniformSampler()
@@ -439,6 +452,9 @@ class MatryoshkaTrainer:
         n_batches = 0
         n_skipped = 0
         n_bad = torch.zeros((), dtype=torch.int64, device=device)
+        # Row k of the table is the gate mask for budget k: built once instead
+        # of two launches per batch. Values are the 0/1 floats they always were.
+        masks = _gate_masks(d_max, device)
 
         for i in range(0, n_samples, config.batch_size):
             idx = perm[i : i + config.batch_size]
@@ -452,8 +468,7 @@ class MatryoshkaTrainer:
             n_batches += 1
 
             optimizer.zero_grad()
-            mask = torch.zeros(d_max, device=device)
-            mask[:k] = 1.0
+            mask = masks[k]
 
             if isinstance(module, IGLModule):
                 z = module.encoder(x_batch)
@@ -463,11 +478,12 @@ class MatryoshkaTrainer:
 
                 with torch.no_grad():
                     lstsq_n = min(config.inner_batch_size, n_samples)
-                    lstsq_idx = torch.randperm(n_samples, device=device)[:lstsq_n]
-                    z_lstsq = module.encoder(x_train[lstsq_idx]) * mask.unsqueeze(0)
+                    lstsq_idx = backend.inner_subset(n_samples, lstsq_n, device)
+                    x_lstsq, y_lstsq = _rows(x_train, y_train, lstsq_idx)
+                    z_lstsq = module.encoder(x_lstsq) * mask.unsqueeze(0)
                     phi_lstsq = module.green(z_lstsq, gate_mask=mask)
                     phi_lstsq = normalize_phi(phi_lstsq, module.normalize)
-                    target_lstsq = self.loss.target(y_train[lstsq_idx]) - module.bias.detach()
+                    target_lstsq = self.loss.target(y_lstsq) - module.bias.detach()
                     w_k, bad = backend.ridge_solve(phi_lstsq, target_lstsq, l2=config.source_l2)
                     w_k = w_k.to(device)
                     n_bad = n_bad + bad.to(device=device, dtype=torch.int64)
@@ -646,14 +662,15 @@ class MatryoshkaTrainer:
         device = x_train.device
         with torch.no_grad():
             if full:
-                inner_idx = torch.arange(x_train.shape[0], device=device)
+                inner_idx: torch.Tensor | None = torch.arange(x_train.shape[0], device=device)
             else:
                 inner_n = min(config.inner_batch_size, x_train.shape[0])
-                inner_idx = torch.randperm(x_train.shape[0], device=device)[:inner_n]
-            z_full = module.encoder(x_train[inner_idx])
+                inner_idx = backend.inner_subset(x_train.shape[0], inner_n, device)
+            x_inner, y_inner = _rows(x_train, y_train, inner_idx)
+            z_full = module.encoder(x_inner)
             phi_full = module.green(z_full)
             phi_full = normalize_phi(phi_full, module.normalize)
-            target_full = self.loss.target(y_train[inner_idx]) - module.bias.detach()
+            target_full = self.loss.target(y_inner) - module.bias.detach()
             # The backend decides how a suspect solve is handled: the CPU branch
             # keeps its host guard (verbatim), the device branches keep the last
             # good readout through a device flag. Either way the trainer's

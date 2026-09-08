@@ -87,6 +87,10 @@ class Backend(Protocol):
         """The end-of-epoch readout refresh: new weights, or ``current`` when the solve cannot be trusted."""
         ...  # pragma: no cover  # Protocol method body
 
+    def inner_subset(self, n_samples: int, inner_n: int, device: torch.device) -> torch.Tensor | None:
+        """Row indices of the inner-solve subset, or ``None`` for every row in natural order."""
+        ...  # pragma: no cover  # Protocol method body
+
 
 class _DeviceBackend:
     """Shared implementation of the on-device (MPS, CUDA) branches."""
@@ -104,6 +108,19 @@ class _DeviceBackend:
         # reports through the flag; a failed refresh keeps the last good readout.
         weights, bad = self.ridge_solve(phi, target, l2=l2)
         return torch.where(bad, current.to(weights.device), weights)
+
+    def inner_subset(self, n_samples: int, inner_n: int, device: torch.device) -> torch.Tensor | None:
+        """Skip the permutation when the subset is the whole set: the ridge solve does not depend on row order.
+
+        A permutation of ``n`` rows is a device sort per batch plus a gather of
+        every row, and it only shuffles what gets summed; the device branches
+        take the rows as they are. The CPU branch keeps the permutation so its
+        random-number consumption, and every bit of its arithmetic, stay as
+        they were.
+        """
+        if inner_n >= n_samples:
+            return None
+        return torch.randperm(n_samples, device=device)[:inner_n]
 
     def loss_accumulator(self, device: torch.device) -> torch.Tensor:
         return torch.zeros((), dtype=self._accumulator_dtype, device=device)
@@ -152,6 +169,9 @@ class CpuBackend:
         if torch.isfinite(phi).all() and torch.isfinite(target).all():
             return direct_solve_weights(phi, target, l2=l2)
         return current
+
+    def inner_subset(self, n_samples: int, inner_n: int, device: torch.device) -> torch.Tensor | None:
+        return torch.randperm(n_samples, device=device)[:inner_n]
 
     def loss_accumulator(self, device: torch.device) -> torch.Tensor:
         return torch.zeros((), dtype=torch.float64, device=device)

@@ -216,3 +216,25 @@ def test_cuda_backend_precision_context_toggles_tf32_and_restores() -> None:
             assert not torch.backends.cuda.matmul.allow_tf32
     finally:
         torch.backends.cuda.matmul.allow_tf32 = before
+
+
+def test_gate_mask_table_matches_the_per_batch_masks() -> None:
+    from igl.core.trainer import _gate_masks
+
+    masks = _gate_masks(5, torch.device("cpu"))
+    assert masks.shape == (6, 5)
+    for k in range(6):
+        expected = torch.zeros(5)
+        expected[:k] = 1.0
+        assert torch.equal(masks[k], expected)
+
+
+def test_inner_subset_is_a_permutation_on_cpu_and_skipped_on_devices_when_whole() -> None:
+    from igl.device import CpuBackend, MpsBackend
+
+    torch.manual_seed(0)
+    cpu_idx = CpuBackend().inner_subset(10, 10, torch.device("cpu"))
+    assert cpu_idx is not None and sorted(cpu_idx.tolist()) == list(range(10))
+    assert MpsBackend().inner_subset(10, 10, torch.device("cpu")) is None
+    partial = MpsBackend().inner_subset(10, 4, torch.device("cpu"))
+    assert partial is not None and partial.shape == (4,) and len(set(partial.tolist())) == 4

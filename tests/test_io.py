@@ -161,3 +161,11 @@ def test_bare_module_preprocessing_round_trip(tmp_path: Path) -> None:
         preprocessing=PreprocessingState(mu=torch.zeros(4), sd=1.5, y_scale=whitener.y_scale_, whitener=whitener),
     )
     assert isinstance(load(tmp_path / "m.pt"), IGLModule)
+
+
+def test_package_version_falls_back_with_the_package_version() -> None:
+    """Saving from a source checkout (no installed distribution) must not raise."""
+    import igl
+    from igl.io import _package_version
+
+    assert _package_version() == igl.__version__

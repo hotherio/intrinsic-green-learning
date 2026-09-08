@@ -205,9 +205,11 @@ def read_provenance(path: str | Path) -> dict[str, object]:
 
 
 def _package_version() -> str:
-    from importlib.metadata import version
+    # ``igl.__version__`` already falls back to "0.0.0" when the distribution
+    # is not installed (a source checkout on PYTHONPATH), so saving works there too.
+    from igl import __version__
 
-    return version("intrinsic-green-learning")
+    return __version__
 
 
 def _dims(module: IGLModule) -> dict[str, object]:

@@ -657,7 +657,14 @@ so an epoch with a quarter of the steps costs about a quarter. The examples that
 set a batch size take the new default on CUDA; their wall times and headline outputs
 under it are recorded below once the GPU is free.
 
-<!-- CUDA-BATCH-1024 -->
+Headline outputs under the 1024 default, H100 (the GPU was shared with a training job at
+82% utilisation, so these are the outputs only; the wall times of that run are not
+reported): moons, swiss roll, torus and Poisson, the four examples that leave the batch
+size unset, produce exactly the headlines they produced at 256 (accuracy 1.000 and
+0.9960, `d_eff` 1, 3, 3, R² 0.999, MSE 0). Whitened regression and save/load set their
+batch size explicitly and are unaffected; their last digits move at the 1e-2 (KL) and
+1e-7 (round trip) level between two CUDA runs, the run-to-run spread of TF32 matmuls.
+Timings under the default follow when the GPU is free.
 
 ## Status
 

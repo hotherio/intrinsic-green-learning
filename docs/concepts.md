@@ -134,7 +134,7 @@ the module's device (see [`igl.device.select_backend`][igl.device.select_backend
 | branch | readout solve | Green kernel | Jacobian (orthogonality) | host transfers |
 |---|---|---|---|---|
 | CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
-| MPS | Gram products on the device, the `R × R` system factored in float64 on the CPU (one small copy per batch) | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+| MPS | Cholesky of the normal equations + one refinement step, on device | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
 | CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
 
 The CPU branch keeps every number bit-identical release to release, which is

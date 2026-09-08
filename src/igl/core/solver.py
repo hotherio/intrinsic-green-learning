@@ -97,7 +97,8 @@ def direct_solve_weights(
     # On CPU/MPS, pin to CPU exactly as before: lstsq is unreliable on MPS, and
     # this path is bit-identical to the validated CPU results.
     on_cuda = phi.device.type == "cuda"
-    if on_cuda:
+    on_mps = phi.device.type == "mps"
+    if on_cuda or on_mps:
         phi_w = phi.detach().float()
         y_w = y.detach().float()
     else:
@@ -119,7 +120,6 @@ def direct_solve_weights(
         dim=0,
     )
 
-    on_mps = phi_w.device.type == "mps"
     if on_cuda or on_mps:  # pragma: no cover  # device only
         # The device branches: CUDA factors on the device (Cholesky + one
         # refinement step); MPS forms the Gram there and factors in float64 on the CPU.
@@ -278,13 +278,14 @@ def ridge_solve_device(
 def ridge_solve_hybrid(phi: torch.Tensor, y: torch.Tensor, *, l2: float = 1e-3) -> tuple[torch.Tensor, torch.Tensor]:
     """Ridge solve with the Gram products on the device and the ``R × R`` system solved in float64 on the CPU.
 
-    The MPS branch's readout solve. Metal's Cholesky is slow at these sizes and
-    the device has no float64; forming ``ΦᵀΦ`` and ``Φᵀy`` on the device keeps
-    the ``O(N R²)`` work there, and the tiny ``R × R`` system crosses to the
-    CPU where LAPACK factors it in double (measured 3× faster than the
-    on-device Cholesky at ``R = 256`` on an M4 Max, at 1e-6 prediction error).
-    One small device-to-host copy per call: acceptable on MPS, which has no
-    zero-synchronisation requirement.
+    Used by :func:`direct_solve_weights` on MPS (the one-off public solve),
+    where the device has no ``lstsq`` and no float64. Forming ``ΦᵀΦ`` and
+    ``Φᵀy`` on the device keeps the ``O(N R²)`` work there; the tiny ``R × R``
+    system crosses to the CPU where LAPACK factors it in double. In isolation
+    this is 3× faster than the on-device Cholesky at ``R = 256`` on an M4 Max,
+    but the training loop does not use it: the device-to-host copy drains the
+    asynchronous Metal queue every batch and fits get 10–20% slower (measured),
+    so :class:`igl.device.MpsBackend` keeps :func:`ridge_solve_device`.
 
     Args:
         phi: ``[N, R]`` design matrix on any device.

@@ -264,9 +264,8 @@ def test_hybrid_solve_matches_the_reference_and_flags_bad_input() -> None:
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS only")
-def test_mps_backend_solves_through_the_hybrid_path() -> None:
-    from igl.core.solver import direct_solve_weights
-    from igl.device import MpsBackend
+def test_hybrid_solve_serves_the_public_solve_on_mps() -> None:
+    from igl.core.solver import direct_solve_weights, ridge_solve_hybrid
 
     torch.manual_seed(0)
     module = IGLModule(input_dim=6, max_dim=3, output_dim=2, n_anchors=16, n_scales=3)
@@ -275,10 +274,13 @@ def test_mps_backend_solves_through_the_hybrid_path() -> None:
         phi = module.design_matrix(x)
     y = torch.randn(512, 2)
     w_ref = direct_solve_weights(phi, y, l2=1e-3)
-    w, bad = MpsBackend().ridge_solve(phi.to("mps"), y.to("mps"), l2=1e-3)
+    w, bad = ridge_solve_hybrid(phi.to("mps"), y.to("mps"), l2=1e-3)
     assert w.device.type == "mps" and bad.device.type == "mps" and not bool(bad)
     pred_ref = phi @ w_ref
     assert float((phi @ w.cpu() - pred_ref).abs().max() / pred_ref.abs().max()) < 1e-4
+    w_public = direct_solve_weights(phi.to("mps"), y.to("mps"), l2=1e-3)
+    assert w_public.device.type == "mps"
+    assert float((phi @ w_public.cpu() - pred_ref).abs().max() / pred_ref.abs().max()) < 1e-4
 
 
 def test_cpu_thread_cap_applies_during_the_fit_and_restores() -> None:

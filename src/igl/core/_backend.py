@@ -33,7 +33,7 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
-from igl.core.solver import direct_solve_weights, ridge_solve_device, ridge_solve_hybrid
+from igl.core.solver import direct_solve_weights, ridge_solve_device
 from igl.types import PrefixForward
 
 BackendName = Literal["cpu", "mps", "cuda"]
@@ -238,18 +238,17 @@ def _thread_cap(threads: int) -> Generator[None]:
 
 
 class MpsBackend(_DeviceBackend):
-    """Apple MPS: Gram on the device and a float64 CPU factorisation for the readout, float32 accumulation.
+    """Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).
 
-    MPS has no float64 and a slow Cholesky, so the readout solve is the hybrid
-    :func:`igl.core.solver.ridge_solve_hybrid` (one small device-to-host copy
-    per batch; there is no zero-synchronisation requirement on this branch).
+    The readout stays on the device on purpose: factoring the ``R × R`` system
+    in float64 on the CPU is 3× faster in isolation, but the copy drains the
+    asynchronous Metal queue every batch and the fit gets 10–20% slower
+    (measured, ``benchmarks/device/REPORT.md``); the hybrid is kept for the
+    one-off public solve only.
     """
 
     name: BackendName = "mps"
     _accumulator_dtype = torch.float32
-
-    def ridge_solve(self, phi: torch.Tensor, y: torch.Tensor, *, l2: float) -> tuple[torch.Tensor, torch.Tensor]:
-        return ridge_solve_hybrid(phi, y, l2=l2)
 
 
 class CudaBackend(_DeviceBackend):

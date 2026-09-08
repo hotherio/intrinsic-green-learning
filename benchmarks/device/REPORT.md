@@ -331,6 +331,27 @@ prediction error versus 3.7e-7 for the float64 SVD, well below the training loss
 noise floor. The Jacobian table is the orthogonality penalty's loop versus
 `vmap(jacrev)`: 6.1× faster at input dimension 2080 with an identical loss.
 
+## The next lever, measured (not part of this change)
+
+After this work the batch step is launch-bound: about 250 kernels per batch and 2.5–2.9 ms
+at every problem size. `benchmarks/device/launch_bound.py` rebuilds the trainer's batch
+step from the library's pieces over static buffers and times what removes the launch
+overhead, on the H100 with the HEAD library (medians of 50 batches, device-synced):
+
+| problem | eager | whole-step CUDA graph replay | `torch.compile` (fusion only) | `torch.compile` reduce-overhead |
+|---|---|---|---|---|
+| medium | 2.54 ms | **0.74 ms** (3.4×) | 1.72 ms (1.5×) | not measurable: cudagraph trees reject a step that carries its own backward (torch 2.8) |
+| large | 2.55 ms | **0.92 ms** (2.8×) | 1.81 ms (1.4×) | same |
+
+Against v0.13.0 (4.98 and 8.93 ms) the graph replay would be 6.7× and 9.7× per batch. The
+whole-step capture is possible only because the step no longer synchronises with the host
+(the census above), and it stays inside the CUDA backend: static shapes (the last partial
+batch runs eagerly or is padded), static index and gate buffers the sampler fills, the
+optimizer built with `capturable=True`, the eigh-based AIRM loss excluded (its eigensolver
+synchronises; the iterative method captures). Fusion alone (`torch.compile` default mode)
+is worth 1.5× and could stack on top of the graph, but costs 2–6 s of compile per fit and
+graph-breaks at the precision context switches; the graph capture has neither cost.
+
 ## Status
 
 CUDA: complete (H100 idle, 2026-09-08 06:43–06:53 UTC, full suite for the baseline and

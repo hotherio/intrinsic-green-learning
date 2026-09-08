@@ -23,7 +23,8 @@ from igl.core.solver import direct_solve_weights
 
 
 def _rel_err(a: torch.Tensor, b: torch.Tensor) -> float:
-    return float((a.double() - b.double()).abs().max() / b.double().abs().max().clamp_min(1e-30))
+    a64, b64 = a.detach().cpu().double(), b.detach().cpu().double()  # MPS has no float64
+    return float((a64 - b64).abs().max() / b64.abs().max().clamp_min(1e-30))
 
 
 def kernel_bench(device: torch.device, *, n: int = 4096, r: int = 64, k: int = 4) -> list[dict[str, Any]]:

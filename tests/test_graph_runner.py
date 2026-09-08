@@ -86,7 +86,7 @@ def _trainer(**overrides: object) -> MatryoshkaTrainer:
 
 def test_graph_runner_eligibility_rules() -> None:
     module = IGLModule(input_dim=3, max_dim=2, output_dim=3, n_anchors=4, n_scales=2)
-    common = {"device": torch.device("cpu"), "d_max": 2, "n_samples": 16}
+    common = {"device": torch.device("cpu"), "d_max": 2, "n_samples": 16, "batch_size": 8}
     cuda = CudaBackend()
     assert _trainer()._graph_runner(module, CpuBackend(), extra_losses=(), **common) is None  # noqa: SLF001
     runner = _trainer()._graph_runner(module, cuda, extra_losses=(), **common)  # noqa: SLF001
@@ -107,7 +107,7 @@ def test_graph_runner_refuses_synchronising_losses_and_data_driven_bases() -> No
     from igl.spectral import LearnedLaplacianBasis, SpectralKernel
 
     module = IGLModule(input_dim=3, max_dim=2, output_dim=3, n_anchors=4, n_scales=2)
-    common = {"device": torch.device("cpu"), "d_max": 2, "n_samples": 16}
+    common = {"device": torch.device("cpu"), "d_max": 2, "n_samples": 16, "batch_size": 8}
     cfg = MatryoshkaConfig(epochs=1, batch_size=8, inner_batch_size=16, early_stop_patience=None, verbose=False)
     eigh = MatryoshkaTrainer(loss=AIRMLoss(latent_dim=2), config=cfg)
     iterative = MatryoshkaTrainer(loss=AIRMLoss(latent_dim=2, matrix_method="iterative"), config=cfg)

@@ -88,6 +88,7 @@ class _Counting(CpuBackend):
     """CPU backend that counts host transfers, for the sync-property tests."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.transfers = 0
 
     def host_scalars(self, values: Sequence[torch.Tensor | float]) -> list[float]:
@@ -238,3 +239,68 @@ def test_inner_subset_is_a_permutation_on_cpu_and_skipped_on_devices_when_whole(
     assert MpsBackend().inner_subset(10, 10, torch.device("cpu")) is None
     partial = MpsBackend().inner_subset(10, 4, torch.device("cpu"))
     assert partial is not None and partial.shape == (4,) and len(set(partial.tolist())) == 4
+
+
+def test_hybrid_solve_matches_the_reference_and_flags_bad_input() -> None:
+    from igl.core.solver import direct_solve_weights, ridge_solve_hybrid
+
+    torch.manual_seed(0)
+    module = IGLModule(input_dim=6, max_dim=3, output_dim=2, n_anchors=16, n_scales=3)
+    x = torch.randn(512, 6)
+    with torch.no_grad():
+        phi = module.design_matrix(x)
+    y = torch.randn(512, 2)
+    w_ref = direct_solve_weights(phi, y, l2=1e-3)
+    w, bad = ridge_solve_hybrid(phi, y, l2=1e-3)
+    assert not bool(bad)
+    pred_ref = phi @ w_ref
+    assert float((phi @ w - pred_ref).abs().max() / pred_ref.abs().max()) < 1e-4
+    w1, bad1 = ridge_solve_hybrid(phi, y[:, 0], l2=1e-3)
+    assert w1.shape == (phi.shape[1], 1) and not bool(bad1)
+    bad_phi = phi.clone()
+    bad_phi[3, 2] = float("nan")
+    w_bad, flag = ridge_solve_hybrid(bad_phi, y, l2=1e-3)
+    assert bool(flag) and torch.isfinite(w_bad).all() and torch.equal(w_bad, torch.zeros_like(w_bad))
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS only")
+def test_mps_backend_solves_through_the_hybrid_path() -> None:
+    from igl.core.solver import direct_solve_weights
+    from igl.device import MpsBackend
+
+    torch.manual_seed(0)
+    module = IGLModule(input_dim=6, max_dim=3, output_dim=2, n_anchors=16, n_scales=3)
+    x = torch.randn(512, 6)
+    with torch.no_grad():
+        phi = module.design_matrix(x)
+    y = torch.randn(512, 2)
+    w_ref = direct_solve_weights(phi, y, l2=1e-3)
+    w, bad = MpsBackend().ridge_solve(phi.to("mps"), y.to("mps"), l2=1e-3)
+    assert w.device.type == "mps" and bad.device.type == "mps" and not bool(bad)
+    pred_ref = phi @ w_ref
+    assert float((phi @ w.cpu() - pred_ref).abs().max() / pred_ref.abs().max()) < 1e-4
+
+
+def test_cpu_thread_cap_applies_during_the_fit_and_restores() -> None:
+    from igl.device import CpuBackend, select_backend
+
+    before = torch.get_num_threads()
+    backend = select_backend("cpu", cpu_threads=max(1, before - 1))
+    assert isinstance(backend, CpuBackend) and backend.threads == max(1, before - 1)
+    with backend.precision():
+        assert torch.get_num_threads() == max(1, before - 1)
+    assert torch.get_num_threads() == before
+    with CpuBackend().precision():
+        assert torch.get_num_threads() == before
+
+
+def test_batch_size_defaults_per_device_and_round_trips() -> None:
+    cfg = MatryoshkaConfig()
+    assert cfg.batch_size is None
+    assert cfg.batch_size_for("cpu") == 256 and cfg.batch_size_for("mps") == 256 and cfg.batch_size_for("cuda") == 1024
+    assert MatryoshkaConfig(batch_size=64).batch_size_for("cuda") == 64
+    data = igl.IGLConfig(matryoshka=MatryoshkaConfig(cpu_threads=6)).to_dict()
+    back = igl.IGLConfig.from_dict(data)
+    assert back.matryoshka.batch_size is None and back.matryoshka.cpu_threads == 6
+    back2 = igl.IGLConfig.from_dict(igl.IGLConfig(matryoshka=MatryoshkaConfig(batch_size=128)).to_dict())
+    assert back2.matryoshka.batch_size == 128

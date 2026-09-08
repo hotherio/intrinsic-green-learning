@@ -134,7 +134,7 @@ the module's device (see [`igl.device.select_backend`][igl.device.select_backend
 | branch | readout solve | Green kernel | Jacobian (orthogonality) | host transfers |
 |---|---|---|---|---|
 | CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
-| MPS | Cholesky of the normal equations + one refinement step, on device | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+| MPS | Gram products on the device, the `R × R` system factored in float64 on the CPU (one small copy per batch) | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
 | CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
 
 The CPU branch keeps every number bit-identical release to release, which is
@@ -153,7 +153,12 @@ rate). `MatryoshkaConfig.torch_compile` additionally fuses the step's kernels
 with `torch.compile` before recording, at the cost of a few seconds of
 compilation per fit. Both are ignored off CUDA, and both step aside for a loss
 that synchronises (`AIRMLoss` with `eigh`), for extra losses, and for a
-data-driven spectral basis. The one documented exception is the AIRM loss's eigensolver,
+data-driven spectral basis. Two more knobs are per device: the default outer
+batch size is 1024 on CUDA and 256 elsewhere (`MatryoshkaConfig.batch_size`
+left at `None`; the per-batch cost on a GPU does not grow with the batch), and
+`MatryoshkaConfig.cpu_threads` caps torch's intra-op threads for the fit on
+the CPU branch (off by default because a different thread count changes the
+order of BLAS reductions and therefore the bits). The one documented exception is the AIRM loss's eigensolver,
 which synchronises on CUDA and, because MPS has no eigensolver, runs on the
 CPU for MPS tensors, unless `AIRMLoss(matrix_method="iterative")` is chosen
 (matrix functions from products, solves and inverses only, on any device).

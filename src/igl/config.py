@@ -14,6 +14,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Self, TypeVar, cast
 
+import torch
+
 from igl.exceptions import IGLConfigError
 from igl.types import (
     ActivationType,
@@ -152,12 +154,18 @@ class SpectralConfig:
         object.__setattr__(self, "domain_map", DomainMap(self.domain_map))
 
 
+_DEFAULT_BATCH = 256
+_CUDA_DEFAULT_BATCH = 1024
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MatryoshkaConfig:
     """Matryoshka VP training configuration."""
 
     epochs: int = 1500
-    batch_size: int = 256
+    # ``None`` resolves per device in ``batch_size_for``: 1024 on CUDA (the
+    # per-batch cost there is flat in the batch size), 256 elsewhere.
+    batch_size: int | None = None
     inner_batch_size: int = 4096
     encoder_lr: float = 1e-3
     weight_decay: float | None = None
@@ -179,6 +187,15 @@ class MatryoshkaConfig:
     # with torch.compile first (a few seconds of compilation per fit).
     cuda_graphs: bool = True
     torch_compile: bool = False
+    # CPU branch only: intra-op thread cap for the fit (None = torch's default,
+    # bit-identical results; a cap is faster on small problems).
+    cpu_threads: int | None = None
+
+    def batch_size_for(self, device: torch.device | str) -> int:
+        """The outer batch size on ``device``: the explicit value, else 1024 on CUDA and 256 elsewhere."""
+        if self.batch_size is not None:
+            return self.batch_size
+        return _CUDA_DEFAULT_BATCH if torch.device(device).type == "cuda" else _DEFAULT_BATCH
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sampling", SamplingMode(self.sampling))
@@ -272,6 +289,7 @@ class IGLConfig:
                 "matmul_precision": str(matryoshka_precision),
                 "cuda_graphs": self.matryoshka.cuda_graphs,
                 "torch_compile": self.matryoshka.torch_compile,
+                "cpu_threads": self.matryoshka.cpu_threads,
             },
         }
 
@@ -425,7 +443,7 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
     d = _MATRYOSHKA_DEFAULTS
     return MatryoshkaConfig(
         epochs=_typed_get(data, "epochs", d.epochs),
-        batch_size=_typed_get(data, "batch_size", d.batch_size),
+        batch_size=cast(int | None, data.get("batch_size", d.batch_size)),
         inner_batch_size=_typed_get(data, "inner_batch_size", d.inner_batch_size),
         encoder_lr=_typed_get(data, "encoder_lr", d.encoder_lr),
         weight_decay=cast("float | None", data.get("weight_decay", d.weight_decay)),
@@ -445,6 +463,7 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         matmul_precision=cast(MatmulPrecisionLike, data.get("matmul_precision", d.matmul_precision)),
         cuda_graphs=_typed_get(data, "cuda_graphs", d.cuda_graphs),
         torch_compile=_typed_get(data, "torch_compile", d.torch_compile),
+        cpu_threads=cast(int | None, data.get("cpu_threads", d.cpu_threads)),
     )
 
 

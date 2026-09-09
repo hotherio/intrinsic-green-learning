@@ -165,7 +165,15 @@ class _DeviceBackend:
 
 
 class CpuBackend:
-    """The reference branch: bit-identical to the pre-backend code."""
+    """The reference branch: bit-identical to the pre-backend code.
+
+    ``threads`` caps torch's intra-op thread count for the duration of a fit
+    (:meth:`precision`). Off by default: fewer threads are faster on small
+    problems (an M4 Max runs the medium benchmark batch 13% faster with 6
+    threads than with its default 12), but the thread count changes the order
+    of BLAS reductions, so results are then no longer bit-identical to the
+    default's.
+    """
 
     name: BackendName = "cpu"
     kernel_path: KernelPath = "reference"
@@ -209,12 +217,35 @@ class CpuBackend:
     ) -> AdamW:
         return AdamW(params, lr=lr, weight_decay=weight_decay) if weight_decay is not None else AdamW(params, lr=lr)
 
+    def __init__(self, *, threads: int | None = None) -> None:
+        self.threads = threads
+
     def precision(self) -> contextlib.AbstractContextManager[None]:
-        return contextlib.nullcontext()
+        if self.threads is None:
+            return contextlib.nullcontext()
+        return _thread_cap(self.threads)
+
+
+@contextlib.contextmanager
+def _thread_cap(threads: int) -> Generator[None]:
+    """Set torch's intra-op thread count for the block and restore the previous value."""
+    previous = torch.get_num_threads()
+    torch.set_num_threads(max(1, threads))
+    try:
+        yield
+    finally:
+        torch.set_num_threads(previous)
 
 
 class MpsBackend(_DeviceBackend):
-    """Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64)."""
+    """Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).
+
+    The readout stays on the device on purpose: factoring the ``R × R`` system
+    in float64 on the CPU is 3× faster in isolation, but the copy drains the
+    asynchronous Metal queue every batch and the fit gets 10–20% slower
+    (measured, ``benchmarks/device/REPORT.md``); the hybrid is kept for the
+    one-off public solve only.
+    """
 
     name: BackendName = "mps"
     _accumulator_dtype = torch.float32
@@ -261,12 +292,14 @@ def _tf32(*, enabled: bool) -> Generator[None]:  # pragma: no cover  # CUDA only
         torch.backends.cudnn.allow_tf32 = cudnn_before
 
 
-def select_backend(device: torch.device | str, *, tf32: bool = True) -> Backend:
+def select_backend(device: torch.device | str, *, tf32: bool = True, cpu_threads: int | None = None) -> Backend:
     """The backend for ``device``: ``CpuBackend``, ``MpsBackend`` or ``CudaBackend``.
 
     Args:
         device: The device the module lives on.
         tf32: Whether the CUDA backend enables TF32 matmuls during a fit.
+        cpu_threads: Intra-op thread cap for the CPU backend during a fit
+            (``None`` leaves torch's setting; results then stay bit-identical).
 
     Returns:
         A :class:`Backend`.
@@ -276,7 +309,7 @@ def select_backend(device: torch.device | str, *, tf32: bool = True) -> Backend:
         return CudaBackend(tf32=tf32)
     if kind == "mps":
         return MpsBackend()
-    return cast(Backend, CpuBackend())
+    return cast(Backend, CpuBackend(threads=cpu_threads))
 
 
 __all__ = ["Backend", "BackendName", "CpuBackend", "CudaBackend", "KernelPath", "MpsBackend", "select_backend"]

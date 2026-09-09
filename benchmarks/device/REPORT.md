@@ -611,6 +611,80 @@ The synchronisation census reads exactly one host transfer per epoch in graph mo
 capture's own host copies were removed: `torch.full` and `fill_` instead of
 `torch.tensor` and `as_tensor` for the learning rate).
 
+## Follow-up round: MPS readout solve, CPU thread cap, CUDA default batch size
+
+Three candidates from the per-device assessment after v0.14.0, each measured at the fit
+level (`epoch_modes.py`, median epoch after the first, device-synced) and with the region
+timer and the examples.
+
+**MPS hybrid readout solve: a negative result, not shipped in the trainer.** In isolation,
+forming the Gram on the device and factoring the `R × R` system in float64 on the CPU is
+3× faster than Metal's Cholesky at `R = 256` (0.9 vs 2.8 ms, 1e-6 prediction error). In
+the training loop it is slower: the device-to-host copy drains the asynchronous Metal
+queue every batch, and the pipelining lost costs more than the solve saved.
+
+| MPS, fit epoch wall | on-device solve (v0.14.0) | hybrid solve |
+|---|---|---|
+| small | 35.2 ms | 42.1 ms |
+| medium | 80.5 ms | 88.7 ms |
+| large | 232.7 ms | 226.1 ms |
+| examples (moons / swiss / torus / whitened / Poisson) | 21.7 / 19.7 / 45.0 / 46.5 / 54.4 s | 24.5 / 22.3 / 54.0 / 55.4 / 63.6 s |
+
+`MpsBackend` keeps the on-device solve; the hybrid (`ridge_solve_hybrid`) only serves the
+one-off public `direct_solve_weights` on MPS, where the previous path was a CPU `lstsq`
+fallback. After the revert the fit-level timer reads 35.4 / 80.9 / 234.0 ms and the
+examples 22.2 / 19.9 / 45.9 / 47.1 / 52.8 s, back on v0.14.0's numbers within noise. The lesson generalises: a per-call micro-benchmark that synchronises after every
+call cannot see the cost of breaking an asynchronous queue.
+
+**CPU thread cap (`MatryoshkaConfig.cpu_threads`, opt-in).** Torch's default on the M4 Max
+is 12 intra-op threads; small tensors oversubscribe them.
+
+| CPU, fit epoch wall | default (12) | 4 threads | 6 threads | 8 threads |
+|---|---|---|---|---|
+| small | 37.3 ms | 26.9 ms | 29.5 ms | 34.6 ms |
+| medium | 220.8 ms | 211.6 ms | 197.7 ms | 209.7 ms |
+| large | 956 ms | 1049 ms | 955 ms | 939 ms |
+
+Six threads is the safe cap on this machine (21% and 10% faster on small and medium, no
+loss on large; four threads costs 10% on large). It stays off by default because the
+thread count changes the order of BLAS reductions: the reference trajectory differs at
+the 5e-5 level in the weights, so results are no longer bit-identical to the default's.
+
+**CUDA default batch size 1024** (`MatryoshkaConfig.batch_size` left at `None` resolves to
+1024 on CUDA and 256 elsewhere; an explicit value is used as given). The per-batch cost on
+the H100 is flat in the batch size (2.9 ms eager, 0.6 ms replayed, at every problem size),
+so an epoch with a quarter of the steps costs about a quarter. The examples that do not
+set a batch size take the new default on CUDA; their wall times and headline outputs
+under it are recorded below once the GPU is free.
+
+Headline outputs under the 1024 default, H100 (the GPU was shared with a training job at
+82% utilisation, so these are the outputs only; the wall times of that run are not
+reported): moons, swiss roll, torus and Poisson, the four examples that leave the batch
+size unset, produce exactly the headlines they produced at 256 (accuracy 1.000 and
+0.9960, `d_eff` 1, 3, 3, R² 0.999, MSE 0). Whitened regression and save/load set their
+batch size explicitly and are unaffected; their last digits move at the 1e-2 (KL) and
+1e-7 (round trip) level between two CUDA runs, the run-to-run spread of TF32 matmuls.
+Timings under the default, H100 idle but its 64-core host at a load average of 31 from
+other tenants (2026-09-09 19:26 UTC): the examples whose batch size is fixed slowed by
+13–35% against the idle-host run, which dates every absolute wall time of that run, so
+the batch effect was taken as an A/B in one process, alternating the two settings
+(medium-size model, 8 epochs, median epoch after the third, device-synced):
+
+| rows | batch 256 | batch 1024 (default) | steps per epoch, full + partial |
+|---|---|---|---|
+| 1000 | 8.45 ms | 6.58 ms | 3 + 1 → 0 + 1 |
+| 2000 | 12.5 ms | 6.99 ms | 7 + 1 → 1 + 1 |
+| 4096 | 22.4 ms | 7.99 ms | 16 → 4 |
+| 16384 | 98.2 ms | 27.0 ms | 64 → 16 |
+
+The epoch is 1.3× to 3.6× faster, the ratio growing with the dataset because the per-batch
+cost is flat. The trade is the usual one: a quarter of the optimizer steps per epoch, so a
+short fit converges less per epoch (after 8 epochs the training loss reads 0.56 against
+0.45 at 1000 rows, 0.45 against 0.38 at 4096); the examples run hundreds of epochs and
+land on the same headlines. Below 1024 rows the whole epoch is one partial batch, which the
+graph replay does not cover (it captures full batches only); a second graph for the tail
+shape would extend the replay to small datasets and is the next follow-up.
+
 ## Status
 
 Complete. CUDA on the H100 (idle GPU, 2026-09-08): full suite for the baseline and HEAD,

@@ -1,9 +1,11 @@
-"""Epoch wall time of ``MatryoshkaTrainer.fit`` per execution mode on CUDA.
+"""Epoch wall time of ``MatryoshkaTrainer.fit`` per execution mode.
 
-Modes: eager (``cuda_graphs=False``), graph (the default on CUDA), compile
-(``torch_compile=True`` without the graph), graph+compile. One warm-up fit, then the
-median epoch of a multi-epoch fit, device-synced. The region timer cannot see inside a
-replayed graph, so this is the measurement for the graph and compile work.
+CUDA modes: eager (``cuda_graphs=False``), graph (the default), compile
+(``torch_compile=True`` without the graph), graph+compile. CPU modes: torch's default
+thread count and the ``cpu_threads`` cap at 4, 6 and 8. MPS: the default only. One
+warm-up fit, then the median epoch of a multi-epoch fit, device-synced. The region timer
+cannot see inside a replayed graph or a fit-scoped thread cap, so this is the measurement
+for those.
 
     IGL_BENCH_DEVICE=cuda python -m benchmarks.device.epoch_modes
 """
@@ -21,11 +23,20 @@ import igl
 from benchmarks.device._harness import machine_state, resolve_device, sync, write_result
 from benchmarks.device.workloads import PROBLEMS, make_config, make_data, make_module
 
-MODES: dict[str, dict[str, bool]] = {
-    "eager": {"cuda_graphs": False, "torch_compile": False},
-    "graph": {"cuda_graphs": True, "torch_compile": False},
-    "compile": {"cuda_graphs": False, "torch_compile": True},
-    "graph+compile": {"cuda_graphs": True, "torch_compile": True},
+MODES_BY_DEVICE: dict[str, dict[str, dict[str, object]]] = {
+    "cuda": {
+        "eager": {"cuda_graphs": False, "torch_compile": False},
+        "graph": {"cuda_graphs": True, "torch_compile": False},
+        "compile": {"cuda_graphs": False, "torch_compile": True},
+        "graph+compile": {"cuda_graphs": True, "torch_compile": True},
+    },
+    "cpu": {
+        "default": {},
+        "threads_4": {"cpu_threads": 4},
+        "threads_6": {"cpu_threads": 6},
+        "threads_8": {"cpu_threads": 8},
+    },
+    "mps": {"default": {}},
 }
 
 
@@ -34,7 +45,7 @@ def time_mode(problem_name: str, device: torch.device, mode: str, *, epochs: int
     x, y, x_val, y_val = make_data(problem, device)
     torch.manual_seed(0)
     module = make_module(problem, device)
-    cfg = make_config(problem, epochs=epochs, **MODES[mode])
+    cfg = make_config(problem, epochs=epochs, **MODES_BY_DEVICE[device.type][mode])
     trainer = igl.MatryoshkaTrainer(loss=igl.CrossEntropyLoss(n_classes=2), config=cfg)
     stamps: list[float] = []
 
@@ -65,17 +76,15 @@ def main() -> None:
     parser.add_argument("--no-gate", action="store_true")
     args = parser.parse_args()
     device = resolve_device(args.device)
-    if device.type != "cuda":
-        raise SystemExit("epoch modes are a CUDA measurement")
     state = machine_state(device, gate=not args.no_gate)
     start = time.perf_counter()
     rows: list[dict[str, Any]] = []
     for problem in args.problems.split(","):
-        for mode in MODES:
+        for mode in MODES_BY_DEVICE[device.type]:
             row = {"problem": problem, **time_mode(problem, device, mode, epochs=args.epochs)}
             rows.append(row)
             print(
-                f"cuda {problem:7s} {mode:14s} epoch {row['epoch_ms_median_after_first']:8.2f} ms "
+                f"{device.type:4s} {problem:7s} {mode:14s} epoch {row['epoch_ms_median_after_first']:8.2f} ms "
                 f"(first epoch {row['first_epoch_ms']:8.2f} ms, first fit {row['first_fit_s']:.1f} s)",
                 flush=True,
             )

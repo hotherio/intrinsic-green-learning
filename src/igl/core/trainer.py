@@ -204,7 +204,7 @@ class MatryoshkaTrainer:
         backend = (
             self.backend
             if self.backend is not None
-            else select_backend(device, tf32=config.matmul_precision is MatmulPrecision.TF32)
+            else select_backend(device, tf32=config.matmul_precision is MatmulPrecision.TF32, cpu_threads=config.cpu_threads)
         )
         x_train = x_train.to(device)
         y_train = y_train.to(device)
@@ -216,12 +216,15 @@ class MatryoshkaTrainer:
 
         d_max = module.max_dim
         n_samples = x_train.shape[0]
+        batch_size = config.batch_size_for(device)
 
         if isinstance(module, IGLModule):
             params: list[nn.Parameter] = list(module.encoder.parameters()) + list(module.green.parameters()) + [module.bias]
         else:
             params = list(module.parameters())
-        runner = self._graph_runner(module, backend, extra_losses=extra_losses, device=device, d_max=d_max, n_samples=n_samples)
+        runner = self._graph_runner(
+            module, backend, extra_losses=extra_losses, device=device, d_max=d_max, n_samples=n_samples, batch_size=batch_size
+        )
         optimizer = backend.make_optimizer(
             params, lr=config.encoder_lr, weight_decay=config.weight_decay, capturable=runner is not None
         )
@@ -278,6 +281,7 @@ class MatryoshkaTrainer:
                 runner=runner,
                 loss_sum=loss_sum,
                 n_bad=n_bad,
+                batch_size=batch_size,
             )
         finally:
             precision.__exit__(None, None, None)
@@ -292,6 +296,7 @@ class MatryoshkaTrainer:
         device: torch.device,
         d_max: int,
         n_samples: int,
+        batch_size: int,
     ) -> GraphRunner | None:
         """A :class:`GraphRunner` when the CUDA branch can replay the batch step, else ``None``.
 
@@ -316,7 +321,7 @@ class MatryoshkaTrainer:
         return GraphRunner(  # pragma: no cover  # CUDA only
             device=device,
             lr=config.encoder_lr,
-            batch_size=config.batch_size,
+            batch_size=batch_size,
             inner_n=None if inner_n >= n_samples else inner_n,
             d_max=d_max,
             use_graph=config.cuda_graphs,
@@ -391,6 +396,7 @@ class MatryoshkaTrainer:
         runner: GraphRunner | None,
         loss_sum: torch.Tensor,
         n_bad: torch.Tensor,
+        batch_size: int,
     ) -> None:
         config = self.config
         best_metric: float = -float("inf") if self.loss.higher_is_better else float("inf")
@@ -414,6 +420,7 @@ class MatryoshkaTrainer:
                 runner=runner,
                 loss_sum=loss_sum,
                 n_bad=n_bad,
+                batch_size=batch_size,
             )
 
             if scheduler is not None:
@@ -713,6 +720,7 @@ class MatryoshkaTrainer:
         runner: GraphRunner | None,
         loss_sum: torch.Tensor,
         n_bad: torch.Tensor,
+        batch_size: int,
     ) -> tuple[torch.Tensor, int]:
         """One epoch, without touching the host.
 
@@ -737,9 +745,9 @@ class MatryoshkaTrainer:
         masks = _gate_masks(d_max, device)
         lstsq_n = min(config.inner_batch_size, n_samples)
 
-        for i in range(0, n_samples, config.batch_size):
-            idx = perm[i : i + config.batch_size]
-            if runner is not None and not runner.disabled and idx.shape[0] == config.batch_size:
+        for i in range(0, n_samples, batch_size):
+            idx = perm[i : i + batch_size]
+            if runner is not None and not runner.disabled and idx.shape[0] == batch_size:
                 # CUDA graph replay of a full batch: only the buffers are filled
                 # from Python; the recorded kernels do the rest.
                 k = self.sampler(d_max)

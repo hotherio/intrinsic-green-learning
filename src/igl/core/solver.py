@@ -97,7 +97,8 @@ def direct_solve_weights(
     # On CPU/MPS, pin to CPU exactly as before: lstsq is unreliable on MPS, and
     # this path is bit-identical to the validated CPU results.
     on_cuda = phi.device.type == "cuda"
-    if on_cuda:
+    on_mps = phi.device.type == "mps"
+    if on_cuda or on_mps:
         phi_w = phi.detach().float()
         y_w = y.detach().float()
     else:
@@ -119,9 +120,10 @@ def direct_solve_weights(
         dim=0,
     )
 
-    if on_cuda:  # pragma: no cover  # CUDA only
-        # The device branch: Cholesky + one refinement step, no float64 SVD.
-        weights, bad = ridge_solve_device(phi_w, y_w, l2=l2)
+    if on_cuda or on_mps:  # pragma: no cover  # device only
+        # The device branches: CUDA factors on the device (Cholesky + one
+        # refinement step); MPS forms the Gram there and factors in float64 on the CPU.
+        weights, bad = ridge_solve_device(phi_w, y_w, l2=l2) if on_cuda else ridge_solve_hybrid(phi_w, y_w, l2=l2)
         if bool(bad):  # one host sync: this public entry point promises a warning or an exception
             message = "direct_solve_weights: the device solve failed (non-finite inputs or factorisation)"
             if on_nonfinite == "raise":
@@ -273,4 +275,63 @@ def ridge_solve_device(
     return weights, bad
 
 
-__all__ = ["direct_solve_weights", "ridge_solve_device", "solve_with_intercept"]
+def ridge_solve_hybrid(phi: torch.Tensor, y: torch.Tensor, *, l2: float = 1e-3) -> tuple[torch.Tensor, torch.Tensor]:
+    """Ridge solve with the Gram products on the device and the ``R × R`` system solved in float64 on the CPU.
+
+    Used by :func:`direct_solve_weights` on MPS (the one-off public solve),
+    where the device has no ``lstsq`` and no float64. Forming ``ΦᵀΦ`` and
+    ``Φᵀy`` on the device keeps the ``O(N R²)`` work there; the tiny ``R × R``
+    system crosses to the CPU where LAPACK factors it in double. In isolation
+    this is 3× faster than the on-device Cholesky at ``R = 256`` on an M4 Max,
+    but the training loop does not use it: the device-to-host copy drains the
+    asynchronous Metal queue every batch and fits get 10–20% slower (measured),
+    so :class:`igl.device.MpsBackend` keeps :func:`ridge_solve_device`.
+
+    Args:
+        phi: ``[N, R]`` design matrix on any device.
+        y: ``[N, C]`` (or ``[N]``) targets on the same device.
+        l2: User-facing ridge strength, scaled by the mean column norm as in
+            :func:`direct_solve_weights`.
+
+    Returns:
+        ``(w, bad)`` as :func:`ridge_solve_device`: weights on ``phi``'s
+        device and a 0-d boolean flag on that device.
+    """
+    phi32 = phi.detach().float()
+    y32 = y.detach().float()
+    if y32.dim() == 1:
+        y32 = y32.unsqueeze(-1)
+    with full_precision_matmul(phi32.device):
+        ok = torch.isfinite(phi32).all() & torch.isfinite(y32).all()
+        phi_c = torch.nan_to_num(phi32)
+        y_c = torch.nan_to_num(y32)
+        col_scale = cast(torch.Tensor, phi_c.norm(dim=0).mean().clamp_min(1e-6))  # pyright: ignore[reportUnknownMemberType]
+        gram = phi_c.T @ phi_c
+        rhs = phi_c.T @ y_c
+    gram64 = gram.cpu().double()
+    rhs64 = rhs.cpu().double()
+    l2_eff = l2 * (col_scale.cpu().double() ** 2)
+    gram64 = gram64 + l2_eff * torch.eye(gram64.shape[0], dtype=torch.float64)
+    chol, info = cast(
+        "tuple[torch.Tensor, torch.Tensor]",
+        torch.linalg.cholesky_ex(gram64),  # pyright: ignore[reportUnknownMemberType]
+    )
+    chol = torch.nan_to_num(chol)
+    weights64 = torch.cholesky_solve(rhs64, chol)
+    weights = torch.nan_to_num(weights64).float().to(phi32.device)
+    # One refinement step against the float32 products on the device: the
+    # float32 Gram is the accuracy floor of the plain solve (cond × 1e-7), and
+    # the residual, solved with the same double factor, recovers it (the same
+    # step the on-device solve takes).
+    with full_precision_matmul(phi32.device):
+        l2_eff32 = l2_eff.float().to(phi32.device)
+        residual = rhs - (phi_c.T @ (phi_c @ weights) + l2_eff32 * weights)
+    correction = torch.cholesky_solve(residual.cpu().double(), chol)
+    weights = weights + torch.nan_to_num(correction).float().to(phi32.device)
+    bad_host = (info > 0) | ~torch.isfinite(weights64).all() | ~torch.isfinite(correction).all()
+    bad = (~ok) | bad_host.to(phi32.device)
+    weights = torch.where(bad, torch.zeros_like(weights), torch.nan_to_num(weights))
+    return weights, bad
+
+
+__all__ = ["direct_solve_weights", "ridge_solve_device", "ridge_solve_hybrid", "solve_with_intercept"]

@@ -1772,7 +1772,7 @@ matmul precision context, and the single host transfer per epoch. See
 
 
 <h2 id="igl.device.select_backend" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_backend</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_backend</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cpu_threads</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 </h2>
 
@@ -1823,6 +1823,23 @@ matmul precision context, and the single host transfer per epoch. See
             </td>
             <td>
                   <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cpu_threads</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Intra-op thread cap for the CPU backend during a fit
+(<code>None</code> leaves torch's setting; results then stay bit-identical).</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -1950,6 +1967,12 @@ matmul precision context, and the single host transfer per epoch. See
 
 
         <p>The reference branch: bit-identical to the pre-backend code.</p>
+<p><code>threads</code> caps torch's intra-op thread count for the duration of a fit
+(:meth:<code>precision</code>). Off by default: fewer threads are faster on small
+problems (an M4 Max runs the medium benchmark batch 13% faster with 6
+threads than with its default 12), but the thread count changes the order
+of BLAS reductions, so results are then no longer bit-identical to the
+default's.</p>
 
 
 
@@ -1994,6 +2017,11 @@ matmul precision context, and the single host transfer per epoch. See
 
 
         <p>Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).</p>
+<p>The readout stays on the device on purpose: factoring the <code>R × R</code> system
+in float64 on the CPU is 3× faster in isolation, but the copy drains the
+asynchronous Metal queue every batch and the fit gets 10–20% slower
+(measured, <code>benchmarks/device/REPORT.md</code>); the hybrid is kept for the
+one-off public solve only.</p>
 
 
 

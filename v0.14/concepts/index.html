@@ -1964,7 +1964,12 @@ rate). <code>MatryoshkaConfig.torch_compile</code> additionally fuses the step's
 with <code>torch.compile</code> before recording, at the cost of a few seconds of
 compilation per fit. Both are ignored off CUDA, and both step aside for a loss
 that synchronises (<code>AIRMLoss</code> with <code>eigh</code>), for extra losses, and for a
-data-driven spectral basis. The one documented exception is the AIRM loss's eigensolver,
+data-driven spectral basis. Two more knobs are per device: the default outer
+batch size is 1024 on CUDA and 256 elsewhere (<code>MatryoshkaConfig.batch_size</code>
+left at <code>None</code>; the per-batch cost on a GPU does not grow with the batch), and
+<code>MatryoshkaConfig.cpu_threads</code> caps torch's intra-op threads for the fit on
+the CPU branch (off by default because a different thread count changes the
+order of BLAS reductions and therefore the bits). The one documented exception is the AIRM loss's eigensolver,
 which synchronises on CUDA and, because MPS has no eigensolver, runs on the
 CPU for MPS tensors, unless <code>AIRMLoss(matrix_method="iterative")</code> is chosen
 (matrix functions from products, solves and inverses only, on any device).</p>

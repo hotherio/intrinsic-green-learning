@@ -664,7 +664,26 @@ size unset, produce exactly the headlines they produced at 256 (accuracy 1.000 a
 0.9960, `d_eff` 1, 3, 3, R² 0.999, MSE 0). Whitened regression and save/load set their
 batch size explicitly and are unaffected; their last digits move at the 1e-2 (KL) and
 1e-7 (round trip) level between two CUDA runs, the run-to-run spread of TF32 matmuls.
-Timings under the default follow when the GPU is free.
+Timings under the default, H100 idle but its 64-core host at a load average of 31 from
+other tenants (2026-09-09 19:26 UTC): the examples whose batch size is fixed slowed by
+13–35% against the idle-host run, which dates every absolute wall time of that run, so
+the batch effect was taken as an A/B in one process, alternating the two settings
+(medium-size model, 8 epochs, median epoch after the third, device-synced):
+
+| rows | batch 256 | batch 1024 (default) | steps per epoch, full + partial |
+|---|---|---|---|
+| 1000 | 8.45 ms | 6.58 ms | 3 + 1 → 0 + 1 |
+| 2000 | 12.5 ms | 6.99 ms | 7 + 1 → 1 + 1 |
+| 4096 | 22.4 ms | 7.99 ms | 16 → 4 |
+| 16384 | 98.2 ms | 27.0 ms | 64 → 16 |
+
+The epoch is 1.3× to 3.6× faster, the ratio growing with the dataset because the per-batch
+cost is flat. The trade is the usual one: a quarter of the optimizer steps per epoch, so a
+short fit converges less per epoch (after 8 epochs the training loss reads 0.56 against
+0.45 at 1000 rows, 0.45 against 0.38 at 4096); the examples run hundreds of epochs and
+land on the same headlines. Below 1024 rows the whole epoch is one partial batch, which the
+graph replay does not cover (it captures full batches only); a second graph for the tail
+shape would extend the replay to small datasets and is the next follow-up.
 
 ## Status
 

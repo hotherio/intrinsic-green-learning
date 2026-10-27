@@ -43,12 +43,16 @@ def main() -> None:
         epochs=6 if smoke else 400, n_train=512 if smoke else 4096, n_val=128 if smoke else 1024, n_test=256 if smoke else 2048
     )
     t0 = time.perf_counter()
+    seen: set[str] = set()
     for bed_name, amb in beds:
         bed = bed_by_name(bed_name)
+        # the chart arms do not depend on the ambient dimension: run them once per bed
+        chart_arms = () if bed_name in seen else ("conformal", "param")
+        seen.add(bed_name)
         for seed in seeds:
             s = replace(spec, ambient=amb, n_train=8192 if (bed.d >= 8 and not smoke) else spec.n_train)
             dataset = make_dataset(bed, s, seed=seed)
-            for inputs in ("conformal", "param", "ambient"):
+            for inputs in (*chart_arms, "ambient"):
                 if inputs == "conformal" and dataset.conformal_chart is None:
                     continue
                 t1 = time.perf_counter()
@@ -58,7 +62,9 @@ def main() -> None:
                 write_block_result(BLOCK, tag, inputs, seed, row, device=device, state=state, started_at=t1, label=args.label)
                 print(
                     f"{tag:14s} inputs {inputs:9s} seed {seed} nrmse {row['nrmse_test_dmax']:.4f} "
-                    f"rank(u) {row['chart_cost']['rank']} bumps2% {row['chart_cost']['bumps']['0.02']} | {row['wall_s']:.0f}s",
+                    f"best_epoch {row['best_epoch']} rank(u) {row['chart_cost']['rank']} "
+                    f"bumps5/2% {row['chart_cost']['bumps']['0.05']}/{row['chart_cost']['bumps']['0.02']} "
+                    f"| {row['wall_s']:.0f}s",
                     flush=True,
                 )
     print(f"O1 done in {time.perf_counter() - t0:.0f}s")

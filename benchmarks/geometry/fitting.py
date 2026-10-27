@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import torch
+from torch import nn
 
 import igl
 from benchmarks.geometry import charts, geometry_report
@@ -46,6 +47,12 @@ class FitSpec:
     max_dim: int | None = None
     penalty_weight: float = 1.0
     penalty_every: int = 2
+    grad_clip: float = 1.0  # the package default; 0 disables clipping (unstable on some initialisations)
+    encoder_lr: float = 1e-3  # the package default
+    weight_decay: float | None = None
+    noise_std: float = 0.0  # the trainer's input-noise augmentation
+    scheduler: str = "none"
+    frozen_chart_inputs: bool = True  # chart inputs (param, conformal): identity encoder, kernel and readout trained
 
 
 @dataclass(slots=True)
@@ -97,18 +104,26 @@ def make_dataset(bed: manifolds.Bed, spec: FitSpec, *, seed: int = 0, target_fam
     except (RuntimeError, ValueError):
         m_train = None
     conformal = None
+    param_chart = "parameter chart"
+    t_param = t.to(torch.float32)
     if bed.conformal_chart is not None:
         conformal = {k: torch.stack([bed.conformal_chart(ti) for ti in t[v]]).to(torch.float32) for k, v in idx.items()}
+        if torch.allclose(conformal["train"], t_param[idx["train"]]):
+            # the bed is parametrised by its conformal chart (sphere caps): the non-conformal reference chart
+            # is then the graph chart, the first d ambient coordinates (orthographic projection on a cap)
+            t_param = x0[:, : bed.d].to(torch.float32)
+            param_chart = "graph chart (first d ambient coordinates)"
     return Dataset(
         bed_name=bed.name,
         d=bed.d,
         x={k: x[v] for k, v in idx.items()},
         y={k: u[v] for k, v in idx.items()},
-        t={k: t[v].to(torch.float32) for k, v in idx.items()},
+        t={k: t_param[v] for k, v in idx.items()},
         embed=embed,
         metric_inv_train=m_train,
         conformal_chart=conformal,
         target_family=str(tg["family"]),
+        extra={"param_chart": param_chart},
     )
 
 
@@ -213,20 +228,34 @@ def fit_arm(
     if src is None:
         raise ValueError(f"{dataset.bed_name} has no {inputs} inputs")
     x_tr, x_va, x_te = (src[k].to(dev) for k in ("train", "val", "test"))
+    if inputs != "ambient":
+        # chart inputs are standardised per column on the train split (a constant affine map, free for the
+        # geometry); ambient inputs are left as the package receives them
+        mu, sd = x_tr.mean(0, keepdim=True), x_tr.std(0, keepdim=True).clamp_min(1e-6)
+        x_tr, x_va, x_te = (x_tr - mu) / sd, (x_va - mu) / sd, (x_te - mu) / sd
     y_tr, y_va, y_te = (dataset.y[k].to(dev) for k in ("train", "val", "test"))
     d = dataset.d
     max_dim = spec.max_dim or d
     torch.manual_seed(seed)
     module = igl.IGLModule(x_tr.shape[1], max_dim, 1, n_anchors=spec.n_anchors, n_scales=spec.n_scales)
-    init_encoder_orthogonal_(module.encoder)
+    frozen = inputs != "ambient" and spec.frozen_chart_inputs and x_tr.shape[1] == max_dim
+    if frozen:
+        # the oracle chart is given: an encoder trained on top of it only distorts it (pilots on the hills),
+        # so the chart is frozen and the kernel and readout alone are trained
+        module.encoder = nn.Identity()
+    else:
+        init_encoder_orthogonal_(module.encoder)
     module = module.to(dev)
     config = igl.MatryoshkaConfig(
         epochs=spec.epochs,
         batch_size=spec.batch_size,
         source_l2=spec.source_l2,
-        scheduler="none",
-        early_stop_patience=None,
-        grad_clip=0.0,
+        early_stop_patience=spec.epochs,  # never fires within the budget; the best-validation state is restored
+        grad_clip=spec.grad_clip,
+        encoder_lr=spec.encoder_lr,
+        weight_decay=spec.weight_decay,
+        noise_std=spec.noise_std,
+        scheduler=spec.scheduler,
         log_every=10**9,
     )
     trainer = igl.MatryoshkaTrainer(loss=igl.MSELoss(), config=config)
@@ -240,8 +269,10 @@ def fit_arm(
     if extra_penalties is not None:
         losses += extra_penalties(trainer)
     snapshots: list[dict[str, float]] = []
+    last: dict[str, Any] = {}
 
     def on_epoch(stats: igl.EpochStats) -> None:
+        last["best_epoch"] = stats.best_epoch
         if stats.epoch in {spec.epochs // 4, spec.epochs // 2} or stats.epoch % max(1, spec.epochs // 8) == 0:
             snapshots.append(
                 {"epoch": stats.epoch, "train_loss": stats.train_loss, "val_loss": float(stats.val_loss or float("nan"))}
@@ -263,7 +294,7 @@ def fit_arm(
     rep_train = geometry_report.report(module.encoder, x_tr[:1024], k=d, output_dim=max_dim, metric_inv=m_train)
     with torch.no_grad():
         z_te = module.latent(x_te)[:, :d].cpu().double()
-    chart_cost = {"rank": charts.chart_rank(z_te, y_te.cpu())["rank"]}
+    chart_cost = {"rank": charts.chart_rank(z_te, y_te.cpu())["rank"] if d == 2 else None}  # a 2-D grid measure
     bc = charts.bump_count(z_te[:1024], y_te.cpu()[:1024], max_atoms=128)
     chart_cost["bumps"] = bc["counts"]
     curve = igl.eval_dimension_curve(module, x_va, y_va.unsqueeze(1), loss=igl.MSELoss(), source_l2=spec.source_l2)
@@ -280,8 +311,12 @@ def fit_arm(
         "seed": seed,
         "kind": "learned",
         "epochs": spec.epochs,
+        "grad_clip": spec.grad_clip,
         "wall_s": wall,
         "converged": bool(history.converged),
+        "best_epoch": last.get("best_epoch"),
+        "param_chart": dataset.extra.get("param_chart"),
+        "encoder": "identity (frozen chart)" if frozen else "mlp",
         "train_loss_last": float(history.train_loss[-1]),
         "nrmse_test": nrmse,
         "nrmse_test_dmax": nrmse[str(max_dim)],

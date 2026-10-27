@@ -140,7 +140,7 @@ def arm_penalty(arm: str, spec: FitSpec, dataset: Dataset, trainer_ref: dict[str
             idx = trainer_ref["trainer"].current_batch_indices
             if idx is None:
                 raise RuntimeError("batch indices unavailable")
-            return m_all[idx.to(m_all.device)].to(xb.dtype)
+            return m_all[idx.to(m_all.device)].to(device=xb.device, dtype=xb.dtype)
 
         return ConformalityPenalty(beta=1.0, metric_inv=metric_inv, **matched)
     table: dict[str, Callable[[], ExtraLoss | None]] = {

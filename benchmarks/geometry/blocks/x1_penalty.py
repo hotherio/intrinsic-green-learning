@@ -89,7 +89,7 @@ def main() -> None:
     t0 = time.perf_counter()
     for bed_name, amb in pairs:
         bed = bed_by_name(bed_name)
-        weight: float | None = None  # calibrated once per bed on the first seed's penalty-free chart
+        weight: float | None = None  # calibrated once per bed at epoch 50 of a penalty-free fit (first seed)
         calibration: dict[str, float] = {}
         for seed in seeds:
             s = replace(spec, ambient=amb, n_train=8192 if (bed.d >= 8 and not smoke) else spec.n_train)
@@ -98,24 +98,22 @@ def main() -> None:
             except (RuntimeError, ValueError) as exc:
                 print(f"{bed_name} D={amb}: dataset failed ({exc})", flush=True)
                 continue
-            for arm in ["none", *[a for a in arms if a != "none"]]:
+            if weight is None:
+                stash: dict[str, igl.IGLModule] = {}
+                fit_arm(
+                    dataset, replace(s, epochs=5 if smoke else 50), "none", seed=seed, device=device, prune=False, modules=stash
+                )
+                calibration = calibrate_weight(
+                    stash["none"], dataset.x["train"].to(device), dataset.y["train"].to(device), k=bed.d
+                )
+                weight = calibration["weight"]
+                print(f"{bed_name} D={amb}: calibrated weight {weight:.4g} ({calibration})", flush=True)
+            for arm in arms:
                 if arm == "conf-tan" and dataset.metric_inv_train is None:
                     continue
-                if arm not in arms and weight is not None:
-                    continue  # ``none`` is run only for the calibration when it is not an arm
                 t1 = time.perf_counter()
-                stash: dict[str, igl.IGLModule] = {}
-                s_arm = s if weight is None else replace(s, penalty_weight=weight)
-                row = fit_arm(dataset, s_arm, arm, seed=seed, device=device, prune=not smoke, modules=stash)
-                if arm == "none" and weight is None:
-                    x_cal = dataset.x["train"].to(device)
-                    y_cal = dataset.y["train"].to(device)
-                    calibration = calibrate_weight(stash["none"], x_cal, y_cal, k=bed.d)
-                    weight = calibration["weight"]
-                    print(f"{bed_name} D={amb}: calibrated weight {weight:.4g} ({calibration})", flush=True)
+                row = fit_arm(dataset, replace(s, penalty_weight=weight), arm, seed=seed, device=device, prune=not smoke)
                 row["calibration"] = calibration
-                if arm not in arms:
-                    continue
                 row["ambient"] = amb
                 tag = f"{bed_name}-D{row['D']}"
                 write_block_result(BLOCK, tag, arm, seed, row, device=device, state=state, started_at=t1, label=args.label)

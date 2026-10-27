@@ -78,10 +78,10 @@ def report(
                 chunks_tan.append(j @ m @ j.transpose(1, 2))
     if encoder_was_training:
         encoder.train()
-    a_full = torch.cat(chunks).double()
+    a_full = torch.cat(chunks).cpu().double()  # MPS has no float64: summarise on the CPU
     out: dict[str, Any] = {"full": metric_summary(a_full), "n": int(x.shape[0])}
     if chunks_tan:
-        a_tan = torch.cat(chunks_tan).double()
+        a_tan = torch.cat(chunks_tan).cpu().double()
         out["tan"] = metric_summary(a_tan)
         out["off_manifold_share"] = 1.0 - float(
             torch.linalg.matrix_norm(a_tan).mean() / torch.linalg.matrix_norm(a_full).mean()

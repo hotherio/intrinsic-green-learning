@@ -9,6 +9,43 @@ known) and **learned chart** (IGL trained). The deck's own numbers (two 2-D hill
 
 ## Tier 0: analytic and grid results
 
+Audit notes (2026-10-27, two independent code reviews plus a self-review; the fixes are in the suite,
+the reruns of G1, G2 and G4 under the fixed code are in progress and replace the numbers below where
+they differ):
+
+- R0's two cost measures use different tolerances: the separable rank is relative to `‖u‖`, the atom
+  count to `‖u − mean u‖` (the NRMSE convention), so "1 %" is about 1.5× stricter for the atom count.
+  Both are fair across charts (same samples, same `u`); they are not comparable to each other. The
+  rank on a chart whose image is not a box includes nearest-neighbour fill outside the convex hull;
+  verified immaterial at 1 % on the hills.
+- G1's "incoherent" distortion reused the same six Fourier modes for every entry (mean entry
+  correlation 0.3), so it was partly coherent; its predicted Born depth dropped the naive starting
+  error (`n = log(naive/ε)/log(1/ρ)`); its `ρ` against `‖A − I‖∞` pair was taken without the best
+  global scale; and the power iteration returned an unconverged norm (the deck's 0.507 is about 1 %
+  high). All four are fixed and G1 is rerun.
+- G2 measures the end-to-end sensitivity of `u` to `λ` through the gauge pipeline, which is the full
+  metric sensitivity of the Poisson solution (order one at every `d`, `d = 2` included where
+  `s = 0`); the deck's `s·δ` is the gauge factor alone, not the total. The conclusion stands; the
+  comparison line in the figure is relabelled.
+- G4's loss had an absolute floor on its denominator that a Jacobian spike at a few points could
+  exploit, and no non-degeneracy was logged. The block now rescales `A` to unit mean trace before the
+  loss, logs the range of `tr A` and the smallest `|det Dψ|` of the best chart, draws the restarts and
+  the known-chart bound on the same sample of points, and keeps the optimiser's and the known chart's
+  numbers apart. The hills' numeric conformal chart was conformal only to 6e-2 at the lopsided peak on
+  the deck's 49-point grid; it is now built on a 145-point grid (7e-3 at the worst point), so their
+  known-chart floors move.
+- Targets: the graph-Laplacian family (used in `d ≥ 5` where no eigenfunctions exist, and on SPD(n ≥ 3))
+  cut the Gaussian kernel at a density-dependent kNN radius inside the Gaussian, which breaks the
+  `α = 1` density correction, and SPD(n) under the affine-invariant metric was built with Euclidean
+  distances, identical to its log-Euclidean twin. It is now a fixed-radius truncated Gaussian with the
+  affine-invariant distances on SPD, validated on closed spheres (shape error of `u`: `S²` 4–6 %,
+  `S⁸` 6–9 %). On the beds' bounded patches no boundary condition is imposed, so `u` is a smooth
+  graph-Laplacian field of `f`, the same for every arm, not the Dirichlet solution. No result below
+  used this family yet (the core beds are `d ≤ 4` or have eigenfunctions).
+- The parameter-chart substitution for beds parametrised by their conformal chart now applies to
+  hypersurface caps only; on tori the first `d` ambient coordinates are not a chart (no torus ran
+  through it).
+
 ### R0. The rank story, chart by chart (go / no-go)
 
 Kind: analytic. Targets: the deck's Poisson problem on the hills; grid Poisson solves with a rank-one
@@ -222,6 +259,8 @@ What it says:
 
 ### G4. Oracle floors of the chart penalties
 
+_Numbers from the run before the audit fixes (relative `eps`, non-degeneracy log, finer hill chart); the rerun is in progress._
+
 Kind: analytic, no readout and no encoder. On 2048 sample points of each bed a chart
 `ψ_θ(t) = t + MLP(t)` (2 × 128, tanh, identity at initialisation) is trained for 3000 Adam steps
 (cosine schedule, two restarts for the conformal target) to minimise the axis-normalised
@@ -409,7 +448,9 @@ What it says:
   conformal everywhere, and the readout does not care.
 - **Ambient dimension costs little at these sizes.** `S²` in `R²⁵⁶` is as good as in `R³`
   (0.022 vs 0.023), `S⁸` in `R²⁵⁶` loses 7 % (0.0224 vs 0.0209) and the hill in `R³²` 6 %; the
-  off-manifold share of the Jacobian grows from 0.09–0.13 at native `D` to 0.14–0.21 at `D = 256`.
+  off-manifold part of the Jacobian grows with `D` (the ratio of the on-manifold to the full metric norm
+  falls from 0.87–0.91 at native `D` to 0.79–0.86 at `D = 256`; later rows report the energy share
+  `1 − tr(A_tan)/tr(A_full)` instead).
 - **The 2-D separable rank** of `u` is 5 in the frozen charts of the hill and 4 / 7 in the conformal /
   graph charts of `S²`, against 14–22 in the learned charts: the learned chart is not axis-aligned,
   and its rank says nothing about its atom count (the R0 reading, now on learned charts).
@@ -422,3 +463,73 @@ to the target. X1 asks the only remaining question for proposals A and B: does t
 penalty, at a calibrated weight, preserve this co-adaptation (no regression on the flat pruning
 curve) while adding what the deck promises (a chart-limited certificate, a smaller `λ` spread,
 stability on SPD(2))? Proposal E's reading of `λ` gains a direct witness in `S³×R`.
+
+### X1. Penalty ablation on the core beds (reduced arm set)
+
+Kind: learned chart (label `tier1`, MPS, 3 seeds, 84 fits, 2 h). Arms on ambient inputs: `none`;
+`orth-today` (the package's `OrthogonalityPenalty(0.1, every=20)`); `conf` (`ConformalityPenalty`,
+`β = 1`, axis-normalised, all prefixes, `every = 2`, weight calibrated once per bed so that the
+penalty gradient is 0.3 of the task gradient at epoch 50 of a penalty-free fit); `conf-tan` (the
+same with the bed's tangent projector, so the penalty sees `J P Jᵀ` instead of `J Jᵀ`). Paired
+design: the delta column is per seed against `none` on the same data and minibatches.
+
+| bed | d | D | arm | weight | NRMSE @64 (range) | @16 | @8 | Δ vs none @64 (median [min, max], worse/n) | √L_orth | √L_conf | ‖A−I‖∞ | d_eff | n |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| T2 | 2 | 4 | none | – | 0.0119 (0.0111–0.0119) | 0.012 | 0.012 | – | 0.135 | 0.544 | 7.794 | 2 | 3 |
+| T2 | 2 | 4 | orth-today | – | 0.0119 (0.0113–0.0120) | 0.012 | 0.013 | +0.0001 [+0.0000, +0.0002] 3/3 | 0.00917 | 0.294 | 7.927 | 2 | 3 |
+| T2 | 2 | 4 | conf | 0.00722 | 0.0115 (0.0114–0.0119) | 0.012 | 0.012 | -0.0000 [-0.0004, +0.0002] 1/3 | 0.0098 | 0.083 | 7.521 | 2 | 3 |
+| T2 | 2 | 4 | conf-tan | 0.00722 | 0.0117 (0.0113–0.0118) | 0.012 | 0.012 | -0.0002 [-0.0002, +0.0002] 1/3 | 0.065 | 0.402 | 11.337 | 2 | 3 |
+| hill-lop | 2 | 8 | none | – | 0.0200 (0.0184–0.0295) | 0.02 | 0.022 | – | 0.286 | 0.502 | 12.75 | 2 | 3 |
+| hill-lop | 2 | 8 | orth-today | – | 0.0198 (0.0198–0.0263) | 0.02 | 0.024 | +0.0013 [-0.0097, +0.0063] 2/3 | 0.065 | 0.276 | 9.983 | 2 | 3 |
+| hill-lop | 2 | 8 | conf | 0.0781 | 0.0415 (0.0259–0.0441) | 0.044 | 0.051 | +0.0120 [+0.0059, +0.0257] 3/3 | 0.096 | 0.325 | 612.367 | 2 | 3 |
+| hill-lop | 2 | 8 | conf-tan | 0.0781 | 0.0267 (0.0251–0.0482) | 0.03 | 0.049 | +0.0068 [-0.0044, +0.0297] 2/3 | 0.169 | 0.392 | 8.203 | 2 | 3 |
+| hill-round | 2 | 8 | none | – | 0.0179 (0.0171–0.0193) | 0.018 | 0.018 | – | 0.413 | 0.494 | 8.408 | 2 | 3 |
+| hill-round | 2 | 8 | orth-today | – | 0.0183 (0.0172–0.0215) | 0.018 | 0.019 | +0.0004 [+0.0000, +0.0021] 3/3 | 0.031 | 0.263 | 6.117 | 2 | 3 |
+| hill-round | 2 | 8 | conf | 0.0861 | 0.0253 (0.0199–0.0506) | 0.026 | 0.027 | +0.0075 [+0.0028, +0.0313] 3/3 | 0.037 | 0.084 | 8.993 | 2 | 3 |
+| hill-round | 2 | 8 | conf-tan | 0.0861 | 0.0209 (0.0189–0.0445) | 0.021 | 0.03 | +0.0030 [+0.0018, +0.0252] 3/3 | 0.047 | 0.27 | 12.403 | 2 | 3 |
+| SPD2-airm | 3 | 3 | none | – | 0.0585 (0.0256–0.0717) | 0.06 | 0.07 | – | 0.647 | 0.725 | 338.241 | 2 | 3 |
+| SPD2-airm | 3 | 3 | orth-today | – | 0.0390 (0.0328–0.0726) | 0.039 | 0.041 | +0.0134 [-0.0388, +0.0141] 2/3 | 0.126 | 0.646 | 16.706 | 2 | 3 |
+| SPD2-airm | 3 | 3 | conf | 0.167 | 0.0717 (0.0702–0.0839) | 0.081 | 0.104 | +0.0254 [+0.0000, +0.0446] 3/3 | 0.312 | 0.505 | 622.454 | 2 | 3 |
+| SPD2-airm | 3 | 3 | conf-tan | 0.167 | 0.0688 (0.0665–0.1083) | 0.074 | 0.094 | +0.0103 [-0.0051, +0.0827] 2/3 | 0.28 | 0.496 | 726.263 | 2 | 3 |
+| SPD2-logeuclid | 3 | 3 | none | – | 0.0553 (0.0264–0.0689) | 0.055 | 0.058 | – | 0.554 | 0.739 | 518.228 | 2 | 3 |
+| SPD2-logeuclid | 3 | 3 | orth-today | – | 0.0620 (0.0271–0.0667) | 0.069 | 0.085 | -0.0069 [-0.0282, +0.0402] 1/3 | 0.335 | 0.725 | 419.4 | 2 | 3 |
+| SPD2-logeuclid | 3 | 3 | conf | 0.199 | 0.0783 (0.0734–0.0846) | 0.083 | 0.1 | +0.0293 [+0.0094, +0.0469] 3/3 | 0.245 | 0.538 | 687.871 | 2 | 3 |
+| SPD2-logeuclid | 3 | 3 | conf-tan | 0.199 | 0.0783 (0.0734–0.0846) | 0.083 | 0.1 | +0.0293 [+0.0094, +0.0469] 3/3 | 0.245 | 0.538 | 687.871 | 2 | 3 |
+| S2xR2 | 4 | 5 | none | – | 0.0426 (0.0382–0.0501) | 0.043 | 0.044 | – | 0.315 | 0.667 | 22.02 | 2 | 3 |
+| S2xR2 | 4 | 5 | orth-today | – | 0.0427 (0.0413–0.0488) | 0.043 | 0.044 | +0.0002 [-0.0013, +0.0031] 2/3 | 0.122 | 0.595 | 22.379 | 2 | 3 |
+| S2xR2 | 4 | 5 | conf | 0.0412 | 0.0464 (0.0459–0.0494) | 0.046 | 0.048 | +0.0038 [-0.0007, +0.0077] 2/3 | 0.048 | 0.417 | 16.224 | 2 | 3 |
+| S2xR2 | 4 | 5 | conf-tan | 0.0412 | 0.0461 (0.0448–0.0494) | 0.046 | 0.053 | +0.0022 [-0.0007, +0.0079] 2/3 | 0.105 | 0.466 | 14.508 | 2 | 3 |
+| S4cap | 4 | 5 | none | – | 0.0462 (0.0449–0.0497) | 0.046 | 0.048 | – | 0.731 | 0.747 | 38.522 | 3 | 3 |
+| S4cap | 4 | 5 | orth-today | – | 0.0475 (0.0446–0.0485) | 0.047 | 0.048 | -0.0003 [-0.0022, +0.0023] 1/3 | 0.188 | 0.653 | 33.574 | 2 | 3 |
+| S4cap | 4 | 5 | conf | 0.546 | 0.0623 (0.0619–0.0678) | 0.063 | 0.07 | +0.0157 [+0.0126, +0.0230] 3/3 | 0.044 | 0.172 | 9.672 | 2 | 3 |
+| S4cap | 4 | 5 | conf-tan | 0.546 | 0.0614 (0.0593–0.0703) | 0.063 | 0.075 | +0.0131 [+0.0117, +0.0254] 3/3 | 0.169 | 0.246 | 37.622 | 2 | 3 |
+
+Figure: `results/benchmarks/geometry/tier1/x1_penalty/figures/x1_penalty.png` (relative change of
+the error per seed, and the conformality floor each arm reaches).
+
+What it says:
+
+- **The conformality penalty, at the calibrated weight, costs accuracy on every curved bed and does
+  nothing on the flat one.** Round hill +0.0075 median (worse on 3 of 3 seeds), lopsided hill
+  +0.012 (3/3), `S⁴` cap +0.016 (3/3), `S²×R²` +0.004 (2/3), SPD(2) under both metrics +0.03 to
+  +0.05 (3/3); `T²` ±0.0004. The pruning curves move with it: the penalised charts are no cheaper at
+  16 or 8 anchors than the free ones. Read with O1: the free encoder co-adapts the chart to the
+  target, and a penalty that pulls the chart towards the geometry pays for it in the readout.
+- **The penalty does what it says to the chart.** The conformality floor falls from 0.49 to 0.08
+  on the round hill, from 0.75 to 0.17 on `S⁴` and from 0.67 to 0.42 on `S²×R²` (where the Weyl
+  tensor forbids 0: the prediction holds, the global penalty cannot flatten a product), with the
+  per-bed weights 0.04–0.5. The gap to G4's oracle floors (0 on the hills and `S⁴`) is optimisation,
+  not obstruction (claim A4 fails at 400 epochs; X2's question).
+- **Today's orthogonality penalty is neutral**: within ±0.002 of `none` on every bed but SPD(2),
+  where it is the one arm that stabilises the learned chart (median 0.039 against 0.059, `‖A − I‖∞`
+  17 against 340), at the price of one seed. The learned chart on SPD(2) is unstable in every other
+  arm (`‖A − I‖∞` of 300–700): the chart problem of SPD(2) is a stability problem first.
+- **The tangent projector changes little**: `conf-tan` tracks `conf` on every bed and coincides with
+  it on the log-Euclidean twin (where `P = I` by construction, a check that passed). At native
+  ambient dimension the off-manifold part of the Jacobian is not what hurts.
+- **Pending:** a weight sweep (`conf` at 0.1× and 0.03× the calibrated weight on the round hill,
+  `S⁴` and `S²×R²`) to see whether a weaker pull keeps the floor gain without the accuracy cost.
+
+Consequence for the plan: proposals A and B do not improve IGL's readout at `N = 4096`, 64 anchors
+and 400 epochs on any synthetic bed of the core set; the value of the conformality target, if any,
+lies in the certificate (D) and in the operator side (E), not in regularising the learned chart.

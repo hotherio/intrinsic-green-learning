@@ -43,30 +43,50 @@ class Chart(nn.Module):
         return t + self.net(t)
 
 
-def inverse_metric_in_chart(chart: Chart, t: torch.Tensor, ginv_param: torch.Tensor) -> torch.Tensor:
-    """``A = D psi g^{-1} D psi^T`` at every point: the inverse metric in the new chart, ``[n, d, d]``."""
+def inverse_metric_in_chart(chart: Chart, t: torch.Tensor, ginv_param: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``A = D psi g^{-1} D psi^T`` at every point (the inverse metric in the new chart, ``[n, d, d]``) and ``D psi``."""
     jac = vmap(jacrev(chart))(t)  # [n, d, d]
-    return jac @ ginv_param @ jac.transpose(1, 2)
+    return jac @ ginv_param @ jac.transpose(1, 2), jac
+
+
+def loss_of(a: torch.Tensor, beta: float) -> torch.Tensor:
+    """The conformality loss of ``a`` after a global rescaling to unit mean trace per dimension.
+
+    The loss is scale-free except for its absolute ``eps`` on the denominator; without the rescaling a
+    Jacobian spike at a few points would push every other point below ``eps`` and lower the loss.
+    """
+    scale = torch.diagonal(a, dim1=-2, dim2=-1).sum(-1).mean() / a.shape[-1]
+    return conformality_loss(a / scale, beta=beta)
+
+
+def degeneracy(a: torch.Tensor, jac: torch.Tensor) -> dict[str, float]:
+    """Non-degeneracy diagnostics of a chart: the range of ``tr(A)`` and the smallest ``|det D psi|`` over the points."""
+    tr = torch.diagonal(a, dim1=-2, dim2=-1).sum(-1)
+    det = torch.linalg.det(jac).abs()
+    return {"tr_ratio_max_min": float(tr.max() / tr.min().clamp_min(1e-300)), "min_abs_det_jac": float(det.min())}
 
 
 def fit_chart(
-    bed: manifolds.Bed, *, beta: float, n_points: int, steps: int, seed: int = 0, lr: float = 3e-3
+    bed: manifolds.Bed, *, beta: float, n_points: int, steps: int, seed: int = 0, lr: float = 3e-3, init_seed: int | None = None
 ) -> tuple[Chart, dict[str, Any]]:
-    """Train the chart; return it with the floor, the training curve and the fraction of the initial deviation removed."""
-    torch.manual_seed(seed)
+    """Train the chart; return it with the floor, the training curve and the fraction of the initial deviation removed.
+
+    ``seed`` fixes the sample of points (shared by restarts and by the known-chart bound); ``init_seed`` the MLP init.
+    """
     t, _ = bed.sample(n_points, seed=seed)
     g_param = torch.stack([bed.metric(ti) for ti in t])
     ginv_param = torch.linalg.inv(g_param)
+    torch.manual_seed(seed if init_seed is None else init_seed)
     chart = Chart(bed.d)
     opt = torch.optim.Adam(chart.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr / 100)
-    start = float(conformality_loss(ginv_param, beta=beta))
+    start = float(loss_of(ginv_param, beta))
     curve: list[float] = []
     best_loss, best_step = start, 0  # the identity chart (step 0) is a valid chart: the floor never exceeds ``start``
     best_state = {k: v.detach().clone() for k, v in chart.state_dict().items()}
     for step in range(steps):
-        a = inverse_metric_in_chart(chart, t, ginv_param)
-        loss = conformality_loss(a, beta=beta)
+        a, _ = inverse_metric_in_chart(chart, t, ginv_param)
+        loss = loss_of(a, beta)
         value = float(loss.detach())
         if value < best_loss:
             best_loss, best_step = value, step
@@ -79,10 +99,11 @@ def fit_chart(
             curve.append(value)
     chart.load_state_dict(best_state)
     with torch.no_grad():
-        a = inverse_metric_in_chart(chart, t, ginv_param)
-        floor = float(conformality_loss(a, beta=beta))
-        conf_floor = float(conformality_loss(a, beta=1.0))
-        orth_floor = float(conformality_loss(a, beta=0.0))
+        a, jac = inverse_metric_in_chart(chart, t, ginv_param)
+        floor = float(loss_of(a, beta))
+        conf_floor = float(loss_of(a, 1.0))
+        orth_floor = float(loss_of(a, 0.0))
+        degen = degeneracy(a, jac)
     tail = curve[-5:]
     converged = (max(tail) - min(tail)) < 0.05 * max(tail[-1], 1e-12) + 1e-9
     info = {
@@ -98,6 +119,7 @@ def fit_chart(
         "converged": converged,
         "best_step": best_step,
         "optimiser_drifted": best_step < steps - steps // 10,
+        **degen,
     }
     return chart, info
 
@@ -112,17 +134,21 @@ def optimise(
     """
     best: dict[str, Any] | None = None
     for r in range(restarts):
-        info = fit_chart(bed, beta=beta, n_points=n_points, steps=steps, seed=seed + r, lr=lr)[1]
+        info = fit_chart(bed, beta=beta, n_points=n_points, steps=steps, seed=seed, init_seed=seed + r, lr=lr)[1]
         if best is None or info["floor"] < best["floor"]:
             best = info
     assert best is not None
     best["restarts"] = restarts
-    known = known_chart_floor(bed, beta=beta, n_points=n_points, seed=seed)
+    best["optimiser_sqrt_floor"] = best["sqrt_floor"]
+    best["floor_source"] = "optimiser"
+    known = known_chart_floor(bed, beta=beta, n_points=n_points, seed=seed)  # the same sample of points
     best["known_chart_floor_sqrt"] = known
     if known is not None and known**2 < best["floor"]:
+        # the reported floor is the known chart's; the optimiser's own numbers stay under ``optimiser_*``
         best["optimiser_gap_sqrt"] = best["sqrt_floor"] - known
         best["floor"] = known**2
         best["sqrt_floor"] = known
+        best["floor_source"] = "known_chart"
         best["removed_fraction"] = 1.0 - (best["floor"] / best["start"]) ** 0.5 if best["start"] > 1e-8 else 1.0
     return best
 
@@ -131,7 +157,6 @@ def known_chart_floor(bed: manifolds.Bed, *, beta: float, n_points: int, seed: i
     """``sqrt`` of the penalty at the bed's known conformal chart (``None`` when the bed has none)."""
     if bed.conformal_chart is None:
         return None
-    torch.manual_seed(seed)
     t, _ = bed.sample(n_points, seed=seed)
     ginv_param = torch.linalg.inv(torch.stack([bed.metric(ti) for ti in t]))
     chart = bed.conformal_chart
@@ -147,7 +172,7 @@ def known_chart_floor(bed: manifolds.Bed, *, beta: float, n_points: int, seed: i
             cols.append((chart(t + e) - chart(t - e)) / (2 * eps))
         jac = torch.stack(cols, dim=-1)
     a = jac @ ginv_param @ jac.transpose(1, 2)
-    return float(conformality_loss(a, beta=beta)) ** 0.5
+    return float(loss_of(a, beta)) ** 0.5
 
 
 def beds_for(*, smoke: bool) -> list[manifolds.Bed]:
@@ -231,7 +256,8 @@ def main() -> None:
         flag = "" if c["converged"] else " (not converged)"
         print(
             f"{bed.name:22s} d={bed.d} {obs['kind']:6s} {obs['mean']:.3f} | conf: start {c['start'] ** 0.5:.3f} "
-            f"floor {c['sqrt_floor']:.4f} removed {c['removed_fraction']:.2f}{flag} | orth floor {o['sqrt_floor']:.4f} "
+            f"floor {c['sqrt_floor']:.4f} ({c['floor_source']}) removed {c['removed_fraction']:.2f}{flag} "
+            f"tr-ratio {c['tr_ratio_max_min']:.1f} min|det| {c['min_abs_det_jac']:.2e} | orth floor {o['sqrt_floor']:.4f} "
             f"(its conf {o['conf_floor_sqrt']:.3f}) | {row['seconds']:.0f}s",
             flush=True,
         )

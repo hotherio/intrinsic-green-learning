@@ -364,7 +364,9 @@ def hill_surface(which: str = "lop") -> Bed:
         if "interp" not in cache:
             from scipy.interpolate import RectBivariateSpline
 
-            prob = hills.make_problem(which, 1.0)
+            # a 145-point grid: on the 49-point grid of the deck the interpolated chart is conformal only to
+            # 6e-2 at the lopsided peak, which would be read as a floor of the chart instead of its resolution
+            prob = hills.make_problem(which, 1.0, m=145)
             chart = hills.isothermal_chart(prob.grid, hill, 1.0, prob.met, prob.curved)
             x = prob.grid.x
             cache["interp"] = (RectBivariateSpline(x, x, chart.p), RectBivariateSpline(x, x, chart.q))

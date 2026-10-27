@@ -16,6 +16,7 @@ depth of 8 to ``1e-3`` and a naive error of 33 %; the lopsided hill ``0.739``, 1
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -411,17 +412,35 @@ def depth(errors: list[float], eps: float) -> int | None:
     return next((n for n, e in enumerate(errors) if e < eps), None)
 
 
-def spectral_radius(prob: HillProblem, iters: int = 80, seed: int = 0) -> float:
-    """``rho(G K)`` by power iteration, the contraction of the Born series."""
+def best_scale(met: Metric) -> float:
+    """The global scale ``c = mean tr(g^{-1}) / 2`` over the grid, the flat kernel's best constant coefficient."""
+    return float((met.gxx + met.gyy).mean() / 2)
+
+
+def max_dev_scaled(met: Metric, scale: float) -> float:
+    """``max |g^{-1}/c - I|`` in operator norm over the grid."""
+    a = np.stack([np.stack([met.gxx, met.gxy], -1), np.stack([met.gxy, met.gyy], -1)], -2) / scale  # [..., 2, 2]
+    dev = a - np.eye(2)
+    return float(np.linalg.norm(dev.reshape(-1, 2, 2), ord=2, axis=(1, 2)).max())
+
+
+def spectral_radius(prob: HillProblem, iters: int = 300, seed: int = 0, *, scale: float = 1.0) -> float:
+    """``rho(G_c K_c)`` by power iteration, the contraction of the Born series with the flat kernel at scale ``c``.
+
+    The operator is not symmetric, so the norm ratio of one step oscillates; the estimate is the geometric
+    mean of the ratios over the second half of the iterations, which converges to the spectral radius.
+    """
     rng = np.random.default_rng(seed)
     n = (prob.grid.m - 2) ** 2
     v = rng.standard_normal(n)
     v /= np.linalg.norm(v)
-    rho = 0.0
+    logs: list[float] = []
     for _ in range(iters):
-        w = prob.flat_lu.solve(prob.flat @ v - prob.curved @ v)
-        rho, v = float(np.linalg.norm(w)), w / max(np.linalg.norm(w), 1e-30)
-    return rho
+        w = prob.flat_lu.solve(scale * (prob.flat @ v) - prob.curved @ v) / scale
+        nw = max(float(np.linalg.norm(w)), 1e-300)
+        logs.append(math.log(nw))
+        v = w / nw
+    return math.exp(float(np.mean(logs[len(logs) // 2 :])))
 
 
 def analyse(name: str, s: float, *, m: int = M_DEFAULT, n_born: int = NBORN, charts: bool = True) -> dict[str, Any]:
@@ -430,6 +449,8 @@ def analyse(name: str, s: float, *, m: int = M_DEFAULT, n_born: int = NBORN, cha
     grid, met = prob.grid, prob.met
     errors = born_errors(prob, n_born)
     rho = spectral_radius(prob)
+    c = best_scale(met)
+    rho_scaled = spectral_radius(prob, scale=c)
     ux, uy, uxx, uxy, uyy = second_derivatives(grid, prob.u)
     stretch = (met.gxx - 1) * uxx + 2 * met.gxy * uxy + (met.gyy - 1) * uyy
     drift = met.bx * ux + met.by * uy
@@ -445,6 +466,9 @@ def analyse(name: str, s: float, *, m: int = M_DEFAULT, n_born: int = NBORN, cha
         "height": prob.height,
         "rho": rho,
         "max_dev": met.max_dev,
+        "scale": c,
+        "rho_scaled": rho_scaled,
+        "max_dev_scaled": max_dev_scaled(met, c),
         "errors": errors,
         "depth": {"1e-2": depth(errors, 1e-2), "1e-3": depth(errors, 1e-3), "1e-6": depth(errors, 1e-6)},
         "naive_error": float(np.linalg.norm(gf - u_true) / np.linalg.norm(u_true)),

@@ -15,6 +15,7 @@ Three families, in order of preference:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -131,25 +132,47 @@ def eigen_targets(bed: Bed, t: torch.Tensor, x: torch.Tensor) -> tuple[torch.Ten
 
 
 def graph_laplacian_targets(
-    x_all: torch.Tensor, f_all: torch.Tensor, *, k: int = 40, alpha: float = 1.0, eps: float = 1e-3, dist: Array | None = None
+    x_all: torch.Tensor,
+    f_all: torch.Tensor,
+    *,
+    k: int = 40,
+    alpha: float = 1.0,
+    eps: float = 1e-3,
+    dist: Array | None = None,
+    cut_quantile: float = 0.99,
 ) -> torch.Tensor:
-    """``u = (L + eps I)^-1 f`` on a kNN graph over ``x_all`` with the ``alpha``-normalised Gaussian kernel of diffusion maps.
+    """``u = (L + eps L_scale)^-1 f`` on a fixed-radius graph over ``x_all`` with the ``alpha``-normalised Gaussian kernel.
 
-    ``dist`` may supply a precomputed pairwise distance matrix (e.g. affine-invariant distances on SPD).
+    The graph is an epsilon-ball graph: the radius ``R`` is the median distance to the ``k``-th neighbour and
+    the Gaussian bandwidth ``sigma`` is set so that the ball holds the ``cut_quantile`` mass of a Gaussian in
+    ``d`` dimensions (``R = sigma * sqrt(chi2_d^{-1}(cut_quantile))``), so the kernel is a fixed-bandwidth
+    kernel truncated far in its tail. A kNN truncation would cut the kernel at a density-dependent radius
+    (inside the Gaussian in ``d >= 8``), which breaks the ``alpha = 1`` density correction of diffusion maps.
+    ``dist`` may supply a precomputed pairwise distance matrix (affine-invariant distances on SPD). ``eps``
+    is in units of ``I - P``; the regulariser is ``eps * 2 / sigma^2``.
     """
+    from scipy.stats import chi2
+
     x = x_all.detach().cpu().numpy().astype(float)
-    n = x.shape[0]
+    n, d = x.shape
     if dist is None:
         nn = NearestNeighbors(n_neighbors=k + 1).fit(x)
-        dists, idx = nn.kneighbors(x)
+        dists_k, _ = nn.kneighbors(x)
+        radius = float(np.median(dists_k[:, k]))
+        graph = nn.radius_neighbors_graph(x, radius=radius, mode="distance")
+        graph = sp.csr_matrix(graph)
     else:
-        idx = np.argsort(dist, axis=1)[:, : k + 1]
-        dists = np.take_along_axis(dist, idx, axis=1)
-    sigma = float(np.median(dists[:, max(1, k // 4)]))  # bandwidth well inside the kNN truncation radius
-    rows = np.repeat(np.arange(n), k + 1)
-    w = np.exp(-(dists.ravel() ** 2) / (2 * sigma**2))
-    kern = sp.csr_matrix((w, (rows, idx.ravel())), shape=(n, n))
-    kern = 0.5 * (kern + kern.T)
+        dist = np.asarray(dist, dtype=float)
+        radius = float(np.median(np.sort(dist, axis=1)[:, k]))
+        graph = sp.csr_matrix(np.where(dist <= radius, dist, 0.0))
+        d = int(x.shape[1])
+    graph.setdiag(0.0)
+    graph.eliminate_zeros()
+    sigma = radius / math.sqrt(float(chi2.ppf(cut_quantile, d)))
+    kern = graph.copy()
+    kern.data = np.exp(-(kern.data**2) / (2 * sigma**2))
+    kern = kern + sp.identity(n, format="csr")  # the self-weight exp(0) = 1 dropped by the sparse graph
+    kern = sp.csr_matrix(0.5 * (kern + kern.T))
     deg = np.asarray(kern.sum(1)).ravel()
     dinv = sp.diags(deg**-alpha)
     kern_a = dinv @ kern @ dinv  # density correction (alpha = 1 recovers the Laplace-Beltrami operator)
@@ -185,7 +208,17 @@ def targets_for(bed: Bed, t: torch.Tensor, x: torch.Tensor, *, family: str = "au
     box = float(bed.high[0] - bed.low[0])
     c0 = torch.tensor([0.15 * box, 0.05 * box] + [0.0] * (bed.d - 2), dtype=t.dtype)
     f = torch.exp(-((t - c0) ** 2).sum(1) / (2 * (0.2 * box) ** 2))
-    return {"family": "graph", "u": graph_laplacian_targets(x, f), "f": f}
+    dist = None
+    if bed.extra.get("metric") == "airm":
+        from benchmarks.geometry.testbeds.spd_beds import airm_pairwise_distance
+
+        dist = airm_pairwise_distance(t, int(bed.extra["n"])).numpy()  # the graph must live in the AIRM geometry
+    # validated on closed spheres against harmonics (shape error of u, degree 1 / 2): S^2 with k = 100 and the
+    # 99 % cut 4 / 6 % at 3000 points; S^8 with k = 800 and the 90 % cut 6 / 9 % at 6000 points. On the beds'
+    # bounded patches no boundary condition is imposed: u is a smooth graph-Laplacian field of f, not the
+    # Dirichlet solution, and every arm sees the same u.
+    k, cut = (100, 0.99) if bed.d <= 4 else (800, 0.9)
+    return {"family": "graph", "u": graph_laplacian_targets(x, f, k=k, dist=dist, cut_quantile=cut), "f": f}
 
 
 __all__ = [

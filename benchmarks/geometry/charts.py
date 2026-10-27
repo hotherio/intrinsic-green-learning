@@ -10,8 +10,8 @@ relabelling of an axis is not free, so the axes are not rank-normalised):
   needs to reach the tolerance (orthogonal matching pursuit), the closest proxy of IGL's anchor count
   that does not depend on how the anchors were trained.
 
-``greedy_prune`` is the deployed counterpart: starting from a trained design matrix, remove the anchor
-whose deletion costs least and refit the readout, giving the error-against-anchors curve on one chart.
+The deployed counterpart, the error-against-anchors curve of a trained design under greedy anchor
+deletion, lives in ``fitting._prune_curve``.
 """
 
 from __future__ import annotations
@@ -29,26 +29,36 @@ from benchmarks.geometry.testbeds.graphs import tt_ranks
 from benchmarks.geometry.testbeds.hills import separable_rank
 
 Array = NDArray[np.float64]
-__all__ = ["affine_normalise", "bump_count", "chart_rank", "greedy_prune", "quantile_normalise"]
+__all__ = ["affine_normalise", "bump_count", "chart_rank"]
 
 
-def affine_normalise(z: torch.Tensor) -> torch.Tensor:
-    """Map each axis of ``z`` to ``[0, 1]`` by a constant rescaling (what the kernel's per-axis widths absorb)."""
+def affine_normalise(z: torch.Tensor, *, robust: bool = False) -> torch.Tensor:
+    """Map each axis of ``z`` to ``[0, 1]`` by a constant rescaling (what the kernel's per-axis widths absorb).
+
+    With ``robust`` the range is the 1–99 % quantile range (the tails stay where the affine map sends them,
+    outside ``[0, 1]``): on a learned chart a few outlying points would otherwise squash the bulk of the data
+    into a corner of the grid the dictionaries of :func:`chart_rank` and :func:`bump_count` are built on,
+    inflating their counts. The map stays a constant rescaling either way.
+    """
     z = z.double()
+    if robust:
+        lo = torch.quantile(z, 0.01, dim=0)
+        hi = torch.quantile(z, 0.99, dim=0)
+        return (z - lo) / (hi - lo).clamp_min(1e-12)
     lo = z.min(dim=0).values
     hi = z.max(dim=0).values
     return (z - lo) / (hi - lo).clamp_min(1e-12)
 
 
-def quantile_normalise(z: torch.Tensor) -> torch.Tensor:
-    """Map each axis of ``z`` to ``[0, 1]`` by its empirical ranks (a monotone relabelling, more than the kernel absorbs)."""
-    ranks = z.argsort(dim=0).argsort(dim=0).double()
-    return ranks / max(z.shape[0] - 1, 1)
+def chart_rank(
+    z: torch.Tensor, u: torch.Tensor, *, tol: float = 0.01, points: int | None = None, robust: bool = False
+) -> dict[str, Any]:
+    """Separable rank of ``u`` on a regular grid of the normalised chart (``d = 2``: SVD; ``d >= 3``: tensor-train ranks).
 
-
-def chart_rank(z: torch.Tensor, u: torch.Tensor, *, tol: float = 0.01, points: int | None = None) -> dict[str, Any]:
-    """Separable rank of ``u`` on a regular grid of the normalised chart (``d = 2``: SVD; ``d >= 3``: tensor-train ranks)."""
-    zq = affine_normalise(z).numpy()
+    Grid nodes outside the convex hull of the sample are filled by nearest neighbour, so on a learned chart
+    whose image is not a box the rank includes boundary plateaus: read it as an upper bound there.
+    """
+    zq = affine_normalise(z, robust=robust).numpy()
     d = zq.shape[1]
     n = points or {1: 65, 2: 33, 3: 17, 4: 11}.get(d, 7)
     axes = [np.linspace(0, 1, n)] * d
@@ -77,13 +87,15 @@ def bump_count(
     centres_per_axis: int | None = None,
     width_factors: tuple[float, ...] = (0.5, 1.0, 2.0),
     max_atoms: int = 256,
+    robust: bool = False,
 ) -> dict[str, Any]:
     """Smallest number of fixed-grid Gaussian atoms whose sparse fit reaches relative error ``tol`` (matching pursuit).
 
     The centres form a grid of about 1024 / len(width_factors) points per width; the widths are the grid
-    spacing times ``width_factors``, so the dictionary covers the chart in any dimension.
+    spacing times ``width_factors``. In ``d >= 4`` that grid has at most four centres per axis, so the count
+    is only a coarse upper bound there and is usually censored.
     """
-    zq = affine_normalise(z).numpy()
+    zq = affine_normalise(z, robust=robust).numpy()
     d = zq.shape[1]
     m = centres_per_axis or max(2, int(round((1024 / len(width_factors)) ** (1 / d))))
     axes = [np.linspace(0, 1, m)] * d
@@ -109,28 +121,3 @@ def bump_count(
             break
     counts = {f"{t:g}": next((i + 1 for i, e in enumerate(curve) if e <= t), None) for t in (0.05, 0.02, 0.01)}
     return {"count": count, "counts": counts, "curve": curve, "n_candidates": int(phi.shape[1]), "censored": count is None}
-
-
-def greedy_prune(
-    phi_blocks: list[torch.Tensor], y: torch.Tensor, *, l2: float = 1e-3, min_blocks: int = 1
-) -> list[dict[str, float]]:
-    """Error against the number of anchors when anchors are removed greedily from a trained design, the readout refit by ridge.
-
-    ``phi_blocks`` holds one ``[n, K]`` block of design columns per anchor (its scales); ``y`` ``[n]``.
-    """
-    y = y.double()
-    norm = float(y.norm())
-    alive = list(range(len(phi_blocks)))
-
-    def fit_error(idx: list[int]) -> float:
-        phi = torch.cat([phi_blocks[i].double() for i in idx], dim=1)
-        gram = phi.T @ phi + l2 * torch.eye(phi.shape[1], dtype=phi.dtype)
-        w = torch.linalg.solve(gram, phi.T @ y)
-        return float((y - phi @ w).norm() / norm)
-
-    curve = [{"anchors": len(alive), "error": fit_error(alive)}]
-    while len(alive) > min_blocks:
-        best = min(alive, key=lambda i: fit_error([j for j in alive if j != i]))
-        alive.remove(best)
-        curve.append({"anchors": len(alive), "error": fit_error(alive)})
-    return curve

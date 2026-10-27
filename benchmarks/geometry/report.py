@@ -268,10 +268,127 @@ def figure_o1(rows: list[dict[str, Any]], label: str) -> None:
     print("figure:", out / "o1_oracle_bracket.png")
 
 
-FIGURES = {"o1_oracle_bracket": figure_o1}
+def _paired(rows: list[dict[str, Any]], base: list[dict[str, Any]], key: str = "nrmse_test_dmax") -> dict[str, Any]:
+    """Per-seed deltas of ``key`` against the ``none`` arm: median, min, max and the sign agreement."""
+    b = {r["seed"]: float(r[key]) for r in base}
+    deltas = [float(r[key]) - b[r["seed"]] for r in rows if r["seed"] in b]
+    if not deltas:
+        return {"median": float("nan"), "min": float("nan"), "max": float("nan"), "worse": 0, "n": 0}
+    return {
+        "median": sorted(deltas)[len(deltas) // 2],
+        "min": min(deltas),
+        "max": max(deltas),
+        "worse": sum(d > 0 for d in deltas),
+        "n": len(deltas),
+    }
+
+
+def table_x1(rows: list[dict[str, Any]]) -> str:
+    """X1: penalty arms per bed, medians over seeds, paired deltas against ``none``."""
+    import statistics as st
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in rows:
+        groups.setdefault((r["bed"], r["arm"]), []).append(r)
+    beds = sorted({b for b, _ in groups}, key=lambda b: (groups[(b, "none")][0]["d"], b))
+    order = ["none", "orth-today", "orth-matched", "conf", "conf@0.1", "conf@0.03", "conf-tan", "conf-plain", "beta-0.5"]
+    body = []
+    for b in beds:
+        base = groups.get((b, "none"), [])
+        for a in sorted({a for bb, a in groups if bb == b}, key=lambda a: order.index(a) if a in order else 99):
+            rs = groups[(b, a)]
+            e64 = [float(r["nrmse_test_dmax"]) for r in rs]
+            pd = _paired(rs, base)
+            rt = [r["report_test"]["full"] for r in rs]
+            w = rs[0].get("penalty_weight")
+            body.append(
+                [
+                    b,
+                    rs[0]["d"],
+                    rs[0]["D"],
+                    a,
+                    "–" if w is None else f"{w:.3g}",
+                    f"{st.median(e64):.4f} ({min(e64):.4f}–{max(e64):.4f})",
+                    st.median(_at_anchors(r, 16) for r in rs),
+                    st.median(_at_anchors(r, 8) for r in rs),
+                    "–" if a == "none" else f"{pd['median']:+.4f} [{pd['min']:+.4f}, {pd['max']:+.4f}] {pd['worse']}/{pd['n']}",
+                    st.median(float(x["sqrt_orth"]) for x in rt),
+                    st.median(float(x["sqrt_conf"]) for x in rt),
+                    st.median(float(x["norm_inf"]) for x in rt),
+                    st.median(int(r["d_eff_elbow"]) for r in rs),
+                    len(rs),
+                ]
+            )
+    return md_table(
+        [
+            "bed",
+            "d",
+            "D",
+            "arm",
+            "weight",
+            "NRMSE @64 (range)",
+            "@16",
+            "@8",
+            "Δ vs none @64 (median [min, max], worse/n)",
+            "√L_orth",
+            "√L_conf",
+            "‖A−I‖∞",
+            "d_eff",
+            "n",
+        ],
+        body,
+    )
+
+
+def figure_x1(rows: list[dict[str, Any]], label: str) -> None:
+    """Paired deltas against ``none`` per bed and arm (dots per seed), and the conformality floor per arm."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in rows:
+        groups.setdefault((r["bed"], r["arm"]), []).append(r)
+    beds = sorted({b for b, _ in groups}, key=lambda b: (groups[(b, "none")][0]["d"], b))
+    arms = [
+        a
+        for a in ["orth-today", "orth-matched", "conf", "conf@0.1", "conf@0.03", "conf-tan"]
+        if any(a == aa for _, aa in groups)
+    ]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 0.6 * len(beds) + 2.5))
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for i, b in enumerate(beds):
+        base = {r["seed"]: float(r["nrmse_test_dmax"]) for r in groups[(b, "none")]}
+        for j, a in enumerate(arms):
+            rs = groups.get((b, a), [])
+            ys = [i + (j - (len(arms) - 1) / 2) * 0.12] * len(rs)
+            xs = [float(r["nrmse_test_dmax"]) / base[r["seed"]] - 1.0 for r in rs if r["seed"] in base]
+            ax1.scatter(xs[: len(ys)], ys[: len(xs)], color=colors[j % len(colors)], s=18, label=a if i == 0 else None)
+            fl = [float(r["report_test"]["full"]["sqrt_conf"]) for r in rs]
+            ax2.scatter(fl, ys[: len(fl)], color=colors[j % len(colors)], s=18, label=a if i == 0 else None)
+        fl0 = [float(r["report_test"]["full"]["sqrt_conf"]) for r in groups[(b, "none")]]
+        ax2.scatter(fl0, [i] * len(fl0), color="k", s=18, marker="x", label="none" if i == 0 else None)
+    for ax in (ax1, ax2):
+        ax.set_yticks(range(len(beds)))
+        ax.set_yticklabels(beds, fontsize=8)
+        ax.grid(alpha=0.3)
+    ax1.axvline(0, color="k", lw=0.8)
+    ax1.set_xlabel("relative change of test NRMSE at 64 anchors against the none arm (same seed)")
+    ax2.set_xlabel("√L_conf of the learned chart (test set)")
+    ax1.legend(fontsize=7)
+    fig.tight_layout()
+    out = Path.cwd() / "results" / "benchmarks" / "geometry" / label / "x1_penalty" / "figures"
+    out.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out / "x1_penalty.png", dpi=150)
+    print("figure:", out / "x1_penalty.png")
+
+
+FIGURES = {"o1_oracle_bracket": figure_o1, "x1_penalty": figure_x1}
 
 TABLES = {
     "o1_oracle_bracket": table_o1,
+    "x1_penalty": table_x1,
     "r0_rank_go_nogo": table_r0,
     "g0_geometry": table_g0,
     "g1_rho_law": table_g1,

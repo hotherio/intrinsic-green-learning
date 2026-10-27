@@ -1,18 +1,20 @@
 """The learned-chart protocol shared by every tier 1+ block: one IGL fit per (bed, arm, seed), scored the same way.
 
-Fixed by the plan: the default encoder with Stiefel init, 64 anchors x 4 scales, 400 epochs, batch 256,
-``source_l2 = 1e-3``, no scheduler, no early stopping, no gradient clipping; the same data tensors for every
-arm; the readout solved on the full training set and scored on the test set (never ``eval_dimension_curve``
-on test); both penalty floors, the geometry report, ``d_eff`` and the chart-only costs recorded for every run.
-A paired design: arms sharing a seed see the same minibatches, because the sampler draws from the global RNG
-that ``torch.manual_seed`` resets before each fit.
+Fixed by the plan, as revised by the O1 pilots: the default encoder with Stiefel init, 64 anchors x 4
+scales, 400 epochs, batch 256, ``source_l2 = 1e-3``, constant learning rate, the package's gradient clipping,
+no early stop within the budget but the best-validation state restored; the same data tensors for every arm;
+the readout solved on the full training set and scored on the test set (never ``eval_dimension_curve`` on
+test); both penalty floors, the geometry report, ``d_eff`` and the chart-only costs recorded for every run.
+Chart inputs (the oracle arms) are standardised and fed to a frozen identity encoder. A paired design: arms
+sharing a seed see the same minibatches, because the sampler draws from the global RNG that
+``torch.manual_seed`` resets before each fit.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import torch
@@ -108,11 +110,14 @@ def make_dataset(bed: manifolds.Bed, spec: FitSpec, *, seed: int = 0, target_fam
     t_param = t.to(torch.float32)
     if bed.conformal_chart is not None:
         conformal = {k: torch.stack([bed.conformal_chart(ti) for ti in t[v]]).to(torch.float32) for k, v in idx.items()}
-        if torch.allclose(conformal["train"], t_param[idx["train"]]):
-            # the bed is parametrised by its conformal chart (sphere caps): the non-conformal reference chart
-            # is then the graph chart, the first d ambient coordinates (orthographic projection on a cap)
+        if torch.allclose(conformal["train"], t_param[idx["train"]]) and bed.ambient == bed.d + 1:
+            # a hypersurface parametrised by its conformal chart (sphere caps): the non-conformal reference
+            # chart is then the graph chart, the first d ambient coordinates (orthographic projection on a cap).
+            # Not for tori or flat beds: their first d ambient coordinates do not form a chart.
             t_param = x0[:, : bed.d].to(torch.float32)
             param_chart = "graph chart (first d ambient coordinates)"
+        elif torch.allclose(conformal["train"], t_param[idx["train"]]):
+            param_chart = "parameter chart (= conformal chart)"
     return Dataset(
         bed_name=bed.name,
         d=bed.d,
@@ -123,7 +128,7 @@ def make_dataset(bed: manifolds.Bed, spec: FitSpec, *, seed: int = 0, target_fam
         metric_inv_train=m_train,
         conformal_chart=conformal,
         target_family=str(tg["family"]),
-        extra={"param_chart": param_chart},
+        extra={"param_chart": param_chart, "ambient_metric_identity": bed.ambient_metric is None},
     )
 
 
@@ -143,6 +148,9 @@ def arm_penalty(arm: str, spec: FitSpec, dataset: Dataset, trainer_ref: dict[str
             return m_all[idx.to(m_all.device)].to(device=xb.device, dtype=xb.dtype)
 
         return ConformalityPenalty(beta=1.0, metric_inv=metric_inv, **matched)
+    if "@" in arm:  # "conf@0.1": the arm's penalty at a multiple of the calibrated weight
+        base, factor = arm.split("@")
+        return arm_penalty(base, replace(spec, penalty_weight=w * float(factor)), dataset, trainer_ref)
     table: dict[str, Callable[[], ExtraLoss | None]] = {
         "none": lambda: None,
         "orth-today": lambda: OrthogonalityPenalty(weight=0.1, every=20),
@@ -322,11 +330,19 @@ def fit_arm(
     m_train = None
     if inputs == "ambient" and dataset.metric_inv_train is not None:
         m_train = dataset.metric_inv_train[:1024].to(dev)
-    rep_train = geometry_report.report(module.encoder, x_tr[:1024], k=d, output_dim=max_dim, metric_inv=m_train)
+    rep_train = geometry_report.report(
+        module.encoder,
+        x_tr[:1024],
+        k=d,
+        output_dim=max_dim,
+        metric_inv=m_train,
+        metric_inv_is_projector=bool(dataset.extra.get("ambient_metric_identity", True)),
+    )
     with torch.no_grad():
         z_te = module.latent(x_te)[:, :d].cpu().double()
-    chart_cost = {"rank": charts.chart_rank(z_te, y_te.cpu())["rank"] if d == 2 else None}  # a 2-D grid measure
-    bc = charts.bump_count(z_te[:1024], y_te.cpu()[:1024], max_atoms=128)
+    # chart-only costs on a robust [0, 1] normalisation of the latent (a learned chart can have outliers)
+    chart_cost = {"rank": charts.chart_rank(z_te, y_te.cpu(), robust=True)["rank"] if d == 2 else None}
+    bc = charts.bump_count(z_te[:1024], y_te.cpu()[:1024], max_atoms=128, robust=True)
     chart_cost["bumps"] = bc["counts"]
     curve = igl.eval_dimension_curve(module, x_va, y_va.unsqueeze(1), loss=igl.MSELoss(), source_l2=spec.source_l2)
     try:
@@ -358,11 +374,12 @@ def fit_arm(
         "dimension_curve": {str(k): float(v) for k, v in curve.items()},
         "snapshots": snapshots,
         "target_family": dataset.target_family,
-        "nrmse_val_history": [float(v) for v in history.val_loss[-3:]] if history.val_loss else [],
+        "val_loss_last3": [float(v) for v in history.val_loss[-3:]] if history.val_loss else [],  # MSE, not NRMSE
     }
     if prune:
         row["prune_curve"] = _prune_curve(module, x_tr, y_tr, x_te, y_te, k=max_dim, l2=spec.source_l2)
-    row["penalty_weight"] = spec.penalty_weight if arm not in ("none", "orth-today") else None
+    factor = float(arm.split("@")[1]) if "@" in arm else 1.0
+    row["penalty_weight"] = spec.penalty_weight * factor if arm not in ("none", "orth-today") else None
     row["penalty_every"] = spec.penalty_every if arm not in ("none", "orth-today") else None
     if modules is not None:
         modules[arm] = module

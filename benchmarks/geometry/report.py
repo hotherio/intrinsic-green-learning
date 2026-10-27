@@ -163,7 +163,115 @@ def table_g4(rows: list[dict[str, Any]]) -> str:
     )
 
 
+def _group_o1(rows: list[dict[str, Any]]) -> dict[tuple[str, int, str], list[dict[str, Any]]]:
+    groups: dict[tuple[str, int, str], list[dict[str, Any]]] = {}
+    for r in rows:
+        groups.setdefault((r["bed"], int(r["D"]), str(r["inputs"])), []).append(r)
+    return groups
+
+
+def _at_anchors(r: dict[str, Any], n: int) -> float:
+    if n == 64:
+        return float(r["nrmse_test_dmax"])
+    return next((float(c["error"]) for c in r.get("prune_curve", []) if c["anchors"] == n), float("nan"))
+
+
+def table_o1(rows: list[dict[str, Any]]) -> str:
+    """O1: oracle brackets, median over seeds along the pruning curve, with the seed range at 64 anchors."""
+    import statistics as st
+
+    body = []
+    for (bed, dim, inputs), rs in sorted(_group_o1(rows).items(), key=lambda kv: (kv[1][0]["d"], kv[0])):
+        e64 = [float(r["nrmse_test_dmax"]) for r in rs]
+        atoms = [r["chart_cost"]["bumps"]["0.05"] for r in rs]
+        body.append(
+            [
+                bed,
+                rs[0]["d"],
+                dim,
+                inputs if inputs != "param" else ("param (" + str(rs[0].get("param_chart", "")).split(" (")[0] + ")"),
+                rs[0].get("encoder", ""),
+                f"{st.median(e64):.4f} ({min(e64):.4f}–{max(e64):.4f})",
+                st.median(_at_anchors(r, 32) for r in rs),
+                st.median(_at_anchors(r, 16) for r in rs),
+                st.median(_at_anchors(r, 8) for r in rs),
+                "/".join("–" if a is None else str(a) for a in atoms),
+                st.median(float(r["report_test"]["full"]["sqrt_conf"]) for r in rs),
+                st.median(int(r["d_eff_elbow"]) for r in rs),
+                len(rs),
+            ]
+        )
+    return md_table(
+        [
+            "bed",
+            "d",
+            "D",
+            "inputs",
+            "encoder",
+            "NRMSE @64 (range)",
+            "@32",
+            "@16",
+            "@8",
+            "atoms 5 % (seeds)",
+            "√L_conf",
+            "d_eff",
+            "n",
+        ],
+        body,
+    )
+
+
+def figure_o1(rows: list[dict[str, Any]], label: str) -> None:
+    """NRMSE against anchors per bed: the frozen conformal chart, the frozen parameter chart and the learned chart."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    groups = _group_o1(rows)
+    beds = sorted(
+        {(k[0], k[1]) for k in groups if k[2] == "ambient"}, key=lambda b: (groups[(b[0], b[1], "ambient")][0]["d"], b)
+    )
+    n = len(beds)
+    cols = 4
+    fig, axes = plt.subplots((n + cols - 1) // cols, cols, figsize=(3.4 * cols, 2.9 * ((n + cols - 1) // cols)), squeeze=False)
+    anchors = [64, 48, 32, 24, 16, 12, 8, 6, 4]
+    style = {
+        "conformal": ("tab:green", "frozen conformal chart"),
+        "param": ("tab:orange", "frozen parameter chart"),
+        "ambient": ("tab:blue", "learned chart (IGL today)"),
+    }
+    for ax, (bed, dim) in zip(axes.flat, beds, strict=False):
+        for inputs, (color, name) in style.items():
+            key = next((k for k in groups if k[0] == bed and k[2] == inputs and (inputs != "ambient" or k[1] == dim)), None)
+            if key is None:
+                continue
+            rs = groups[key]
+            med = [sorted(_at_anchors(r, a) for r in rs)[len(rs) // 2] for a in anchors]
+            lo = [min(_at_anchors(r, a) for r in rs) for a in anchors]
+            hi = [max(_at_anchors(r, a) for r in rs) for a in anchors]
+            ax.plot(anchors, med, "-o", ms=3, color=color, label=name)
+            ax.fill_between(anchors, lo, hi, color=color, alpha=0.15)
+        ax.set_title(f"{bed}  d = {groups[(bed, dim, 'ambient')][0]['d']}, D = {dim}", fontsize=9)
+        ax.set_xscale("log", base=2)
+        ax.set_yscale("log")
+        ax.set_xlabel("anchors kept")
+        ax.set_ylabel("test NRMSE")
+        ax.grid(alpha=0.3)
+    for ax in list(axes.flat)[n:]:
+        ax.axis("off")
+    axes.flat[0].legend(fontsize=7)
+    fig.tight_layout()
+    out = Path.cwd() / "results" / "benchmarks" / "geometry" / label / "o1_oracle_bracket" / "figures"
+    out.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out / "o1_oracle_bracket.png", dpi=150)
+    print("figure:", out / "o1_oracle_bracket.png")
+
+
+FIGURES = {"o1_oracle_bracket": figure_o1}
+
 TABLES = {
+    "o1_oracle_bracket": table_o1,
     "r0_rank_go_nogo": table_r0,
     "g0_geometry": table_g0,
     "g1_rho_law": table_g1,
@@ -177,6 +285,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--label", required=True)
     p.add_argument("--blocks", default=",".join(TABLES))
+    p.add_argument("--figures", action="store_true", help="also draw the figures of the blocks that have one")
     args = p.parse_args()
     for block in args.blocks.split(","):
         rows = load(args.label, block)
@@ -184,6 +293,8 @@ def main() -> None:
             continue
         print(f"\n### {block}\n")
         print(TABLES[block](rows))
+        if args.figures and block in FIGURES:
+            FIGURES[block](rows, args.label)
 
 
 __all__ = ["load", "md_table"]

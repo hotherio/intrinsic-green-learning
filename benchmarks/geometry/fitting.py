@@ -24,7 +24,7 @@ from benchmarks.geometry.testbeds import manifolds, targets
 from benchmarks.geometry.testbeds.package_sets import to_inputs
 from igl.core.normalization import normalize_phi
 from igl.core.solver import solve_with_intercept
-from igl.spd import ConformalityPenalty, OrthogonalityPenalty, init_encoder_orthogonal_
+from igl.spd import ConformalityPenalty, OrthogonalityPenalty, conformality_loss, init_encoder_orthogonal_, jacobian
 from igl.types import ExtraLoss
 
 __all__ = ["ARMS", "Dataset", "FitSpec", "arm_penalty", "fit_arm", "make_dataset", "score_readout"]
@@ -156,6 +156,36 @@ def arm_penalty(arm: str, spec: FitSpec, dataset: Dataset, trainer_ref: dict[str
     return table[arm]()
 
 
+def calibrate_weight(
+    module: igl.IGLModule,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    *,
+    k: int,
+    beta: float = 1.0,
+    target_ratio: float = 0.3,
+    batch: int = 256,
+) -> dict[str, float]:
+    """The penalty weight at which ``‖∇penalty‖ ≈ target_ratio · ‖∇task‖`` over the encoder parameters.
+
+    Measured on one batch of a module trained without penalty (the chart IGL today reaches), so the
+    calibrated arms start from a known pull relative to the task, the same rule on every bed.
+    """
+    params = [p for p in module.encoder.parameters() if p.requires_grad]
+    xb, yb = x[:batch], y[:batch]
+    module.zero_grad(set_to_none=True)
+    task = ((module(xb).squeeze(-1) - yb) ** 2).mean()
+    g_task = torch.autograd.grad(task, params, allow_unused=True)
+    n_task = torch.sqrt(sum((g**2).sum() for g in g_task if g is not None)).item()
+    module.zero_grad(set_to_none=True)
+    j = jacobian(module.encoder, xb, output_dim=module.max_dim)[:, :k, :]
+    pen = conformality_loss(j @ j.transpose(1, 2), beta=beta)
+    g_pen = torch.autograd.grad(pen, params, allow_unused=True)
+    n_pen = torch.sqrt(sum((g**2).sum() for g in g_pen if g is not None)).item()
+    weight = target_ratio * n_task / max(n_pen, 1e-12)
+    return {"weight": float(weight), "grad_task": n_task, "grad_penalty_unit": n_pen, "target_ratio": target_ratio}
+
+
 ARMS = ("none", "orth-today", "orth-matched", "conf", "conf-plain", "beta-0.5", "conf-tan")
 
 
@@ -217,6 +247,7 @@ def fit_arm(
     inputs: str = "ambient",
     prune: bool = True,
     extra_penalties: Callable[[igl.MatryoshkaTrainer], list[ExtraLoss]] | None = None,
+    modules: dict[str, igl.IGLModule] | None = None,
 ) -> dict[str, Any]:
     """Train one arm on one dataset and seed; return the scored row of the reporting schema.
 
@@ -331,4 +362,8 @@ def fit_arm(
     }
     if prune:
         row["prune_curve"] = _prune_curve(module, x_tr, y_tr, x_te, y_te, k=max_dim, l2=spec.source_l2)
+    row["penalty_weight"] = spec.penalty_weight if arm not in ("none", "orth-today") else None
+    row["penalty_every"] = spec.penalty_every if arm not in ("none", "orth-today") else None
+    if modules is not None:
+        modules[arm] = module
     return row

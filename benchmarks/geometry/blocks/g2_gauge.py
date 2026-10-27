@@ -112,7 +112,7 @@ def one_case(d: int, kind: str, *, n: int, deltas: list[float], seed: int = 0) -
         "s": s,
         "identity_fd_residual": residual,
         "round_trip_error": round_trip,
-        "rho_curved": graphs.spectral_radius(prob, iters=20, scale=graphs.best_scale(prob)),
+        "rho_curved": graphs.spectral_radius(prob, iters=300, scale=graphs.best_scale(prob)),
         "amplification": amp,
         "lambda_range": [float(lam.min()), float(lam.max())],
     }

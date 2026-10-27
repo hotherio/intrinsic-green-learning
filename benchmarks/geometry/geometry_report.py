@@ -31,7 +31,9 @@ def metric_summary(a: torch.Tensor, *, eps_depth: float = 1e-3) -> dict[str, flo
     op_norms = torch.linalg.matrix_norm(dev, ord=2)
     norm_inf = float(op_norms.max())
     eig = torch.linalg.eigvalsh(0.5 * (a + a.transpose(-1, -2))).clamp_min(1e-12).log()
-    aniso_cv = float((eig.std(dim=-1) / eig.mean(dim=-1).abs().clamp_min(1e-12)).mean()) if k > 1 else 0.0
+    # anisotropy of the chart at a point: the spread of the log-eigenvalues of A (0 iff A is a multiple of I;
+    # a coefficient of variation of log-eigenvalues would be meaningless, their mean can sit at 0)
+    aniso_logstd = float(eig.std(dim=-1).mean()) if k > 1 else 0.0
     lam = k / tr
     off = a - torch.diag_embed(torch.diagonal(a, dim1=-2, dim2=-1))
     offdiag_mass = float(((off**2).sum((-2, -1)) / (a**2).sum((-2, -1))).mean())
@@ -44,7 +46,7 @@ def metric_summary(a: torch.Tensor, *, eps_depth: float = 1e-3) -> dict[str, flo
         "sqrt_orth": float(orthogonality_loss(a)) ** 0.5,
         "sqrt_conf": float(conformality_loss(a)) ** 0.5,
         "sqrt_conf_plain": float(conformality_loss(a, axis_normalize=False)) ** 0.5,
-        "aniso_cv": aniso_cv,
+        "aniso_logstd": aniso_logstd,
         "lambda_mean": float(lam.mean()),
         "lambda_cv": float(lam.std() / lam.mean()),
         "offdiag_mass": offdiag_mass,
@@ -58,11 +60,15 @@ def report(
     k: int,
     output_dim: int,
     metric_inv: torch.Tensor | None = None,
+    metric_inv_is_projector: bool = True,
     batch_size: int = 512,
 ) -> dict[str, Any]:
     """The geometry report of ``encoder`` on inputs ``x`` for the leading ``k`` latent dimensions.
 
     ``metric_inv`` ``[n, D, D]`` gives the on-manifold metric ``A_tan = J M J^T`` next to ``A_full = J J^T``.
+    When ``M`` is the tangent projector (ambient metric the identity), ``off_manifold_share`` is the fraction
+    of the Jacobian's energy that leaves the tangent space, ``1 - tr(A_tan)/tr(A_full)``; for another ambient
+    metric the two matrices are not comparable and the share is omitted.
     """
     encoder_was_training = encoder.training
     encoder.eval()
@@ -83,7 +89,8 @@ def report(
     if chunks_tan:
         a_tan = torch.cat(chunks_tan).cpu().double()
         out["tan"] = metric_summary(a_tan)
-        out["off_manifold_share"] = 1.0 - float(
-            torch.linalg.matrix_norm(a_tan).mean() / torch.linalg.matrix_norm(a_full).mean()
-        )
+        if metric_inv_is_projector:
+            tr_tan = torch.diagonal(a_tan, dim1=-2, dim2=-1).sum(-1)
+            tr_full = torch.diagonal(a_full, dim1=-2, dim2=-1).sum(-1)
+            out["off_manifold_share"] = 1.0 - float((tr_tan / tr_full.clamp_min(1e-12)).mean())
     return out

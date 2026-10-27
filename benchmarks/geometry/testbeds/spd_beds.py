@@ -105,4 +105,26 @@ def airm_distance2(v: torch.Tensor, v0: torch.Tensor, n: int) -> torch.Tensor:
     return torch.stack(out)
 
 
-__all__ = ["airm_distance2", "airm_metric_in_log_coords", "spd_bed", "spd_from_vec", "sym_from_vec", "vec_from_sym"]
+__all__ = [
+    "airm_distance2",
+    "airm_metric_in_log_coords",
+    "spd_bed",
+    "spd_from_vec",
+    "sym_from_vec",
+    "vec_from_sym",
+    "airm_pairwise_distance",
+]
+
+
+def airm_pairwise_distance(v: torch.Tensor, n: int, *, chunk: int = 256) -> torch.Tensor:
+    """Pairwise affine-invariant distances ``[N, N]`` between the matrices ``P(v_i)``, in float32, row chunks."""
+    p_all = torch.stack([spd_from_vec(vi, n) for vi in v])  # [N, n, n]
+    w, q = torch.linalg.eigh(p_all)
+    p_isqrt = q @ torch.diag_embed(w.rsqrt()) @ q.transpose(-1, -2)  # [N, n, n]
+    out = torch.empty(v.shape[0], v.shape[0], dtype=torch.float32)
+    for i0 in range(0, v.shape[0], chunk):
+        a = p_isqrt[i0 : i0 + chunk]  # [c, n, n]
+        m = a[:, None] @ p_all[None] @ a[:, None]  # [c, N, n, n]
+        ev = torch.linalg.eigvalsh(0.5 * (m + m.transpose(-1, -2))).clamp_min(1e-300)
+        out[i0 : i0 + chunk] = (ev.log() ** 2).sum(-1).sqrt().to(torch.float32)
+    return out

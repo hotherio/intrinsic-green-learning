@@ -11,6 +11,7 @@ radius follow from the same two operators.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -272,18 +273,24 @@ def depth(errors: list[float], eps: float) -> int | None:
     return next((k for k, e in enumerate(errors) if e < eps), None)
 
 
-def spectral_radius(prob: GraphProblem, iters: int = 60, seed: int = 0, *, scale: float = 1.0) -> float:
-    """``rho(G_c K_c)`` by power iteration, with the flat kernel at global scale ``c``."""
+def spectral_radius(prob: GraphProblem, iters: int = 300, seed: int = 0, *, scale: float = 1.0) -> float:
+    """``rho(G_c K_c)`` by power iteration, with the flat kernel at global scale ``c``.
+
+    The operator is not symmetric, so the norm ratio of one step oscillates; the estimate is the geometric
+    mean of the ratios over the second half of the iterations, which converges to the spectral radius.
+    """
     rng = np.random.default_rng(seed)
     inner_shape = prob.f[prob.inner].shape
     v = rng.standard_normal(inner_shape)
     v /= np.linalg.norm(v)
-    rho = 0.0
+    logs: list[float] = []
     for _ in range(iters):
         u_full = _embed(v, prob.d, prob.n)
         w = flat_solve(scale * apply_flat(u_full, prob.h) - apply_curved(u_full, prob), prob.h) / scale
-        rho, v = float(np.linalg.norm(w)), w / max(np.linalg.norm(w), 1e-30)
-    return rho
+        nw = max(float(np.linalg.norm(w)), 1e-300)
+        logs.append(math.log(nw))
+        v = w / nw
+    return math.exp(float(np.mean(logs[len(logs) // 2 :])))
 
 
 def max_dev_scaled(prob: GraphProblem, scale: float) -> float:

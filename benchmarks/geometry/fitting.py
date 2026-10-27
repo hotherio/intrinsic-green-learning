@@ -163,17 +163,17 @@ def _prune_curve(
 ) -> list[dict[str, float]]:
     mask = torch.zeros(module.max_dim, device=x_tr.device)
     mask[:k] = 1.0
-    with torch.no_grad():
-        phi_tr = normalize_phi(module.design_matrix(x_tr, gate_mask=mask), module.normalize).double()
-        phi_te = normalize_phi(module.design_matrix(x_te, gate_mask=mask), module.normalize).double()
+    with torch.no_grad():  # the greedy loop runs on the CPU in float64 (MPS has no float64)
+        phi_tr = normalize_phi(module.design_matrix(x_tr, gate_mask=mask), module.normalize).cpu().double()
+        phi_te = normalize_phi(module.design_matrix(x_te, gate_mask=mask), module.normalize).cpu().double()
     n_anchor = module.green.n_anchors
     alive = list(range(n_anchor))
-    y_tr64, y_te64 = y_tr.double(), y_te.double()
+    y_tr64, y_te64 = y_tr.cpu().double(), y_te.cpu().double()
 
     def err(cols: list[int]) -> float:
         a, b_ = phi_tr[:, cols], phi_te[:, cols]
         w, b = solve_with_intercept(a, y_tr64.unsqueeze(1), l2=l2)
-        pred = (b_ @ w.to(b_.device) + b.to(b_.device)).squeeze(1)
+        pred = (b_ @ w.to(b_.device, b_.dtype) + b.to(b_.device, b_.dtype)).squeeze(1)
         return float(((pred - y_te64) ** 2).mean().sqrt() / y_te64.std())
 
     curve = [{"anchors": len(alive), "error": err(alive)}]
@@ -189,7 +189,7 @@ def _prune_curve(
 def _train_err(phi: torch.Tensor, y: torch.Tensor, cols: list[int], l2: float) -> float:
     a = phi[:, cols]
     w, b = solve_with_intercept(a, y.unsqueeze(1), l2=l2)
-    return float(((a @ w.to(a.device) + b.to(a.device)).squeeze(1) - y).norm())
+    return float(((a @ w.to(a.device, a.dtype) + b.to(a.device, a.dtype)).squeeze(1) - y).norm())
 
 
 def fit_arm(

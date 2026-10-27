@@ -113,6 +113,7 @@ class KernelConfig:
     normalize: NormalizeModeLike = NormalizeMode.NONE
     null_space: NullSpaceKindLike = NullSpaceKind.NONE
     polynomial_degree: int = 1
+    per_scale_columns: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "operator", _coerce_operator(self.operator))

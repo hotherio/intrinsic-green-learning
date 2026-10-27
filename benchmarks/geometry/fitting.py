@@ -255,13 +255,7 @@ def fit_arm(
     wall = time.perf_counter() - t0
     module.eval()
     nrmse = {str(k): score_readout(module, x_tr, y_tr, x_te, y_te, k=k, l2=spec.source_l2) for k in sorted({d, max_dim})}
-    m_te = None
-    if inputs == "ambient" and dataset.metric_inv_train is not None:
-        try:
-            # test-set metric_inv is not stored; the report on the train set carries the tangent comparison
-            m_te = None
-        except RuntimeError:
-            m_te = None
+    # the test-set metric_inv is not stored; the report on the train set carries the tangent comparison
     rep_test = geometry_report.report(module.encoder, x_te, k=d, output_dim=max_dim)
     m_train = None
     if inputs == "ambient" and dataset.metric_inv_train is not None:
@@ -302,5 +296,4 @@ def fit_arm(
     }
     if prune:
         row["prune_curve"] = _prune_curve(module, x_tr, y_tr, x_te, y_te, k=max_dim, l2=spec.source_l2)
-    del m_te
     return row

@@ -62,15 +62,22 @@ def fit_chart(
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps, eta_min=lr / 100)
     start = float(conformality_loss(ginv_param, beta=beta))
     curve: list[float] = []
+    best_loss, best_step = start, 0  # the identity chart (step 0) is a valid chart: the floor never exceeds ``start``
+    best_state = {k: v.detach().clone() for k, v in chart.state_dict().items()}
     for step in range(steps):
         a = inverse_metric_in_chart(chart, t, ginv_param)
         loss = conformality_loss(a, beta=beta)
+        value = float(loss.detach())
+        if value < best_loss:
+            best_loss, best_step = value, step
+            best_state = {k: v.detach().clone() for k, v in chart.state_dict().items()}
         opt.zero_grad()
         loss.backward()
         opt.step()
         sched.step()
         if step % max(1, steps // 50) == 0 or step == steps - 1:
-            curve.append(float(loss.detach()))
+            curve.append(value)
+    chart.load_state_dict(best_state)
     with torch.no_grad():
         a = inverse_metric_in_chart(chart, t, ginv_param)
         floor = float(conformality_loss(a, beta=beta))
@@ -89,6 +96,8 @@ def fit_chart(
         "already_conformal": start <= 1e-8,
         "curve": curve,
         "converged": converged,
+        "best_step": best_step,
+        "optimiser_drifted": best_step < steps - steps // 10,
     }
     return chart, info
 
@@ -126,7 +135,17 @@ def known_chart_floor(bed: manifolds.Bed, *, beta: float, n_points: int, seed: i
     t, _ = bed.sample(n_points, seed=seed)
     ginv_param = torch.linalg.inv(torch.stack([bed.metric(ti) for ti in t]))
     chart = bed.conformal_chart
-    jac = torch.stack([jacrev(chart)(ti) for ti in t])  # [n, d, d]
+    try:
+        jac = torch.stack([jacrev(chart)(ti) for ti in t])  # [n, d, d]
+    except (RuntimeError, TypeError):
+        # a chart given by interpolation (the hills): finite-difference Jacobian
+        eps = 1e-4
+        cols = []
+        for i in range(bed.d):
+            e = torch.zeros(bed.d, dtype=t.dtype)
+            e[i] = eps
+            cols.append((chart(t + e) - chart(t - e)) / (2 * eps))
+        jac = torch.stack(cols, dim=-1)
     a = jac @ ginv_param @ jac.transpose(1, 2)
     return float(conformality_loss(a, beta=beta)) ** 0.5
 
@@ -176,13 +195,19 @@ def figure(rows: list[dict[str, Any]], label: str | None) -> None:
 
 def main() -> None:
     """Run the block."""
-    args = parser(__doc__ or "").parse_args()
+    p = parser(__doc__ or "")
+    p.add_argument("--beds", default=None, help="comma-separated bed names to (re)run; default: every bed of the block")
+    args = p.parse_args()
     gate(args)
     t0 = time.perf_counter()
     steps = 150 if args.smoke else 3000
     n_points = 256 if args.smoke else 2048
     rows: list[dict[str, Any]] = []
-    for bed in beds_for(smoke=args.smoke):
+    beds = beds_for(smoke=args.smoke)
+    if args.beds:
+        wanted = {n.strip() for n in str(args.beds).split(",") if n.strip()}
+        beds = [b for b in beds if b.name in wanted]
+    for bed in beds:
         t1 = time.perf_counter()
         obs = manifolds.obstruction(bed, n_points=3 if args.smoke else 6)
         res = {
@@ -210,6 +235,12 @@ def main() -> None:
             f"(its conf {o['conf_floor_sqrt']:.3f}) | {row['seconds']:.0f}s",
             flush=True,
         )
+    if args.beds:
+        # a partial run: the figure covers every bed saved under the label, not only the ones rerun
+        from benchmarks.device._harness import git_short_sha
+        from benchmarks.geometry.report import load
+
+        rows = load(args.label or git_short_sha(), BLOCK)
     figure(rows, args.label)
     print(f"G4 done in {time.perf_counter() - t0:.0f}s")
 

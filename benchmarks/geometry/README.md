@@ -27,6 +27,7 @@ and **learned-chart** blocks (IGL trained). Every table names its kind.
 uv run python -m benchmarks.geometry.blocks.g0_geometry --smoke      # under a minute
 IGL_BENCH_LABEL=run1 uv run python -m benchmarks.geometry.blocks.g1_rho_law
 make geometry-tier0                                                   # R0, G0, G1, G2, G4
+uv run python -m benchmarks.geometry.blocks.g4_oracle_floor --beds hillxhill,S2xR2   # one bed or a few
 ```
 
 The machine-state gate of the device suite applies to learned-chart blocks (quiet machine, load

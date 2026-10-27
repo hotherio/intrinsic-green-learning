@@ -98,3 +98,11 @@ changelog-unreleased: ### Preview unreleased changes
 
 changelog-tag: ### Get changelog for latest tag (for releases)
 	@git-cliff --latest --strip header
+
+# --- geometry benchmark suite (manual; see benchmarks/geometry/README.md) ---
+.PHONY: geometry-smoke geometry-tier0
+geometry-smoke: ### run every geometry block on a tiny setting (under a minute each)
+	for b in r0_rank_go_nogo g0_geometry g1_rho_law g2_gauge g4_oracle_floor; do uv run python -m benchmarks.geometry.blocks.$$b --smoke || exit 1; done
+
+geometry-tier0: ### the analytic blocks of the geometry suite, one after the other (R0, G0, G1, G2, G4)
+	for b in r0_rank_go_nogo g0_geometry g1_rho_law g2_gauge g4_oracle_floor; do uv run python -m benchmarks.geometry.blocks.$$b || exit 1; done

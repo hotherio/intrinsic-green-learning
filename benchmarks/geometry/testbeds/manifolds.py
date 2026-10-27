@@ -178,15 +178,24 @@ def obstruction(bed: Bed, *, n_points: int = 8, seed: int = 1) -> dict[str, Any]
     """Mean and max of the obstruction share over random points of the patch: Weyl in ``d >= 4``, Cotton in ``d = 3``."""
     t, _ = bed.sample(n_points, seed=seed)
     if bed.d >= 4:
-        shares = [weyl_share(bed, ti)["share"] for ti in t]
+        parts = [weyl_share(bed, ti) for ti in t]
+        num, den = sum(p["weyl2"] for p in parts), sum(p["riem2"] for p in parts)
+        shares = [p["share"] for p in parts]
         kind = "weyl"
     elif bed.d == 3:
-        shares = [cotton_share(bed, ti)["share"] for ti in t]
+        parts = [cotton_share(bed, ti) for ti in t]
+        num, den = sum(p["cotton2"] for p in parts), sum(p["riem2"] ** 1.5 for p in parts)
+        shares = [p["share"] for p in parts]
         kind = "cotton"
     else:
-        shares = [0.0]
-        kind = "none"
-    return {"kind": kind, "mean": sum(shares) / len(shares), "max": max(shares)}
+        num, den, shares, kind = 0.0, 1.0, [0.0], "none"
+    # the ratio of sums is robust where the curvature vanishes at a point (a per-point ratio can blow up there)
+    return {
+        "kind": kind,
+        "mean": num / den if den > 1e-14 else 0.0,
+        "max": max(shares),
+        "mean_of_ratios": sum(shares) / len(shares),
+    }
 
 
 # --- the beds -------------------------------------------------------------------------------------

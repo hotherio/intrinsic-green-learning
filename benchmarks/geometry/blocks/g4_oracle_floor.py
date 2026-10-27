@@ -30,7 +30,7 @@ BLOCK = "g4_oracle_floor"
 class Chart(nn.Module):
     """``psi(t) = t + MLP(t)`` with the last layer zero at initialisation: the identity chart, free to deform."""
 
-    def __init__(self, d: int, hidden: int = 64) -> None:
+    def __init__(self, d: int, hidden: int = 128) -> None:
         super().__init__()
         self.net = nn.Sequential(nn.Linear(d, hidden), nn.Tanh(), nn.Linear(hidden, hidden), nn.Tanh(), nn.Linear(hidden, d))
         last = self.net[-1]
@@ -85,16 +85,50 @@ def fit_chart(
         "sqrt_floor": floor**0.5,
         "conf_floor_sqrt": conf_floor**0.5,
         "orth_floor_sqrt": orth_floor**0.5,
-        "removed_fraction": 1.0 - (floor / start) ** 0.5 if start > 0 else 0.0,
+        "removed_fraction": 1.0 - (floor / start) ** 0.5 if start > 1e-8 else 1.0,
+        "already_conformal": start <= 1e-8,
         "curve": curve,
         "converged": converged,
     }
     return chart, info
 
 
-def optimise(bed: manifolds.Bed, *, beta: float, n_points: int, steps: int, seed: int = 0, lr: float = 3e-3) -> dict[str, Any]:
-    """:func:`fit_chart` without the chart: the JSON-serialisable summary."""
-    return fit_chart(bed, beta=beta, n_points=n_points, steps=steps, seed=seed, lr=lr)[1]
+def optimise(
+    bed: manifolds.Bed, *, beta: float, n_points: int, steps: int, seed: int = 0, lr: float = 5e-3, restarts: int = 2
+) -> dict[str, Any]:
+    """The best of ``restarts`` runs of :func:`fit_chart` (JSON-serialisable), bounded by the known conformal chart.
+
+    Where the bed exposes its conformal chart, the floor of that chart is computed too and the reported floor
+    is the smaller of the two: the optimiser can only over-estimate the true floor.
+    """
+    best: dict[str, Any] | None = None
+    for r in range(restarts):
+        info = fit_chart(bed, beta=beta, n_points=n_points, steps=steps, seed=seed + r, lr=lr)[1]
+        if best is None or info["floor"] < best["floor"]:
+            best = info
+    assert best is not None
+    best["restarts"] = restarts
+    known = known_chart_floor(bed, beta=beta, n_points=n_points, seed=seed)
+    best["known_chart_floor_sqrt"] = known
+    if known is not None and known**2 < best["floor"]:
+        best["optimiser_gap_sqrt"] = best["sqrt_floor"] - known
+        best["floor"] = known**2
+        best["sqrt_floor"] = known
+        best["removed_fraction"] = 1.0 - (best["floor"] / best["start"]) ** 0.5 if best["start"] > 1e-8 else 1.0
+    return best
+
+
+def known_chart_floor(bed: manifolds.Bed, *, beta: float, n_points: int, seed: int = 0) -> float | None:
+    """``sqrt`` of the penalty at the bed's known conformal chart (``None`` when the bed has none)."""
+    if bed.conformal_chart is None:
+        return None
+    torch.manual_seed(seed)
+    t, _ = bed.sample(n_points, seed=seed)
+    ginv_param = torch.linalg.inv(torch.stack([bed.metric(ti) for ti in t]))
+    chart = bed.conformal_chart
+    jac = torch.stack([jacrev(chart)(ti) for ti in t])  # [n, d, d]
+    a = jac @ ginv_param @ jac.transpose(1, 2)
+    return float(conformality_loss(a, beta=beta)) ** 0.5
 
 
 def beds_for(*, smoke: bool) -> list[manifolds.Bed]:
@@ -145,14 +179,14 @@ def main() -> None:
     args = parser(__doc__ or "").parse_args()
     gate(args)
     t0 = time.perf_counter()
-    steps = 150 if args.smoke else 2000
+    steps = 150 if args.smoke else 3000
     n_points = 256 if args.smoke else 2048
     rows: list[dict[str, Any]] = []
     for bed in beds_for(smoke=args.smoke):
         t1 = time.perf_counter()
         obs = manifolds.obstruction(bed, n_points=3 if args.smoke else 6)
         res = {
-            name: optimise(bed, beta=b, n_points=n_points, steps=steps)
+            name: optimise(bed, beta=b, n_points=n_points, steps=steps, restarts=1 if (args.smoke or name != "conf") else 2)
             for name, b in (("conf", 1.0), ("orth", 0.0), ("half", 0.5))
         }
         row = {

@@ -490,7 +490,7 @@ stability on SPD(2))? Proposal E's reading of `λ` gains a direct witness in `S�
 
 ### X1. Penalty ablation on the core beds (reduced arm set)
 
-Kind: learned chart (label `tier1`, MPS, 3 seeds, 84 fits + 12 sweep fits, 2.3 h). Arms on ambient inputs: `none`;
+Kind: learned chart (label `tier1`, MPS, 3 seeds, 84 fits + 18 sweep fits, 2.4 h). Arms on ambient inputs: `none`;
 `orth-today` (the package's `OrthogonalityPenalty(0.1, every=20)`); `conf` (`ConformalityPenalty`,
 `β = 1`, axis-normalised, all prefixes, `every = 2`, weight calibrated once per bed so that the
 penalty gradient is 0.3 of the task gradient at epoch 50 of a penalty-free fit); `conf-tan` (the
@@ -511,6 +511,8 @@ design: the delta column is per seed against `none` on the same data and minibat
 | hill-round | 2 | 8 | none | – | 0.0179 (0.0171–0.0193) | 0.018 | 0.018 | – | 0.413 | 0.494 | 8.408 | 2 | 3 |
 | hill-round | 2 | 8 | orth-today | – | 0.0183 (0.0172–0.0215) | 0.018 | 0.019 | +0.0004 [+0.0000, +0.0021] 3/3 | 0.031 | 0.263 | 6.117 | 2 | 3 |
 | hill-round | 2 | 8 | conf | 0.0861 | 0.0253 (0.0199–0.0506) | 0.026 | 0.027 | +0.0075 [+0.0028, +0.0313] 3/3 | 0.037 | 0.084 | 8.993 | 2 | 3 |
+| hill-round | 2 | 8 | conf@0.1 | 0.00861 | 0.0185 (0.0172–0.0227) | 0.018 | 0.019 | +0.0006 [+0.0001, +0.0034] 3/3 | 0.029 | 0.132 | 7.138 | 2 | 3 |
+| hill-round | 2 | 8 | conf@0.03 | 0.00258 | 0.0176 (0.0175–0.0246) | 0.017 | 0.018 | +0.0004 [-0.0003, +0.0052] 2/3 | 0.074 | 0.207 | 7.334 | 2 | 3 |
 | hill-round | 2 | 8 | conf-tan | 0.0861 | 0.0209 (0.0189–0.0445) | 0.021 | 0.03 | +0.0030 [+0.0018, +0.0252] 3/3 | 0.047 | 0.27 | 12.403 | 2 | 3 |
 | SPD2-airm | 3 | 3 | none | – | 0.0585 (0.0256–0.0717) | 0.06 | 0.07 | – | 0.647 | 0.725 | 338.241 | 2 | 3 |
 | SPD2-airm | 3 | 3 | orth-today | – | 0.0390 (0.0328–0.0726) | 0.039 | 0.041 | +0.0134 [-0.0388, +0.0141] 2/3 | 0.126 | 0.646 | 16.706 | 2 | 3 |
@@ -561,9 +563,9 @@ What it says:
   (2/3), while the conformality floor the chart reaches climbs back from 0.17 to 0.21 and 0.33: the
   accuracy cost and the floor gain scale together, there is no weight at which the chart is more
   conformal at no cost. On `S²×R²` the same: +0.004 → +0.002 → +0.0015 with floors 0.42 → 0.44 →
-  0.56 (against 0.67 free). The round hill's sweep ran by mistake at ambient dimension 3 instead
-  of the core's 8 (unpaired against the `none` rows; it showed the same pattern, +0.002 at both
-  weights with floors 0.22 / 0.26) and is queued for a rerun at 8.
+  0.56 (against 0.67 free). On the round hill +0.0075 → +0.0006 (3/3) → +0.0004 (2/3) with floors
+  0.08 → 0.13 → 0.21 (0.49 free): at 0.03× the penalty is within the seed noise of `none` on all
+  three beds, and the chart it leaves is barely more conformal than the free one.
 
 Consequence for the plan: proposals A and B do not improve IGL's readout at `N = 4096`, 64 anchors
 and 400 epochs on any synthetic bed of the core set; the value of the conformality target, if any,

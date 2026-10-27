@@ -24,9 +24,7 @@ def analytic_beds(*, smoke: bool) -> list[manifolds.Bed]:
     cat = manifolds.catalogue()
     names = ["S4cap", "S2xR2", "S2xS2", "S3xR"] if smoke else list(cat)
     beds = [cat[n] for n in names]
-    beds += [spd_beds.spd_bed(2), spd_beds.spd_bed(3)] + (
-        [] if smoke else [spd_beds.spd_bed(4), spd_beds.spd_bed(2, metric="logeuclid")]
-    )
+    beds += [spd_beds.spd_bed(2), spd_beds.spd_bed(3)] + ([] if smoke else [spd_beds.spd_bed(2, metric="logeuclid")])
     beds += [manifolds.sphere_cap(3), manifolds.sphere_cap(3, axes=(1.0, 1.0, 2.0, 3.0)), manifolds.cylinder(3)]
     return beds
 

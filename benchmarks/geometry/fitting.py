@@ -263,13 +263,10 @@ def fit_arm(
         except RuntimeError:
             m_te = None
     rep_test = geometry_report.report(module.encoder, x_te, k=d, output_dim=max_dim)
-    rep_train = geometry_report.report(
-        module.encoder,
-        x_tr[:1024],
-        k=d,
-        output_dim=max_dim,
-        metric_inv=None if dataset.metric_inv_train is None else dataset.metric_inv_train[:1024].to(dev),
-    )
+    m_train = None
+    if inputs == "ambient" and dataset.metric_inv_train is not None:
+        m_train = dataset.metric_inv_train[:1024].to(dev)
+    rep_train = geometry_report.report(module.encoder, x_tr[:1024], k=d, output_dim=max_dim, metric_inv=m_train)
     with torch.no_grad():
         z_te = module.latent(x_te)[:, :d].cpu().double()
     chart_cost = {"rank": charts.chart_rank(z_te, y_te.cpu())["rank"]}

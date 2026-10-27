@@ -356,7 +356,23 @@ def hill_surface(which: str = "lop") -> Bed:
         return torch.stack([x, y, z])
 
     low, high = _box(2, 1.0)
-    del np, hill
+    cache: dict[str, Any] = {}
+
+    def conformal(t: torch.Tensor) -> torch.Tensor:
+        # the isothermal chart (p, q) of testbeds.hills, interpolated from its grid (cubic splines, so the
+        # Jacobian used by the oracle floor is smooth); computed once per bed
+        if "interp" not in cache:
+            from scipy.interpolate import RectBivariateSpline
+
+            prob = hills.make_problem(which, 1.0)
+            chart = hills.isothermal_chart(prob.grid, hill, 1.0, prob.met, prob.curved)
+            x = prob.grid.x
+            cache["interp"] = (RectBivariateSpline(x, x, chart.p), RectBivariateSpline(x, x, chart.q))
+        sp_p, sp_q = cache["interp"]
+        tt = t.detach().cpu().numpy().reshape(-1, 2)
+        out = np.stack([sp_p.ev(tt[:, 0], tt[:, 1]), sp_q.ev(tt[:, 0], tt[:, 1])], axis=-1)
+        return torch.from_numpy(out).to(t.dtype).reshape(t.shape)
+
     return Bed(
         name=f"hill-{which}",
         d=2,
@@ -364,9 +380,9 @@ def hill_surface(which: str = "lop") -> Bed:
         embedding=emb,
         low=low,
         high=high,
-        conformal_chart=None,
+        conformal_chart=conformal,
         weyl_zero=True,
-        notes="d = 2: a conformal (isothermal) chart exists; computed numerically in testbeds.hills",
+        notes="d = 2: the isothermal chart of testbeds.hills, interpolated (not differentiable by autograd)",
     )
 
 

@@ -309,4 +309,116 @@ What it says:
 
 ## Tier 1: learned charts
 
-_pending_
+### Protocol (revised after the O1 pilots, 2026-10-27)
+
+Every learned row: `IGLModule(D, d, 1)` with the default encoder (256 × 2, LayerNorm, SiLU, orthogonal
+init), 64 anchors × 4 scales, 400 epochs, batch 256, `source_l2 = 1e-3`, the package's gradient
+clipping (1.0), constant learning rate 1e-3, no early stop within the budget but the best-validation
+state restored at the end; `N = 4096 / 1024 / 2048` (8192 train in `d ≥ 8`), targets standardised,
+inputs with noise 0.005. The readout is solved on the train split and scored on the test split (NRMSE
+at the full prefix); costs are measured on the frozen chart: the greedy anchor-pruning curve, the
+fixed-grid bump count of `u` at 5 / 2 / 1 % (censored at 128 atoms), the 2-D separable rank.
+
+Two pins of the plan were dropped by the pilots on the round hill (nine fits per variant, three seeds):
+
+- **No clipping** (`grad_clip = 0`, meant to avoid a hidden learning-rate cut in penalty arms): some
+  initialisations blow up (`‖A − I‖∞` of 400–1000 on the test chart) in every arm, which destroys the
+  pairing. Clipping is the package's behaviour and is kept; the penalty weights are calibrated
+  instead.
+- **Oracle charts through a trained encoder**: IGL trained on an exact chart as inputs is unstable at
+  any learning rate (1e-3, 3e-4, 1e-4): the orthogonally initialised encoder already is a chart, and
+  training only distorts it (validation peaks before epoch 30 and degrades, or the Jacobian blows
+  up). Weight decay and input-noise augmentation do not help. The oracle arms (`conformal`, `param`)
+  therefore **freeze the chart**: identity encoder, kernel and readout trained. With that, the three
+  seeds converge (best epoch > 370, flat validation) and the conformal chart beats the parameter chart
+  on every seed of the pilot (0.019 / 0.023 / 0.028 against 0.023 / 0.025 / 0.029; atoms at 5 %:
+  28 / 42 / 36 against 34 / 47 / 54).
+
+Chart inputs are standardised per column (a constant affine map, free for the geometry). Sphere caps
+are parametrised by their conformal chart, so their non-conformal reference is the graph chart (the
+first `d` ambient coordinates).
+
+### O1. Oracle brackets
+
+Kind: learned chart (label `tier1`, MPS, 3 seeds, 66 fits, 43 min). IGL with three kinds of inputs on
+each bed: the **frozen conformal chart** (identity encoder), the **frozen parameter chart** (for the
+sphere caps the graph chart, since their parameter chart is the conformal one), and the **embedded
+ambient data** (IGL today: the chart is learned). No penalty in any arm. Columns: test NRMSE at the
+full 64 anchors (median and seed range), then the median along the greedy pruning curve at 32, 16 and
+8 anchors; fixed-grid Gaussian atoms of `u` at 5 % per seed (censored at 128); the conformality floor
+of the chart on the test set; the elbow dimension.
+
+| bed | d | D | inputs | encoder | NRMSE @64 (range) | @32 | @16 | @8 | atoms 5 % (seeds) | √L_conf | d_eff | n |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S2cap | 2 | 2 | conformal | identity (frozen chart) | 0.0222 (0.0207–0.0247) | 0.022 | 0.028 | 0.071 | 43/48/36 | 0 | 2 | 3 |
+| S2cap | 2 | 2 | param (graph chart) | identity (frozen chart) | 0.0355 (0.0293–0.0422) | 0.034 | 0.043 | 0.132 | 59/88/61 | 0 | 2 | 3 |
+| S2cap | 2 | 3 | ambient | mlp | 0.0228 (0.0219–0.0298) | 0.023 | 0.023 | 0.025 | 36/34/44 | 0.47 | 2 | 3 |
+| S2cap | 2 | 256 | ambient | mlp | 0.0219 (0.0208–0.0222) | 0.022 | 0.022 | 0.023 | 41/43/36 | 0.454 | 2 | 3 |
+| hill-round | 2 | 2 | conformal | identity (frozen chart) | 0.0227 (0.0192–0.0282) | 0.022 | 0.033 | 0.061 | 28/42/36 | 0 | 2 | 3 |
+| hill-round | 2 | 2 | param (parameter chart) | identity (frozen chart) | 0.0246 (0.0228–0.0286) | 0.025 | 0.032 | 0.063 | 34/47/54 | 0 | 2 | 3 |
+| hill-round | 2 | 8 | ambient | mlp | 0.0179 (0.0171–0.0193) | 0.018 | 0.018 | 0.018 | 35/40/34 | 0.494 | 2 | 3 |
+| hill-round | 2 | 32 | ambient | mlp | 0.0189 (0.0175–0.0212) | 0.019 | 0.019 | 0.021 | 33/30/39 | 0.566 | 2 | 3 |
+| SPD2-airm | 3 | 3 | ambient | mlp | 0.0585 (0.0256–0.0717) | 0.058 | 0.06 | 0.07 | 24/–/– | 0.725 | 2 | 3 |
+| SPD2-airm | 3 | 3 | param (parameter chart) | identity (frozen chart) | 0.0436 (0.0376–0.0443) | 0.044 | 0.053 | 0.09 | 63/62/64 | 0 | 3 | 3 |
+| S2xR2 | 4 | 4 | param (parameter chart) | identity (frozen chart) | 0.0684 (0.0660–0.0852) | 0.071 | 0.1 | 0.165 | –/–/– | 0 | 4 | 3 |
+| S2xR2 | 4 | 5 | ambient | mlp | 0.0426 (0.0382–0.0501) | 0.043 | 0.043 | 0.044 | 86/124/74 | 0.667 | 2 | 3 |
+| S3xR | 4 | 4 | conformal | identity (frozen chart) | 0.1043 (0.1031–0.1330) | 0.109 | 0.15 | 0.209 | –/–/– | 0 | 4 | 3 |
+| S3xR | 4 | 4 | param (parameter chart) | identity (frozen chart) | 0.0658 (0.0655–0.0823) | 0.072 | 0.098 | 0.152 | –/–/– | 0 | 4 | 3 |
+| S3xR | 4 | 5 | ambient | mlp | 0.0474 (0.0416–0.0496) | 0.047 | 0.048 | 0.049 | 111/79/52 | 0.682 | 3 | 3 |
+| S4cap | 4 | 4 | conformal | identity (frozen chart) | 0.0675 (0.0649–0.0800) | 0.072 | 0.116 | 0.177 | –/–/– | 0 | 4 | 3 |
+| S4cap | 4 | 4 | param (graph chart) | identity (frozen chart) | 0.1147 (0.0968–0.1196) | 0.118 | 0.154 | 0.205 | –/–/– | 0 | 4 | 3 |
+| S4cap | 4 | 5 | ambient | mlp | 0.0462 (0.0449–0.0497) | 0.046 | 0.046 | 0.048 | 74/75/55 | 0.747 | 3 | 3 |
+| S8cap | 8 | 8 | conformal | identity (frozen chart) | 0.0208 (0.0207–0.0331) | 0.021 | 0.026 | 0.054 | –/–/– | 0 | 4 | 3 |
+| S8cap | 8 | 8 | param (graph chart) | identity (frozen chart) | 0.0245 (0.0236–0.0261) | 0.024 | 0.031 | 0.075 | –/–/– | 0 | 4 | 3 |
+| S8cap | 8 | 9 | ambient | mlp | 0.0209 (0.0208–0.0213) | 0.021 | 0.021 | 0.021 | 25/27/23 | 0.798 | 4 | 3 |
+| S8cap | 8 | 256 | ambient | mlp | 0.0224 (0.0219–0.0232) | 0.022 | 0.022 | 0.024 | 32/32/38 | 0.724 | 3 | 3 |
+figure: /Users/aquemy/projects/hother/intrinsic-green-learning/results/benchmarks/geometry/tier1/o1_oracle_bracket/figures/o1_oracle_bracket.png
+
+Figure: `results/benchmarks/geometry/tier1/o1_oracle_bracket/figures/o1_oracle_bracket.png` (NRMSE
+against anchors kept, one panel per bed, the seed range shaded).
+
+What it says:
+
+- **Among frozen charts, the conformal chart wins where it is tame.** On the hills and `S²` it beats
+  the parameter chart on every seed in error (0.023 vs 0.025 and 0.022 vs 0.036 at 64 anchors; the
+  gap widens to 0.061 vs 0.063 and 0.071 vs 0.132 at 8 anchors) and in atoms at 5 % (28/42/36 vs
+  34/47/54; 43/48/36 vs 59/88/61). On `S⁴` and `S⁸` the stereographic chart beats the graph chart
+  (0.068 vs 0.115; 0.021 vs 0.025). This is the chart-level content of proposal A, confirmed on a
+  learned readout: at a fixed set of atoms, a conformal chart is the cheaper of two given charts.
+- **But the conformal chart loses where its conformal factor varies strongly.** On the cylinder
+  `S³×R` the conformal chart `x = e^t ω` is the worst input of the three (0.104 against 0.066 for the
+  cylindrical parameters and 0.047 learned): `λ = e^{−2t}` spreads the data over three decades and
+  64 Gaussian atoms cannot follow. Conformality alone is not the right target for a Gaussian kernel;
+  the kernel needs the conformal factor carried somewhere (the operator side, proposal E's gauge),
+  exactly the deck's reading of `λ`.
+- **IGL's learned chart is already better than any geometric chart, and by a wide margin at few
+  anchors.** At 64 anchors the learned chart matches or beats the frozen conformal chart on every bed
+  but SPD(2) (hill 0.018 vs 0.023; `S²` 0.023 vs 0.022; `S⁴` 0.046 vs 0.068; `S³×R` 0.047 vs 0.104;
+  `S⁸` 0.021 vs 0.021). Along the pruning curve the learned chart is **flat down to 8 anchors**
+  (hill 0.018 → 0.018, `S⁴` 0.046 → 0.048, `S⁸` 0.021 → 0.021) while every frozen chart climbs by a
+  factor 2.5–4 (hill conformal 0.023 → 0.061, `S⁴` conformal 0.068 → 0.177). The encoder adapts the
+  chart to the target `u`, not to the geometry: in the learned chart the solution is representable
+  by about eight Gaussian atoms, which no geometric chart achieves. The oracle gap of the plan
+  (conformal minus ambient) is therefore **zero or negative** on every bed; a geometry-only chart
+  penalty cannot be justified by the readout error at these sizes, and must be judged by what it
+  does to this co-adaptation (X1).
+- **The one exception is SPD(2).** The frozen log-Eig chart (0.044, seed range 0.038–0.044) beats the
+  learned chart (median 0.059, range 0.026–0.072), which is unstable on this bed; its learned
+  pruning curve is flat as elsewhere. The learned chart's conformality floor is 0.73 on SPD(2) and
+  0.75–0.80 on the `d ≥ 4` caps, against 0.45–0.57 on the 2-D beds: the learned charts are far from
+  conformal everywhere, and the readout does not care.
+- **Ambient dimension costs little at these sizes.** `S²` in `R²⁵⁶` is as good as in `R³`
+  (0.022 vs 0.023), `S⁸` in `R²⁵⁶` loses 7 % (0.0224 vs 0.0209) and the hill in `R³²` 6 %; the
+  off-manifold share of the Jacobian grows from 0.09–0.13 at native `D` to 0.14–0.21 at `D = 256`.
+- **The 2-D separable rank** of `u` is 5 in the frozen charts of the hill and 4 / 7 in the conformal /
+  graph charts of `S²`, against 14–22 in the learned charts: the learned chart is not axis-aligned,
+  and its rank says nothing about its atom count (the R0 reading, now on learned charts).
+- **Elbows:** `d_eff` = 2 on every 2-D bed, 3–4 on `S⁴` (true 4), 3–4 on `S⁸` (true 8): the elbow of
+  the dimension curve under-reads `d` as soon as the target is smooth, with `max_dim = d`.
+
+Consequence for the plan: the premise that the anchor count is set by the geometry of the chart
+holds between *given* charts (A, confirmed) and fails against the *learned* chart, which co-adapts
+to the target. X1 asks the only remaining question for proposals A and B: does the conformality
+penalty, at a calibrated weight, preserve this co-adaptation (no regression on the flat pruning
+curve) while adding what the deck promises (a chart-limited certificate, a smaller `λ` spread,
+stability on SPD(2))? Proposal E's reading of `λ` gains a direct witness in `S³×R`.

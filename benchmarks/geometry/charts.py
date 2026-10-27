@@ -1,7 +1,8 @@
 """Chart-only cost measures on a frozen chart ``z = Psi(x)``: what a target costs there, independent of the kernel's training.
 
-Two measures of "products", computed after quantile-normalising each axis of the chart (the kernel's
-per-axis widths make a monotone per-axis relabelling free):
+Two measures of "products", computed after rescaling each axis of the chart by a constant to ``[0, 1]``
+(the kernel's per-axis widths make a constant per-axis rescaling free, and nothing more: a nonlinear
+relabelling of an axis is not free, so the axes are not rank-normalised):
 
 - ``chart_rank``: ``u`` resampled on a regular grid of the chart, separable rank at a tolerance (SVD in
   ``d = 2``, tensor-train ranks above);
@@ -28,18 +29,26 @@ from benchmarks.geometry.testbeds.graphs import tt_ranks
 from benchmarks.geometry.testbeds.hills import separable_rank
 
 Array = NDArray[np.float64]
-__all__ = ["bump_count", "chart_rank", "greedy_prune", "quantile_normalise"]
+__all__ = ["affine_normalise", "bump_count", "chart_rank", "greedy_prune", "quantile_normalise"]
+
+
+def affine_normalise(z: torch.Tensor) -> torch.Tensor:
+    """Map each axis of ``z`` to ``[0, 1]`` by a constant rescaling (what the kernel's per-axis widths absorb)."""
+    z = z.double()
+    lo = z.min(dim=0).values
+    hi = z.max(dim=0).values
+    return (z - lo) / (hi - lo).clamp_min(1e-12)
 
 
 def quantile_normalise(z: torch.Tensor) -> torch.Tensor:
-    """Map each axis of ``z`` to ``[0, 1]`` by its empirical ranks (a monotone per-axis relabelling)."""
+    """Map each axis of ``z`` to ``[0, 1]`` by its empirical ranks (a monotone relabelling, more than the kernel absorbs)."""
     ranks = z.argsort(dim=0).argsort(dim=0).double()
     return ranks / max(z.shape[0] - 1, 1)
 
 
 def chart_rank(z: torch.Tensor, u: torch.Tensor, *, tol: float = 0.01, points: int | None = None) -> dict[str, Any]:
     """Separable rank of ``u`` on a regular grid of the normalised chart (``d = 2``: SVD; ``d >= 3``: tensor-train ranks)."""
-    zq = quantile_normalise(z).numpy()
+    zq = affine_normalise(z).numpy()
     d = zq.shape[1]
     n = points or {1: 65, 2: 33, 3: 17, 4: 11}.get(d, 7)
     axes = [np.linspace(0, 1, n)] * d
@@ -66,17 +75,22 @@ def bump_count(
     *,
     tol: float = 0.01,
     centres_per_axis: int | None = None,
-    widths: tuple[float, ...] = (0.08, 0.16, 0.32),
+    width_factors: tuple[float, ...] = (0.5, 1.0, 2.0),
     max_atoms: int = 256,
 ) -> dict[str, Any]:
-    """Smallest number of fixed-grid Gaussian atoms whose sparse fit reaches relative error ``tol`` (matching pursuit)."""
-    zq = quantile_normalise(z).numpy()
+    """Smallest number of fixed-grid Gaussian atoms whose sparse fit reaches relative error ``tol`` (matching pursuit).
+
+    The centres form a grid of about 1024 / len(width_factors) points per width; the widths are the grid
+    spacing times ``width_factors``, so the dictionary covers the chart in any dimension.
+    """
+    zq = affine_normalise(z).numpy()
     d = zq.shape[1]
-    m = centres_per_axis or max(2, int(round((1024 / len(widths)) ** (1 / d))))
+    m = centres_per_axis or max(2, int(round((1024 / len(width_factors)) ** (1 / d))))
     axes = [np.linspace(0, 1, m)] * d
     centres = np.stack(np.meshgrid(*axes, indexing="ij"), -1).reshape(-1, d)
+    spacing = 1.0 / max(m - 1, 1)
     cols = []
-    for w in widths:
+    for w in (spacing * f for f in width_factors):
         d2 = ((zq[:, None, :] - centres[None, :, :]) ** 2).sum(-1)
         cols.append(np.exp(-d2 / (2 * w * w)))
     phi = np.concatenate(cols, axis=1)

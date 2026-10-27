@@ -9,9 +9,8 @@ known) and **learned chart** (IGL trained). The deck's own numbers (two 2-D hill
 
 ## Tier 0: analytic and grid results
 
-Audit notes (2026-10-27, two independent code reviews plus a self-review; the fixes are in the suite,
-the reruns of G1, G2 and G4 under the fixed code are in progress and replace the numbers below where
-they differ):
+Audit notes (2026-10-27, two independent code reviews plus a self-review; the fixes are in the suite
+and G1, G2 and G4 were rerun under the fixed code; the tables below are the post-audit numbers):
 
 - R0's two cost measures use different tolerances: the separable rank is relative to `‖u‖`, the atom
   count to `‖u − mean u‖` (the NRMSE convention), so "1 %" is about 1.5× stricter for the atom count.
@@ -93,70 +92,86 @@ What it says:
 
 ### G1. The Born contraction across dimensions
 
-Kind: analytic. Part A: hills and graph hypersurfaces at five heights; `ρ` by power iteration, the
-proxy `max |A − I|`, the measured Born depth to `1e-3` against `log(1/ε)/log(1/ρ)`, and the error of
-the flat solve that ignores the hill. Part B: random charts of the flat torus with a fixed per-entry
-distortion of three kinds.
+Kind: analytic. Part A: hills and graph hypersurfaces at five heights; `ρ` by power iteration (300
+iterations, geometric mean of the growth ratios over the second half), the proxy `max |A − I|` after
+the best global scale, the measured Born depth to `1e-3` against the predicted
+`log(e_naive/ε)/log(1/ρ)` where `e_naive` is the error of the flat solve that ignores the hill, and
+that naive error. Part B: random charts of the flat torus, `J = I + ε E(θ)`, with `E` built from
+random Fourier fields of unit per-entry standard deviation of three kinds: diagonal, incoherent
+(every entry its own independent field) and coherent (a rank-one shear `a bᵀ φ(θ)`).
 
 | bed | height s | ρ | max|A−I| | ρ / max|A−I| | depth 1e-3 | predicted | naive error |
 |---|---|---|---|---|---|---|---|
-| hill-lop | 0.2 | 0.13 | 0.131 | 0.998 | 2 | 3.392 | 0.047 |
-| hill-lop | 0.4 | 0.361 | 0.358 | 1.007 | 4 | 6.774 | 0.157 |
-| hill-lop | 0.6 | 0.54 | 0.54 | 1 | 8 | 11.222 | 0.281 |
-| hill-lop | 0.8 | 0.66 | 0.663 | 0.995 | 12 | 16.602 | 0.395 |
-| hill-lop | 1 | 0.739 | 0.748 | 0.988 | 18 | 22.844 | 0.491 |
-| hill-round | 0.2 | 0.04 | 0.041 | 0.961 | 1 | 2.14 | 0.021 |
-| hill-round | 0.4 | 0.142 | 0.147 | 0.963 | 2 | 3.533 | 0.078 |
-| hill-round | 0.6 | 0.27 | 0.279 | 0.967 | 4 | 5.275 | 0.158 |
-| hill-round | 0.8 | 0.396 | 0.408 | 0.971 | 6 | 7.459 | 0.247 |
-| hill-round | 1 | 0.507 | 0.518 | 0.977 | 8 | 10.157 | 0.335 |
-| graph-generic-d3 | 0.2 | 0.106 | 0.13 | 0.816 | 2 | 3.083 | 0.033 |
-| graph-generic-d3 | 0.4 | 0.304 | 0.361 | 0.843 | 4 | 5.801 | 0.116 |
-| graph-generic-d3 | 0.6 | 0.47 | 0.536 | 0.878 | 6 | 9.153 | 0.218 |
-| graph-generic-d3 | 0.8 | 0.588 | 0.659 | 0.891 | 9 | 12.995 | 0.32 |
-| graph-generic-d3 | 1 | 0.671 | 0.745 | 0.901 | 13 | 17.304 | 0.411 |
-| graph-radial-d3 | 0.2 | 0.038 | 0.041 | 0.925 | 1 | 2.112 | 0.019 |
-| graph-radial-d3 | 0.4 | 0.136 | 0.146 | 0.927 | 2 | 3.456 | 0.07 |
-| graph-radial-d3 | 0.6 | 0.258 | 0.278 | 0.929 | 4 | 5.103 | 0.143 |
-| graph-radial-d3 | 0.8 | 0.378 | 0.407 | 0.929 | 6 | 7.097 | 0.227 |
-| graph-radial-d3 | 1 | 0.479 | 0.517 | 0.927 | 8 | 9.398 | 0.311 |
-| graph-generic-d4 | 0.2 | 0.079 | 0.129 | 0.615 | 2 | 2.724 | 0.023 |
-| graph-generic-d4 | 0.4 | 0.238 | 0.36 | 0.661 | 3 | 4.811 | 0.084 |
-| graph-generic-d4 | 0.6 | 0.388 | 0.539 | 0.721 | 5 | 7.302 | 0.165 |
-| graph-generic-d4 | 0.8 | 0.506 | 0.652 | 0.776 | 7 | 10.152 | 0.25 |
-| graph-generic-d4 | 1 | 0.595 | 0.723 | 0.823 | 10 | 13.302 | 0.332 |
-| graph-radial-d4 | 0.2 | 0.036 | 0.04 | 0.905 | 1 | 2.08 | 0.015 |
-| graph-radial-d4 | 0.4 | 0.129 | 0.143 | 0.908 | 2 | 3.379 | 0.058 |
-| graph-radial-d4 | 0.6 | 0.248 | 0.272 | 0.911 | 4 | 4.958 | 0.12 |
-| graph-radial-d4 | 0.8 | 0.366 | 0.4 | 0.916 | 5 | 6.871 | 0.194 |
-| graph-radial-d4 | 1 | 0.469 | 0.51 | 0.92 | 7 | 9.128 | 0.27 |
+| hill-lop | 0.2 | 0.131 | 0.131 | 1.001 | 2 | 1.891 | 0.047 |
+| hill-lop | 0.4 | 0.361 | 0.358 | 1.007 | 4 | 4.958 | 0.157 |
+| hill-lop | 0.6 | 0.54 | 0.54 | 0.999 | 8 | 9.149 | 0.281 |
+| hill-lop | 0.8 | 0.658 | 0.663 | 0.993 | 12 | 14.299 | 0.395 |
+| hill-lop | 1 | 0.736 | 0.748 | 0.984 | 18 | 20.223 | 0.491 |
+| hill-round | 0.2 | 0.04 | 0.041 | 0.961 | 1 | 0.941 | 0.021 |
+| hill-round | 0.4 | 0.141 | 0.147 | 0.963 | 2 | 2.226 | 0.078 |
+| hill-round | 0.6 | 0.269 | 0.279 | 0.965 | 4 | 3.858 | 0.158 |
+| hill-round | 0.8 | 0.394 | 0.408 | 0.967 | 6 | 5.921 | 0.247 |
+| hill-round | 1 | 0.503 | 0.518 | 0.97 | 8 | 8.453 | 0.335 |
+| graph-generic-d3 | 0.2 | 0.107 | 0.13 | 0.82 | 2 | 1.567 | 0.033 |
+| graph-generic-d3 | 0.4 | 0.305 | 0.361 | 0.846 | 4 | 4.004 | 0.116 |
+| graph-generic-d3 | 0.6 | 0.469 | 0.536 | 0.876 | 6 | 7.115 | 0.218 |
+| graph-generic-d3 | 0.8 | 0.584 | 0.659 | 0.886 | 9 | 10.74 | 0.32 |
+| graph-generic-d3 | 1 | 0.666 | 0.745 | 0.894 | 13 | 14.787 | 0.411 |
+| graph-radial-d3 | 0.2 | 0.038 | 0.041 | 0.931 | 1 | 0.896 | 0.019 |
+| graph-radial-d3 | 0.4 | 0.137 | 0.146 | 0.935 | 2 | 2.134 | 0.07 |
+| graph-radial-d3 | 0.6 | 0.261 | 0.278 | 0.939 | 4 | 3.697 | 0.143 |
+| graph-radial-d3 | 0.8 | 0.384 | 0.407 | 0.944 | 6 | 5.661 | 0.227 |
+| graph-radial-d3 | 1 | 0.49 | 0.517 | 0.948 | 8 | 8.053 | 0.311 |
+| graph-generic-d4 | 0.2 | 0.081 | 0.129 | 0.625 | 2 | 1.251 | 0.023 |
+| graph-generic-d4 | 0.4 | 0.24 | 0.36 | 0.667 | 3 | 3.108 | 0.084 |
+| graph-generic-d4 | 0.6 | 0.381 | 0.539 | 0.707 | 5 | 5.294 | 0.165 |
+| graph-generic-d4 | 0.8 | 0.506 | 0.652 | 0.776 | 7 | 8.106 | 0.25 |
+| graph-generic-d4 | 1 | 0.595 | 0.723 | 0.823 | 10 | 11.175 | 0.332 |
+| graph-radial-d4 | 0.2 | 0.036 | 0.04 | 0.905 | 1 | 0.82 | 0.015 |
+| graph-radial-d4 | 0.4 | 0.129 | 0.143 | 0.908 | 2 | 1.985 | 0.058 |
+| graph-radial-d4 | 0.6 | 0.248 | 0.272 | 0.911 | 4 | 3.437 | 0.12 |
+| graph-radial-d4 | 0.8 | 0.366 | 0.4 | 0.916 | 5 | 5.237 | 0.194 |
+| graph-radial-d4 | 1 | 0.469 | 0.51 | 0.92 | 7 | 7.397 | 0.27 |
 
 | distortion | d | mean ‖A−I‖ | max ‖A−I‖ | growth vs d = 2 |
 |---|---|---|---|---|
-| coherent | 2 | 0.145 | 0.424 | 1 |
-| coherent | 4 | 0.27 | 1.295 | 1.867 |
-| coherent | 8 | 0.401 | 2.318 | 2.774 |
-| coherent | 16 | 1.02 | 8.583 | 7.055 |
-| diagonal | 2 | 0.121 | 0.25 | 1 |
-| diagonal | 4 | 0.131 | 0.335 | 1.078 |
-| diagonal | 8 | 0.162 | 0.355 | 1.337 |
-| diagonal | 16 | 0.193 | 0.355 | 1.595 |
-| incoherent | 2 | 0.155 | 0.281 | 1 |
-| incoherent | 4 | 0.254 | 0.533 | 1.634 |
-| incoherent | 8 | 0.361 | 0.731 | 2.324 |
-| incoherent | 16 | 0.541 | 1.053 | 3.487 |
+| coherent | 2 | 0.097 | 0.35 | 1 |
+| coherent | 4 | 0.206 | 0.947 | 2.707 |
+| coherent | 8 | 0.41 | 2.699 | 7.714 |
+| coherent | 16 | 1.002 | 8.069 | 23.065 |
+| diagonal | 2 | 0.098 | 0.279 | 1 |
+| diagonal | 4 | 0.146 | 0.378 | 1.357 |
+| diagonal | 8 | 0.175 | 0.388 | 1.393 |
+| diagonal | 16 | 0.202 | 0.403 | 1.446 |
+| incoherent | 2 | 0.12 | 0.321 | 1 |
+| incoherent | 4 | 0.232 | 0.495 | 1.542 |
+| incoherent | 8 | 0.358 | 0.694 | 2.161 |
+| incoherent | 16 | 0.531 | 0.862 | 2.684 |
+
+Figure: `results/benchmarks/geometry/tier0/g1_rho_law/figures/g1_rho_law.png`.
 
 What it says:
 
-- **`ρ ≈ max |A − I|` holds in `d = 2` (ratio 0.96–1.01) and degrades with dimension and with the
-  bump's asymmetry**: 0.93 for the radial bump and 0.82–0.90 for the generic one in `d = 3`, 0.91 and
-  0.61–0.82 in `d = 4`. The deck's proxy is a conservative upper estimate of the contraction above
-  `d = 2`, and the predicted depth over-estimates the measured one everywhere (10.2 against 8 on the
-  round hill).
-- **The growth of the distortion with `d` depends on its kind**: from `d = 2` to 16, ×1.6 for a
-  diagonal distortion, ×3.5 for an incoherent one (the count said `√8 = 2.8`), ×7.1 for a coherent
-  rank-one shear (against `d`-linear 8). The deck's `√d` is the incoherent case and a slight
-  under-estimate; a coherent distortion of a chart, the kind a trained encoder produces, grows like `d`.
+- **`ρ ≈ max |A − I|` holds in `d = 2` (ratio 0.96–1.00) and degrades with dimension and with the
+  bump's asymmetry**: 0.93–0.95 for the radial bump and 0.82–0.89 for the generic one in `d = 3`,
+  0.91 and 0.63–0.82 in `d = 4`. The deck's proxy is a conservative upper estimate of the contraction
+  above `d = 2`. The converged `ρ` of the unit round hill is 0.503 (the deck's 0.507 came from an
+  unconverged power iteration) and 0.736 on the lopsided one (deck 0.739).
+- **The predicted depth tracks the measured one once the naive error is in the formula**: 8.5
+  against 8 and 20.2 against 18 on the hills, 8.1 / 14.8 against 8 / 13 for the `d = 3` graphs,
+  7.4 / 11.2 against 7 / 10 in `d = 4`. The prediction is at most two iterations high (it uses the
+  asymptotic rate; the early iterates contract faster), and never low. The earlier version of this
+  table predicted 10.2 against 8 because the formula dropped the naive error; "the proxy
+  over-predicts the depth" was that bug, not a property of the Born series.
+- **The growth of the distortion with `d` depends on its kind**: from `d = 2` to 16, ×1.45 for a
+  diagonal distortion, ×2.7 for an incoherent one (the count's `√8 = 2.8`), ×23 for a coherent
+  rank-one shear (the count said `d`, that is ×8). The deck's `√d` is the incoherent case, now with
+  every entry an independent field (the earlier run reused the same modes across entries, which
+  correlated them and gave ×3.5). A coherent distortion grows faster than `d` because `A − I` is
+  quadratic in `εE` and the square of a rank-one term with unit entries scales like `d²`; the
+  Jacobian of a trained encoder is of the coherent kind, so the operator side's `ρ` cannot be
+  assumed to stay below one past `d ≈ 4` without a chart penalty that keeps the distortion
+  incoherent or small.
 
 ### G2. The conformally flat gauge: discretisation error and sensitivity
 
@@ -176,6 +191,8 @@ What it says:
 
 - **The gauge identity is exact**: the residual is at the level of the finite differences (5e-5 at
   25³, 4e-4 at 15⁴) and the round trip through the potential form recovers `u` to the same level.
+  (Rerun after the audit with the converged power iteration: the table is unchanged to the digits
+  shown; the spectral radius is not part of it.)
 - **The deck's sensitivity claim was wrong.** It said the gauged target inherits an error `s·δ` with
   `s = (d−2)/4`, so 0.25 δ in `d = 3`. The end-to-end error of the pipeline (potential form solved with
   the perturbed `λ`, then un-gauged) is `1.0–1.2 δ` in both dimensions, because `λ` also enters the
@@ -259,89 +276,96 @@ What it says:
 
 ### G4. Oracle floors of the chart penalties
 
-_Numbers from the run before the audit fixes (relative `eps`, non-degeneracy log, finer hill chart); the rerun is in progress._
-
 Kind: analytic, no readout and no encoder. On 2048 sample points of each bed a chart
 `ψ_θ(t) = t + MLP(t)` (2 × 128, tanh, identity at initialisation) is trained for 3000 Adam steps
 (cosine schedule, two restarts for the conformal target) to minimise the axis-normalised
-conformality loss of the inverse metric it induces, `A = Dψ g⁻¹ Dψᵀ`, the matrix the package's
-`ConformalityPenalty` sees. The same is done for the orthogonality target (`β = 0`) and the half-way
-`β = 0.5`. The floor kept is the best state along the run, never worse than the identity chart,
-and it is replaced by the floor of the bed's closed-form conformal chart when that is lower (the
-optimiser can only over-estimate the true floor). "removed" is the fraction of `√L_conf` of the
-parameter chart that the best chart removes.
+conformality loss of the inverse metric it induces, `A = Dψ g⁻¹ Dψᵀ` rescaled to unit mean trace,
+the matrix the package's `ConformalityPenalty` sees. The same is done for the orthogonality target
+(`β = 0`) and the half-way `β = 0.5`. The floor kept is the best state along the run, never worse
+than the identity chart, and it is replaced by the floor of the bed's closed-form conformal chart,
+evaluated on the same sample, when that is lower (the optimiser can only over-estimate the true
+floor). "removed" is the fraction of `√L_conf` of the parameter chart that the best chart removes.
 
 | bed | d | obstruction | share | √L_conf param chart | oracle √L_conf | known chart | removed | converged | oracle √L_orth |
 |---|---|---|---|---|---|---|---|---|---|
-| S2cap | 2 | none | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| graph-generic-d2 | 2 | none | 0 | 0.174 | 0.013 | – | 0.925 |  | 0.00516 |
-| graph-radial-d2 | 2 | none | 0 | 0.152 | 0.00343 | – | 0.977 |  | 0.00257 |
-| hill-lop | 2 | none | 0 | 0.174 | 0.0074 | 0.0074 | 0.957 |  | 0.00338 |
-| hill-round | 2 | none | 0 | 0.152 | 0.00123 | 0.00123 | 0.992 |  | 0.00089 |
-| S2xR | 3 | cotton | 0 | 0.102 | 0 | 0 | 1 |  | 0 |
-| S3cap | 3 | cotton | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| S3cap-axes1x1x2x3 | 3 | cotton | 0.015 | 0.421 | 0.139 | – | 0.668 |  | 0.014 |
-| SPD2-airm | 3 | cotton | 0 | 0.061 | 0.00264 | – | 0.957 |  | 0.00108 |
+| S2cap | 2 | none | 0 | 1.02e-16 | 1.02e-16 | 1.02e-16 | 1 |  | 3.75e-17 |
+| graph-generic-d2 | 2 | none | 0 | 0.176 | 0.012 | – | 0.931 |  | 0.0051 |
+| graph-radial-d2 | 2 | none | 0 | 0.155 | 0.00539 | – | 0.965 |  | 0.00257 |
+| hill-lop | 2 | none | 0 | 0.177 | 0.000879 | 0.000879 | 0.995 |  | 0.000681 |
+| hill-round | 2 | none | 0 | 0.155 | 0.000138 | 0.000138 | 0.999 |  | 9.92e-05 |
+| S2xR | 3 | cotton | 1.65e-31 | 0.103 | 1.88e-16 | 1.88e-16 | 1 |  | 2.96e-17 |
+| S3cap | 3 | cotton | 7.15e-32 | 1.28e-16 | 1.28e-16 | 1.28e-16 | 1 |  | 4.01e-17 |
+| S3cap-axes1x1x2x3 | 3 | cotton | 0.015 | 0.421 | 0.118 | – | 0.718 | no | 0.015 |
+| SPD2-airm | 3 | cotton | 1.99e-29 | 0.06 | 0.00257 | – | 0.957 |  | 0.00108 |
 | SPD2-logeuclid | 3 | cotton | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| graph-generic-d3 | 3 | cotton | 0.311 | 0.096 | 0.084 | – | 0.123 |  | 0.00782 |
-| graph-radial-d3 | 3 | cotton | 0 | 0.086 | 0.0082 | – | 0.904 |  | 0.00637 |
-| S2xR2 | 4 | weyl | 0.333 | 0.109 | 0.044 | – | 0.601 | no | 4.12e-05 |
-| S2xS2 | 4 | weyl | 0.667 | 0.146 | 0.086 | – | 0.412 |  | 6.57e-05 |
-| S3xR | 4 | weyl | 0 | 0.078 | 0 | 0 | 1 |  | 0 |
-| S4cap | 4 | weyl | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| S4cap-axes1x1x1x1.25x1.5 | 4 | weyl | 0.000901 | 0.174 | 0.016 | – | 0.91 |  | 0.00554 |
-| S4cap-axes1x1x1x1.5x2 | 4 | weyl | 0.00519 | 0.277 | 0.046 | – | 0.835 |  | 0.015 |
-| S4cap-axes1x1x1x1.75x2.5 | 4 | weyl | 0.0097 | 0.34 | 0.09 | – | 0.735 |  | 0.03 |
-| S4cap-axes1x1x1x1x1 | 4 | weyl | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| S4cap-axes1x1x1x2x3 | 4 | weyl | 0.012 | 0.381 | 0.144 | – | 0.623 |  | 0.034 |
-| T4 | 4 | weyl | 0 | 0 | 0 | 0 | 1 |  | 0 |
-| graph-generic-d4 | 4 | weyl | 0.179 | 0.052 | 0.051 | – | 0.011 |  | 0.00598 |
-| graph-radial-d4 | 4 | weyl | 0 | 0.046 | 0.023 | – | 0.497 |  | 0.017 |
-| hillxhill | 4 | weyl | 0.229 | 0.171 | 0.149 | – | 0.128 |  | 0.00387 |
-| SPD3-airm | 6 | weyl | 0.7 | 0.094 | 0.082 | – | 0.128 |  | 0.00953 |
-| S4xS4 | 8 | weyl | 0.571 | 0.107 | 0.089 | – | 0.168 |  | 3.62e-05 |
-| S8cap | 8 | weyl | 0 | 0 | 0 | 0 | 1 |  | 0 |
+| graph-generic-d3 | 3 | cotton | 0.311 | 0.096 | 0.092 | – | 0.042 |  | 0.00844 |
+| graph-radial-d3 | 3 | cotton | 4.36e-31 | 0.087 | 0.013 | – | 0.853 |  | 0.00723 |
+| S2xR2 | 4 | weyl | 0.333 | 0.109 | 0.029 | – | 0.735 | no | 2.73e-17 |
+| S2xS2 | 4 | weyl | 0.667 | 0.147 | 0.088 | – | 0.399 |  | 3.9e-17 |
+| S3xR | 4 | weyl | 1.02e-31 | 0.079 | 2.67e-16 | 2.67e-16 | 1 |  | 3.5e-17 |
+| S4cap | 4 | weyl | 2.25e-31 | 1.29e-16 | 1.29e-16 | 1.29e-16 | 1 |  | 3.88e-17 |
+| S4cap-axes1x1x1x1.25x1.5 | 4 | weyl | 0.000901 | 0.174 | 0.015 | – | 0.915 |  | 0.0054 |
+| S4cap-axes1x1x1x1.5x2 | 4 | weyl | 0.00519 | 0.276 | 0.045 | – | 0.836 | no | 0.015 |
+| S4cap-axes1x1x1x1.75x2.5 | 4 | weyl | 0.0097 | 0.34 | 0.079 | – | 0.768 |  | 0.03 |
+| S4cap-axes1x1x1x1x1 | 4 | weyl | 2.25e-31 | 1.29e-16 | 1.29e-16 | 1.29e-16 | 1 |  | 3.88e-17 |
+| S4cap-axes1x1x1x2x3 | 4 | weyl | 0.012 | 0.381 | 0.126 | – | 0.668 |  | 0.03 |
+| T4 | 4 | weyl | 0 | 1.03e-16 | 1.03e-16 | 1.03e-16 | 1 |  | 0 |
+| graph-generic-d4 | 4 | weyl | 0.179 | 0.052 | 0.051 | – | 0.015 |  | 0.00605 |
+| graph-radial-d4 | 4 | weyl | 2.62e-31 | 0.048 | 0.024 | – | 0.496 |  | 0.016 |
+| hillxhill | 4 | weyl | 0.229 | 0.171 | 0.152 | – | 0.114 |  | 0.00393 |
+| SPD3-airm | 6 | weyl | 0.7 | 0.094 | 0.077 | – | 0.182 |  | 0.00943 |
+| S4xS4 | 8 | weyl | 0.571 | 0.108 | 0.09 | – | 0.167 |  | 3.97e-17 |
+| S8cap | 8 | weyl | 8.89e-32 | 1.51e-16 | 1.51e-16 | 1.51e-16 | 1 |  | 3.31e-17 |
 
-Not converged after 3000 steps: `S²×R²` (its floor is an upper bound). The optimiser drifted
-upward on `hillxhill` (best state at step 1879) and `graph-generic-d4` (step 1036): their floors
-are the best state seen and are also upper bounds.
+Figure: `results/benchmarks/geometry/tier0/g4_oracle_floor/figures/g4_oracle_floor.png`.
+
+Not converged after 3000 steps (floor still moving over the last 10 % of the run by more than the
+restart spread): `S²×R²`, the (1,1,1,1.5,2) ellipsoid and the squashed `S³`; their floors are upper
+bounds. "tr-ratio" (max/min of `tr A` over the sample) and `min |det Dψ|` of the best chart are
+logged for the optimiser's best chart on every bed to exclude degenerate charts: no bed collapses
+(the smallest determinant is 0.047 on an ellipsoid; the largest trace ratio, 24.7, is the optimiser's
+chart of the lopsided hill, whose reported floor comes from the known isothermal chart anyway).
 
 What it says:
 
 - **The existence predictions hold where they can be checked.** `d = 2`: every bed reaches a floor
-  below 0.013 (the hills at their known isothermal chart: 0.0012 / 0.0074; the graphs with the
-  optimiser alone: 0.003 / 0.013). `d = 3`: zero on the beds with vanishing Cotton tensor (`S³` cap,
-  `S²×R`, SPD(2)-AIRM 0.0026 with 96 % removed and no closed-form chart implemented, radial graph
-  0.008) and clearly positive on the two with Cotton ≠ 0 (squashed `S³` 0.139, generic graph
-  0.084). `d = 4`: exactly zero on `S⁴`, `S³×R`, `T⁴` (closed-form charts), positive on every bed
-  with `W ≠ 0`: `S²×R²` 0.044 (share 1/3), `S²×S²` 0.086 (2/3), the product of hills 0.149 (0.23),
-  the generic graph 0.051 (0.18). `d = 6, 8`: SPD(3) 0.082 (share 0.70), `S⁴×S⁴` 0.089 (4/7),
-  `S⁸` cap 0.
+  below 0.013 (the hills at their known isothermal chart: 1.4e-4 / 8.8e-4 on the 145-point chart,
+  which is conformal to 7e-3 at its worst point; the graphs with the optimiser alone: 0.005 /
+  0.012). `d = 3`: zero on the beds with vanishing Cotton tensor (`S³` cap, `S²×R`, SPD(2)-AIRM 0.0026
+  with 96 % removed and no closed-form chart implemented, radial graph 0.013) and clearly positive
+  on the two with Cotton ≠ 0 (squashed `S³` 0.118, generic graph 0.092). `d = 4`: exactly zero on
+  `S⁴`, `S³×R`, `T⁴` (closed-form charts), positive on every bed with `W ≠ 0`: `S²×R²` 0.029 (share
+  1/3), `S²×S²` 0.088 (2/3), the product of hills 0.152 (0.23), the generic graph 0.051 (0.18).
+  `d = 6, 8`: SPD(3) 0.077 (share 0.70), `S⁴×S⁴` 0.090 (4/7), `S⁸` cap 0.
 - **One optimisation gap remains visible:** `graph-radial-d4` has `W = 0` (a hypersurface of
-  revolution is conformally flat) but the optimiser removes only half of the deviation (0.023 left).
-  In the first run of this block `S³×R` showed the same gap (0.0415) until the closed-form chart
-  bounded it. Where no closed form exists, the 2 × 128 chart with 3000 steps is the limit of the
-  oracle in `d = 4`, and X2's "trained floor minus oracle floor" must be read with that in mind.
+  revolution is conformally flat) but the optimiser removes only half of the deviation (0.024 left,
+  with a healthy chart: trace ratio 2.1, determinant 0.95). The floor of `S³×R` showed the same gap
+  (0.04) until the closed-form chart bounded it. Where no closed form exists, the 2 × 128 chart with
+  3000 steps is the limit of the oracle in `d = 4`, and X2's "trained floor minus oracle floor" must
+  be read with that in mind.
 - **The ellipsoid family is monotone but not proportional.** Along `(1,1,1,1,1) → (1,1,1,2,3)` the
-  floor climbs 0 → 0.016 → 0.046 → 0.090 → 0.144 while the mean Weyl share climbs
+  floor climbs 0 → 0.015 → 0.045 → 0.079 → 0.127 while the mean Weyl share climbs
   0 → 0.0009 → 0.005 → 0.010 → 0.012. The share is a ratio (Weyl against the whole curvature); the
   floor is an absolute distortion of the best chart, so a mildly squashed sphere with a tiny Weyl
-  share still leaves a floor of 0.14, more than `S²×R²` with share 1/3. The Weyl share orders beds
+  share still leaves a floor of 0.13, more than `S²×R²` with share 1/3. The Weyl share orders beds
   within a family; it does not predict the size of the floor across families.
 - **Orthogonal charts exist almost everywhere, and they are not conformal.** The orthogonality
-  floor is below 1e-4 on every product (`S²×R²`, `S²×S²`, `S⁴×S⁴`), 0.004 on the product of hills
-  and at most 0.034 elsewhere, while the conformality of the orthogonality-optimal chart is 0.39
-  on the round hill, 0.71 on the product of hills, 0.77 on the generic `d = 4` graph and 0.80 on
-  SPD(3). The oracle side of claim A1 is confirmed: today's target is reachable on charts that are
-  far from conformal, so it cannot steer towards them. Whether that costs anchors is X1's question.
+  floor is at machine precision on every product (`S²×R²`, `S²×S²`, `S⁴×S⁴`: block charts are
+  orthogonal), 0.004 on the product of hills and at most 0.03 elsewhere, while the conformality of
+  the orthogonality-optimal chart is 0.39 on the round hill, 0.71 on the product of hills, 0.77 on
+  the generic `d = 4` graph and 0.80 on SPD(3). The oracle side of claim A1 is confirmed: today's
+  target is reachable on charts that are far from conformal, so it cannot steer towards them.
+  Whether that costs anchors is X1's question.
 - **The count `2/(d+1)` does not predict the removable fraction** (right panel of the figure). On
-  unobstructed beds the best chart removes 90–100 % of `√L_conf` in every `d` from 2 to 8; on
-  obstructed beds 1–60 %, set by the obstruction and the curvature size, not by `d`. The count says
+  unobstructed beds the best chart removes 85–100 % of `√L_conf` in every `d` from 2 to 8; on
+  obstructed beds 1–75 %, set by the obstruction and the curvature size, not by `d`. The count says
   how many of the `d(d+1)/2` metric functions a chart can fix; it says nothing about the normalised
   penalty, and the deck's claim A3 is to be reworded accordingly.
-- `β = 0.5` lands between the two floors on every bed (for example 0.034 on `S²×R²`, 0.122 on the
-  product of hills): the single `β` axis of the package's loss spans today's target and the
-  conformal one continuously, as intended.
+- `β = 0.5` lands between the two floors on every bed: the single `β` axis of the package's loss
+  spans today's target and the conformal one continuously, as intended.
+- Against the pre-audit run (absolute `eps` in the loss, 49-point hill chart, unconverged power
+  iteration elsewhere): every floor moved by less than 0.02, the hills' known-chart floors fell by
+  an order of magnitude with the finer chart, and no conclusion changed.
 - For the plan: X1 trains encoders on the core beds and X2 plots their floors against this column;
   the beds whose oracle floor is a closed-form zero (`S⁴` cap, `S³×R`, `T⁴`, the hills) give a clean
   "optimisation only" reading, SPD(2)-AIRM, `S²×R²` and `graph-radial-d4` give an upper bound.
@@ -466,12 +490,13 @@ stability on SPD(2))? Proposal E's reading of `λ` gains a direct witness in `S�
 
 ### X1. Penalty ablation on the core beds (reduced arm set)
 
-Kind: learned chart (label `tier1`, MPS, 3 seeds, 84 fits, 2 h). Arms on ambient inputs: `none`;
+Kind: learned chart (label `tier1`, MPS, 3 seeds, 84 fits + 12 sweep fits, 2.3 h). Arms on ambient inputs: `none`;
 `orth-today` (the package's `OrthogonalityPenalty(0.1, every=20)`); `conf` (`ConformalityPenalty`,
 `β = 1`, axis-normalised, all prefixes, `every = 2`, weight calibrated once per bed so that the
 penalty gradient is 0.3 of the task gradient at epoch 50 of a penalty-free fit); `conf-tan` (the
 same with the bed's tangent projector, so the penalty sees `J P Jᵀ` instead of `J Jᵀ`). Paired
-design: the delta column is per seed against `none` on the same data and minibatches.
+design: the delta column is per seed against `none` on the same data and minibatches. `conf@0.1` and
+`conf@0.03` are `conf` at 0.1× and 0.03× the calibrated weight (the weight sweep).
 
 | bed | d | D | arm | weight | NRMSE @64 (range) | @16 | @8 | Δ vs none @64 (median [min, max], worse/n) | √L_orth | √L_conf | ‖A−I‖∞ | d_eff | n |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -498,10 +523,14 @@ design: the delta column is per seed against `none` on the same data and minibat
 | S2xR2 | 4 | 5 | none | – | 0.0426 (0.0382–0.0501) | 0.043 | 0.044 | – | 0.315 | 0.667 | 22.02 | 2 | 3 |
 | S2xR2 | 4 | 5 | orth-today | – | 0.0427 (0.0413–0.0488) | 0.043 | 0.044 | +0.0002 [-0.0013, +0.0031] 2/3 | 0.122 | 0.595 | 22.379 | 2 | 3 |
 | S2xR2 | 4 | 5 | conf | 0.0412 | 0.0464 (0.0459–0.0494) | 0.046 | 0.048 | +0.0038 [-0.0007, +0.0077] 2/3 | 0.048 | 0.417 | 16.224 | 2 | 3 |
+| S2xR2 | 4 | 5 | conf@0.1 | 0.00412 | 0.0445 (0.0443–0.0487) | 0.045 | 0.046 | +0.0019 [-0.0013, +0.0061] 2/3 | 0.081 | 0.437 | 23.689 | 3 | 3 |
+| S2xR2 | 4 | 5 | conf@0.03 | 0.00123 | 0.0433 (0.0420–0.0516) | 0.043 | 0.044 | +0.0015 [-0.0006, +0.0051] 2/3 | 0.159 | 0.558 | 23.636 | 2 | 3 |
 | S2xR2 | 4 | 5 | conf-tan | 0.0412 | 0.0461 (0.0448–0.0494) | 0.046 | 0.053 | +0.0022 [-0.0007, +0.0079] 2/3 | 0.105 | 0.466 | 14.508 | 2 | 3 |
 | S4cap | 4 | 5 | none | – | 0.0462 (0.0449–0.0497) | 0.046 | 0.048 | – | 0.731 | 0.747 | 38.522 | 3 | 3 |
 | S4cap | 4 | 5 | orth-today | – | 0.0475 (0.0446–0.0485) | 0.047 | 0.048 | -0.0003 [-0.0022, +0.0023] 1/3 | 0.188 | 0.653 | 33.574 | 2 | 3 |
 | S4cap | 4 | 5 | conf | 0.546 | 0.0623 (0.0619–0.0678) | 0.063 | 0.07 | +0.0157 [+0.0126, +0.0230] 3/3 | 0.044 | 0.172 | 9.672 | 2 | 3 |
+| S4cap | 4 | 5 | conf@0.1 | 0.0546 | 0.0508 (0.0507–0.0549) | 0.051 | 0.052 | +0.0052 [+0.0046, +0.0058] 3/3 | 0.038 | 0.211 | 35.154 | 2 | 3 |
+| S4cap | 4 | 5 | conf@0.03 | 0.0164 | 0.0492 (0.0435–0.0506) | 0.049 | 0.049 | +0.0008 [-0.0014, +0.0030] 2/3 | 0.058 | 0.33 | 39.709 | 2 | 3 |
 | S4cap | 4 | 5 | conf-tan | 0.546 | 0.0614 (0.0593–0.0703) | 0.063 | 0.075 | +0.0131 [+0.0117, +0.0254] 3/3 | 0.169 | 0.246 | 37.622 | 2 | 3 |
 
 Figure: `results/benchmarks/geometry/tier1/x1_penalty/figures/x1_penalty.png` (relative change of
@@ -527,8 +556,14 @@ What it says:
 - **The tangent projector changes little**: `conf-tan` tracks `conf` on every bed and coincides with
   it on the log-Euclidean twin (where `P = I` by construction, a check that passed). At native
   ambient dimension the off-manifold part of the Jacobian is not what hurts.
-- **Pending:** a weight sweep (`conf` at 0.1× and 0.03× the calibrated weight on the round hill,
-  `S⁴` and `S²×R²`) to see whether a weaker pull keeps the floor gain without the accuracy cost.
+- **A weaker pull does not buy anything either (weight sweep).** On `S⁴` the cost falls from +0.016
+  at the calibrated weight to +0.005 at 0.1× (still worse on 3/3 seeds) and to +0.001 at 0.03×
+  (2/3), while the conformality floor the chart reaches climbs back from 0.17 to 0.21 and 0.33: the
+  accuracy cost and the floor gain scale together, there is no weight at which the chart is more
+  conformal at no cost. On `S²×R²` the same: +0.004 → +0.002 → +0.0015 with floors 0.42 → 0.44 →
+  0.56 (against 0.67 free). The round hill's sweep ran by mistake at ambient dimension 3 instead
+  of the core's 8 (unpaired against the `none` rows; it showed the same pattern, +0.002 at both
+  weights with floors 0.22 / 0.26) and is queued for a rerun at 8.
 
 Consequence for the plan: proposals A and B do not improve IGL's readout at `N = 4096`, 64 anchors
 and 400 epochs on any synthetic bed of the core set; the value of the conformality target, if any,

@@ -218,6 +218,7 @@ class IGLModule(nn.Module):
                     latent_dim=max_dim,
                     degree=kernel_cfg.polynomial_degree,
                 ),
+                per_scale_columns=kernel_cfg.per_scale_columns,
             )
         else:
             # Pre-built kernel (e.g. SpectralKernel). It must expose

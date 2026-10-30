@@ -114,6 +114,7 @@ def main() -> None:
                             set_name=set_name,
                             inputs="param",
                             result_arm="frozen-pca",
+                            resume=bool(args.resume),
                         )
                 if "nystroem" in parts:
                     t0 = time.perf_counter()

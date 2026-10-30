@@ -67,6 +67,7 @@ def main() -> None:
                                 set_name=set_name,
                                 result_arm=f"{arm}-N{n_label}",
                                 extra={"calibration": cal, "n_train": n_label},
+                                resume=bool(args.resume),
                             )
     print(f"S3 done in {time.perf_counter() - t_start:.0f}s")
 

@@ -383,7 +383,9 @@ def score(
     with torch.no_grad():
         phi_tr = normalize_phi(module.design_matrix(x_tr, gate_mask=mask), module.normalize)
         phi_te = normalize_phi(module.design_matrix(x_te, gate_mask=mask), module.normalize)
-        w, b = solve_with_intercept(phi_tr, _solve_targets(loss, y_tr), l2=l2)
+        # The scoring solve runs on the CPU (QR least squares): the on-device float32 Cholesky fails on the
+        # near-singular Gram of a wide Φ (MNIST at R = 512) and would return zero weights.
+        w, b = solve_with_intercept(phi_tr.cpu(), _solve_targets(loss, y_tr).cpu(), l2=l2)
         pred = phi_te @ w.to(phi_te.device, phi_te.dtype) + b.to(phi_te.device, phi_te.dtype)
     if isinstance(loss, igl.CrossEntropyLoss):
         labels = pred.argmax(dim=-1)

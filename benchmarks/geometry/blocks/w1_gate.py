@@ -45,7 +45,13 @@ def main() -> None:
     for set_name in args.sets.split(","):
         for k in (int(v) for v in str(args.k).split(",")):
             ds = load_set(set_name, k=k, smoke=smoke)
-            common = {"device": device, "state": state, "label": args.label, "set_name": set_name}
+            common = {
+                "device": device,
+                "state": state,
+                "label": args.label,
+                "set_name": set_name,
+                "resume": bool(args.resume),
+            }
             for r in anchors:
                 spec = base_spec(ds, n_anchors=r, k=k, smoke=smoke, args=args)
                 if "noise" in parts:

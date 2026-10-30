@@ -48,6 +48,7 @@ def main() -> None:
                 "label": args.label,
                 "set_name": set_name,
                 "lr_readout": bool(args.lr_readout),
+                "resume": bool(args.resume),
             }
             for r in anchors:
                 spec = base_spec(ds, n_anchors=r, k=k, smoke=smoke, args=args)

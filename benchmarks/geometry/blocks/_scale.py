@@ -10,6 +10,7 @@ set is a synthetic stand-in (no download, a few seconds on CPU) so the blocks ar
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import time
 from dataclasses import replace
@@ -19,10 +20,11 @@ import torch
 
 import igl
 from benchmarks.device._harness import machine_state
-from benchmarks.geometry._harness import write_block_result
+from benchmarks.geometry._harness import result_path, write_block_result
 from benchmarks.geometry.fitting import Dataset, FitSpec, calibrate_weight, fit_arm, loss_for
 from benchmarks.geometry.testbeds import real
 from igl.data import embed_in_high_dim
+from igl.exceptions import IGLConvergenceError
 
 __all__ = [
     "STEPS_BUDGET",
@@ -48,6 +50,7 @@ def add_scale_args(p: argparse.ArgumentParser, *, default_sets: str = "mnist") -
     p.add_argument("--anchors", default=None, help="comma-separated anchor counts R (default: the block's ladder)")
     p.add_argument("--anchor-init", default="kmeans-keep", help="random | kmeans-keep | kmeans-median")
     p.add_argument("--steps", type=int, default=STEPS_BUDGET, help="optimiser steps per fit (constant across N)")
+    p.add_argument("--resume", action="store_true", help="skip the cells whose result file already holds a score")
     return p
 
 
@@ -145,23 +148,45 @@ def run_fit(
     result_arm: str | None = None,
     extra: dict[str, Any] | None = None,
     lr_readout: bool = False,
+    resume: bool = False,
 ) -> dict[str, Any]:
-    """One fit of the protocol, written under the cell's tag; returns the row."""
+    """One fit of the protocol, written under the cell's tag; returns the row.
+
+    With ``resume`` a cell whose result file already holds a score is skipped. A fit that raises
+    :class:`~igl.exceptions.IGLConvergenceError` (the per-batch readout solve failed, e.g. a ridge below the
+    float32 floor at large ``R``) is written as a failure row (``failed``: the message, no score) so the rest of
+    the block runs; the report lists those cells.
+    """
+    name = result_arm or arm
+    k = spec.max_dim or ds.d
+    cell = tag(set_name, spec.n_anchors, k)
+    head = f"{set_name:18s} R={spec.n_anchors:<4d} k={k:<3d} {name:16s} seed {seed}"
+    path = result_path(block, cell, name, seed, label=label)
+    if resume and path.exists():
+        previous = json.loads(path.read_text())
+        if not previous.get("failed"):
+            print(f"{head} skipped (result exists)", flush=True)
+            return previous
     t0 = time.perf_counter()
-    row = fit_arm(ds, spec, arm, seed=seed, device=device, inputs=inputs, prune=False, lr_readout=lr_readout)
+    try:
+        row = fit_arm(ds, spec, arm, seed=seed, device=device, inputs=inputs, prune=False, lr_readout=lr_readout)
+    except IGLConvergenceError as exc:
+        row = {"failed": str(exc), "set": set_name, "k": k, "arm": name, "R": spec.n_anchors}
+        if extra:
+            row.update(extra)
+        write_block_result(block, cell, name, seed, row, device=device, state=state, started_at=t0, label=label)
+        print(f"{head} FAILED: {exc} | {time.perf_counter() - t0:.0f}s", flush=True)
+        return row
     row["set"] = set_name
-    row["k"] = spec.max_dim or ds.d
+    row["k"] = k
     if extra:
         row.update(extra)
-    name = result_arm or arm
     row["arm"] = name
-    write_block_result(
-        block, tag(set_name, spec.n_anchors, row["k"]), name, seed, row, device=device, state=state, started_at=t0, label=label
-    )
+    write_block_result(block, cell, name, seed, row, device=device, state=state, started_at=t0, label=label)
     metric = f"err {row['err_test']:.4f}" if ds.task == "classification" else f"nrmse {row['nrmse_test_dmax']:.4f}"
     flag = " UNSTABLE" if (row.get("stability") or {}).get("flag") else ""
     print(
-        f"{set_name:18s} R={spec.n_anchors:<4d} k={row['k']:<3d} {name:16s} seed {seed} {metric} | "
+        f"{head} {metric} | "
         f"conf {row['report_test']['full']['sqrt_conf']:.3f} eff_rank {row['phi']['eff_rank']:.1f} "
         f"best {row['best_epoch']}/{row['epochs']}{flag} | {row['wall_s']:.0f}s",
         flush=True,

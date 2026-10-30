@@ -53,6 +53,7 @@ def main() -> None:
                             label=args.label,
                             set_name=set_name,
                             result_arm=init,
+                            resume=bool(args.resume),
                         )
     print(f"S1 done in {time.perf_counter() - t_start:.0f}s")
 

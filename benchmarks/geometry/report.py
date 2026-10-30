@@ -17,7 +17,12 @@ def load(label: str, block: str) -> list[dict[str, Any]]:
     base = Path.cwd() / "results" / "benchmarks" / "geometry" / label / block
     rows: list[dict[str, Any]] = []
     for path in sorted(base.glob("*/*/seed*.json")):
-        rows.append(json.loads(path.read_text()))
+        row = json.loads(path.read_text())
+        if row.get("failed"):
+            # A failure row (the fit raised, no score): reported to stdout, kept out of the tables.
+            print(f"[{block}] failed cell {row.get('bed')} / {row.get('arm')} / seed {row.get('seed')}: {row['failed']}")
+            continue
+        rows.append(row)
     return rows
 
 

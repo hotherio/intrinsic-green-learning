@@ -106,3 +106,19 @@ geometry-smoke: ### run every geometry block on a tiny setting (under a minute e
 
 geometry-tier0: ### the analytic blocks of the geometry suite, one after the other (R0, G0, G1, G2, G4)
 	for b in r0_rank_go_nogo g0_geometry g1_rho_law g2_gauge g4_oracle_floor; do uv run python -m benchmarks.geometry.blocks.$$b || exit 1; done
+
+.PHONY: geometry-scale-smoke geometry-w1 geometry-s0 geometry-s1 geometry-s2 geometry-s3
+geometry-scale-smoke: ### run every scale block (W1, S0-S3) on the synthetic stand-in, CPU, under a minute
+	for b in w1_gate s0_baselines s1_anchor_budget s2_penalty_at_scale s3_learning_curve; do uv run python -m benchmarks.geometry.blocks.$$b --smoke --no-gate || exit 1; done
+
+SETS ?= mnist
+geometry-w1: ### the week-1 gate on $(SETS) (noise floor, frozen PCA chart, inner-solve and ridge checks)
+	IGL_BENCH_LABEL=scale uv run python -m benchmarks.geometry.blocks.w1_gate --sets $(SETS) --device $${IGL_BENCH_DEVICE:-mps}
+geometry-s0: ### the baselines of $(SETS)
+	IGL_BENCH_LABEL=scale uv run python -m benchmarks.geometry.blocks.s0_baselines --sets $(SETS) --k 16,64 --device $${IGL_BENCH_DEVICE:-mps}
+geometry-s1: ### the anchor budget of $(SETS)
+	IGL_BENCH_LABEL=scale uv run python -m benchmarks.geometry.blocks.s1_anchor_budget --sets $(SETS) --k 16,64 --device $${IGL_BENCH_DEVICE:-mps}
+geometry-s2: ### the penalty ablation of $(SETS) at R_BIND (from S1) and 256
+	IGL_BENCH_LABEL=scale uv run python -m benchmarks.geometry.blocks.s2_penalty_at_scale --sets $(SETS) --anchors $(R_BIND),256 --control --device $${IGL_BENCH_DEVICE:-mps}
+geometry-s3: ### the learning curve of $(SETS) at R_BIND
+	IGL_BENCH_LABEL=scale uv run python -m benchmarks.geometry.blocks.s3_learning_curve --sets $(SETS) --anchors $(R_BIND) --device $${IGL_BENCH_DEVICE:-mps}

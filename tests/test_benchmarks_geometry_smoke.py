@@ -79,3 +79,73 @@ def test_geometry_report_on_a_linear_chart() -> None:
     assert rep["full"]["sqrt_conf"] == pytest.approx(0.0, abs=1e-6)  # diagonal metric: zero after axis normalisation
     assert rep["full"]["sqrt_conf_plain"] > 0.1
     assert rep["full"]["sqrt_orth"] == pytest.approx(0.0, abs=1e-6)
+
+
+# ----------------------------------------------------------------------------------- plan v2: the scale protocol
+
+
+def _smoke_dataset():  # noqa: ANN202
+    from benchmarks.geometry.blocks._scale import smoke_set
+    from benchmarks.geometry.fitting import Dataset
+
+    rs = smoke_set()
+    return Dataset.from_arrays(rs.name, rs.x, rs.y, d=4, task=rs.task, n_classes=rs.n_classes, tangent_dim=8)
+
+
+def test_from_arrays_builds_the_pca_chart_and_tangent_proxy() -> None:
+    ds = _smoke_dataset()
+    assert ds.task == "classification" and ds.n_classes == 4
+    assert ds.t["train"].shape == (1200, 4) and ds.extra["pca_basis"].shape == (16, 8)
+    basis = ds.extra["pca_basis"]
+    assert torch.allclose(basis.T @ basis, torch.eye(8), atol=1e-4)
+
+
+def test_classification_fit_records_the_v2_row(tmp_path) -> None:  # noqa: ANN001
+    import igl
+    from benchmarks.geometry.fitting import FitSpec, calibrate_weight, fit_arm
+
+    ds = _smoke_dataset()
+    spec = FitSpec(steps_budget=20, batch_size=128, n_anchors=8, anchor_init="kmeans-keep")
+    modules: dict[str, igl.IGLModule] = {}
+    row = fit_arm(ds, spec, "none", seed=0, prune=False, modules=modules)
+    assert 0.0 <= row["err_test"] <= 1.0 and row["n_test"] == 400 and row["anchor_init"] == "kmeans-keep"
+    assert row["inner_batch_size"] == 4096 and row["steps"] == row["epochs"] * 10
+    assert set(row["score_test"]["4"]) >= {"err", "nll", "wrong"} and row["phi"]["dead_columns"] == 0
+    assert row["report_test"]["tan"]["k"] == 4 and "off_manifold_share" in row["report_test"]
+    cal = calibrate_weight(modules["none"], ds.x["train"], ds.y["train"], k=4, loss=igl.CrossEntropyLoss(n_classes=4))
+    assert cal["weight"] > 0 and cal["grad_task"] > 0
+    conf = fit_arm(
+        ds, FitSpec(steps_budget=20, batch_size=128, n_anchors=8, penalty_weight=cal["weight"]), "conf", seed=0, prune=False
+    )
+    assert conf["grad_ratios"] and all(r["ratio"] > 0 for r in conf["grad_ratios"])
+    frozen = fit_arm(ds, spec, "none", seed=0, inputs="param", prune=False)
+    assert frozen["encoder"] == "identity (frozen chart)" and frozen["param_chart"] == "PCA-4 chart"
+
+
+def test_baselines_and_paired_tests_on_the_smoke_set() -> None:
+    from benchmarks.geometry import baselines
+    from benchmarks.geometry.fitting import FitSpec
+    from benchmarks.geometry.report_scale import paired_tests
+
+    ds = _smoke_dataset()
+    lin = baselines.linear_probe(ds)
+    head = baselines.mlp_head(ds, FitSpec(steps_budget=20, batch_size=128, n_anchors=8, max_dim=4), seed=0)
+    assert 0.0 <= lin["err_test"] <= 1.0 and 0.0 <= head["err_test"] <= 1.0 and head["n_params"] > 0
+    same = paired_tests([(lin["wrong"], lin["wrong"], 400)])
+    assert same["delta"] == 0.0 and same["mcnemar_p"] == 1.0 and same["discordant"] == 0
+    diff = paired_tests([(lin["wrong"], head["wrong"], 400)])
+    assert diff["ci_lo"] <= diff["delta"] <= diff["ci_hi"]
+
+
+def test_scale_block_runs_on_the_smoke_set(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    import sys
+
+    from benchmarks.geometry.blocks import w1_gate
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sys, "argv", ["w1", "--smoke", "--no-gate", "--device", "cpu", "--label", "t", "--parts", "noise,h0", "--seeds", "0"]
+    )
+    w1_gate.main()
+    files = sorted((tmp_path / "results" / "benchmarks" / "geometry" / "t" / "w1_gate").glob("*/*/seed*.json"))
+    assert [f.parent.name for f in files] == ["frozen-pca", "none"]

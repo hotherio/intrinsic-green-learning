@@ -570,3 +570,42 @@ What it says:
 Consequence for the plan: proposals A and B do not improve IGL's readout at `N = 4096`, 64 anchors
 and 400 epochs on any synthetic bed of the core set; the value of the conformality target, if any,
 lies in the certificate (D) and in the operator side (E), not in regularising the learned chart.
+
+## Scale: the chart proposals at application size (plan v2)
+
+Kind: learned chart on real data (no analytic metric) and, in L1, on the synthetic ladder to `d = 64`. Plan v2
+(2026-10-30) moves the question from "does a penalty help on small manifolds" (no: the anchor budget never binds
+there, see X1) to "does anything about the chart matter where anchors bind": MNIST, DBpedia-14 sentence
+embeddings, the GPT-2 token table, a Mac-sized GPT-2 hidden-state pilot. Primary pre-registered hypothesis H4:
+the calibrated conformality penalty lowers the error at the binding anchor count. The rest (H0–H9) is in the plan
+file and is read with Holm correction within a block.
+
+### Protocol (v2)
+
+- Inputs standardised per feature on the training split; the same tensors for every arm; splits seeded.
+- `IGLModule(D, k, C)` with the default encoder (Stiefel init), `R` anchors × 4 scales, batch 256, a constant
+  budget of 12 000 optimiser steps whatever `N` (50 epochs at 60k rows), constant lr 1e-3, clip 1.0, no early
+  stop, best-validation state restored; `inner_batch_size = max(4096, 16 R)` so the training-time readout is
+  never under-determined at large `R`; one-hot ridge readout with `CrossEntropyLoss` for classification.
+- Anchors: k-means on the epoch-0 latents of 16k training rows (identical across arms sharing a seed),
+  scale ladder kept (`kmeans-keep`); `random` and `kmeans-median` as the S1 controls.
+- Penalties: `orth-today` is the package's `OrthogonalityPenalty(0.1, every=20)`; `conf` is the axis-normalised
+  conformality penalty on all prefixes every 2 batches, its weight calibrated per (set, R) so that the penalty
+  gradient is 0.3 of the task gradient of the trainer's own step at 10 % of the budget of a penalty-free fit;
+  the realised ratio is logged at 10 / 50 / 100 %.
+- Scoring: readout solved on the full training split (chunked Φ), error rate on the test split; the wrong rows
+  are kept, so two arms sharing a seed are compared on the same rows (pooled paired bootstrap, McNemar).
+  Thresholds come from the measured seed SD of `none` (W1): the minimum detectable paired effect is quoted as
+  3.6 SD at three seeds and 1.9 SD at five.
+- Baselines on the same split and seeds: linear probe, kNN, the capacity-matched MLP head (IGL's encoder →
+  `Linear(k, R) → SiLU → Linear(R, C)`, same budget), and the frozen PCA-`k` chart through IGL's own kernel and
+  readout (identity encoder, k-means anchors): the control that isolates what the *learned* chart adds.
+- Every fit records the geometry report on the top-64 PCA directions as the tangent proxy, `d_eff`, snapshots,
+  Φ column CV and effective rank, and a stability flag (final `√L_conf` above its epoch-0 value, or a median
+  condition number of `JJᵀ` above 1e4).
+
+### W1. The week-1 gate (MNIST)
+
+_Pending: the noise floor, the frozen PCA chart against the learned chart at R ∈ {32, 512}, the inner-solve and
+ridge checks. The block is written; the run starts once the machine is free._
+

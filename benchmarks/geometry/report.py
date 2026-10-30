@@ -397,6 +397,17 @@ TABLES = {
 }
 
 
+def _register_scale() -> None:
+    """The scale blocks' tables and figures live in :mod:`benchmarks.geometry.report_scale`."""
+    from benchmarks.geometry import report_scale
+
+    TABLES.update(report_scale.TABLES_SCALE)
+    FIGURES.update(report_scale.FIGURES_SCALE)
+
+
+_register_scale()
+
+
 def main() -> None:
     """Print the tables."""
     p = argparse.ArgumentParser(description=__doc__)

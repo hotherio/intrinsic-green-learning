@@ -17,7 +17,12 @@ def load(label: str, block: str) -> list[dict[str, Any]]:
     base = Path.cwd() / "results" / "benchmarks" / "geometry" / label / block
     rows: list[dict[str, Any]] = []
     for path in sorted(base.glob("*/*/seed*.json")):
-        rows.append(json.loads(path.read_text()))
+        row = json.loads(path.read_text())
+        if row.get("failed"):
+            # A failure row (the fit raised, no score): reported to stdout, kept out of the tables.
+            print(f"[{block}] failed cell {row.get('bed')} / {row.get('arm')} / seed {row.get('seed')}: {row['failed']}")
+            continue
+        rows.append(row)
     return rows
 
 
@@ -395,6 +400,17 @@ TABLES = {
     "g2_gauge": table_g2,
     "g4_oracle_floor": table_g4,
 }
+
+
+def _register_scale() -> None:
+    """The scale blocks' tables and figures live in :mod:`benchmarks.geometry.report_scale`."""
+    from benchmarks.geometry import report_scale
+
+    TABLES.update(report_scale.TABLES_SCALE)
+    FIGURES.update(report_scale.FIGURES_SCALE)
+
+
+_register_scale()
 
 
 def main() -> None:

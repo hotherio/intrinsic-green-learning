@@ -40,7 +40,6 @@ anchor, and :meth:`GreenKernel.reanchor_` moves the anchors onto a latent batch
 the median pairwise distance.
 """
 
-import math
 from collections.abc import Iterator, Sequence
 from enum import StrEnum
 from typing import Any, Literal, cast
@@ -345,9 +344,14 @@ class GreenKernel(nn.Module):
                 moved to the anchors' device and dtype.
             method: :class:`ReanchorMethod`: sampled rows or k-means centres.
             sigma: :class:`ReanchorSigma`: keep ``log_sigma`` or recentre the
-                ladder so its middle scale is the median pairwise distance of
-                (up to 2048 rows of) ``z`` divided by ``sqrt(d)``, with the
-                half-width of the constructor's ``sigma_log_range``.
+                ladder so its geometric-mean scale is the median pairwise
+                distance of (up to 2048 rows of) ``z``, with the half-width of
+                the constructor's ``sigma_log_range``. The kernel is a product
+                of per-axis Gaussians, so a common per-axis scale ``s`` gives
+                ``exp(-|z - mu|^2 / 2 s^2)``: the scale that puts a median pair
+                at ``exp(-1/2)`` is the median distance itself, not the
+                distance divided by ``sqrt(d)`` (which would leave the design
+                matrix dead at ``exp(-d/2)``).
             kmeans_iters: Lloyd iterations for ``"kmeans"``; empty clusters
                 keep their previous centre.
             generator: CPU generator for the row draws, for determinism.
@@ -385,10 +389,10 @@ class GreenKernel(nn.Module):
             if n < _MEDIAN_MIN_ROWS:
                 raise IGLConfigError("sigma='median' needs at least two rows")
             sub = z if n <= _MEDIAN_SUBSAMPLE else z[torch.randperm(n, generator=generator)[:_MEDIAN_SUBSAMPLE].to(z.device)]
-            per_axis = (torch.pdist(sub).median() / math.sqrt(self.latent_dim)).clamp_min(1e-12)
+            scale = torch.pdist(sub).median().clamp_min(1e-12)
             lo, hi = self._sigma_log_range
             ladder = torch.linspace(lo, hi, self.n_scales, device=z.device, dtype=z.dtype) - 0.5 * (lo + hi)
-            self.log_sigma.copy_((ladder + torch.log(per_axis)).unsqueeze(1).expand(self.n_scales, self.latent_dim))
+            self.log_sigma.copy_((ladder + torch.log(scale)).unsqueeze(1).expand(self.n_scales, self.latent_dim))
         return idx
 
     def forward(

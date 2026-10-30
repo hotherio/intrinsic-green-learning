@@ -92,7 +92,7 @@ def test_reanchor_median_centres_the_scale_ladder() -> None:
     k = GreenKernel(4, n_anchors=5, n_scales=3, sigma_log_range=(-1.0, 1.0))
     k.reanchor_(z, sigma=ReanchorSigma.MEDIAN, generator=torch.Generator().manual_seed(0))
     ls = k.log_sigma.detach()
-    expected_middle = math.log(float(torch.pdist(z).median()) / 2.0)
+    expected_middle = math.log(float(torch.pdist(z).median()))
     torch.testing.assert_close(ls[1], torch.full((4,), expected_middle), atol=1e-5, rtol=0)
     assert ls[0, 0] < ls[1, 0] < ls[2, 0]
     assert torch.allclose(ls[:, 0:1].expand(3, 4), ls)
@@ -147,3 +147,14 @@ def test_geometry_report_sees_anisotropy() -> None:
     assert full["sqrt_conf"] < 1e-5  # a constant per-axis scale is what the axis normalisation removes
     assert full["sqrt_conf_plain"] > 0.1  # the plain floor sees the unequal scales
     assert full["aniso_logstd"] > 0.5
+
+
+def test_reanchor_median_keeps_the_design_matrix_alive() -> None:
+    torch.manual_seed(3)
+    z = torch.randn(256, 32) @ torch.diag(torch.linspace(0.5, 2.0, 32))
+    kernel = GreenKernel(32, n_anchors=16, n_scales=4)
+    kernel.reanchor_(z, method=ReanchorMethod.KMEANS, sigma=ReanchorSigma.MEDIAN, generator=torch.Generator().manual_seed(0))
+    phi = kernel(z)
+    best = phi.max(dim=1).values / torch.sigmoid(kernel.rank_importance).max()
+    assert float(best.median()) > 0.2
+    assert float(phi.std(dim=0).min()) > 1e-4

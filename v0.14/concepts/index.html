@@ -1998,6 +1998,15 @@ because the SPD cone is a Riemannian manifold, not a flat vector space.
   diagonality. When <span class="arithmatex">\(g\)</span> is diagonal at every <span class="arithmatex">\(x\)</span>, the latent
   coordinates are first-order orthogonal — the Stäckel condition — and
   geodesics separate cleanly per coordinate.
+- [<code>ConformalityPenalty</code>][igl.spd.ConformalityPenalty] — the opt-in,
+  stricter target: <span class="arithmatex">\(g\)</span> a <em>multiple of the identity</em> (right angles and
+  equal stretching), computed on the axis-normalised metric because the
+  kernel's per-axis widths absorb a constant per-axis rescaling of the
+  chart. <code>beta</code> interpolates between the two targets, <code>all_prefixes</code>
+  penalises every nested Matryoshka block, and <code>metric_inv</code> restricts the
+  metric to the data manifold or changes the ambient metric.
+  [<code>conformal_factor</code>][igl.spd.conformal_factor] reads
+  <span class="arithmatex">\(\lambda = k / \operatorname{tr}(J J^\top)\)</span> from the same Jacobian.
 - <a class="autorefs autorefs-internal" href="../reference/spd/#igl.spd.reconstruction.IGLReconSPDClassifier"><code>IGLReconSPDClassifier</code></a> — a
   two-stage classifier: stage A trains the encoder to reconstruct
   log-Eig vectors via AIRM, stage B fits a <code>LogisticRegression</code> on the

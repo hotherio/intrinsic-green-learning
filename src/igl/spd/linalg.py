@@ -42,23 +42,64 @@ _EXP_SQUARINGS = 6
 _EXP_TAYLOR_DEGREE = 16
 
 
-def _eigh(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """``torch.linalg.eigh`` with proper static typing.
+_EIGH_SHIFT_REL = 1e-6
+_LINALG_ERROR: type[RuntimeError] = cast(
+    type[RuntimeError],
+    torch.linalg.LinAlgError,  # pyright: ignore[reportUnknownMemberType, reportPrivateImportUsage]
+)
 
-    The torch stubs return Unknown for the named-tuple decomposition; we cast
-    once here so downstream code stays clean. MPS has no eigensolver, so on
-    that device the decomposition runs on the CPU and the factors move back
-    (one round trip per call; gradients flow through the copies). The
-    iterative method (:data:`MatrixMethod`) avoids the round trip entirely.
-    """
-    if m.device.type == "mps":
-        eigvals, eigvecs = _eigh(m.cpu())
-        return eigvals.to(m.device), eigvecs.to(m.device)
+
+def _eigh_once(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``torch.linalg.eigh`` with proper static typing (the stubs return Unknown)."""
     eigvals, eigvecs = cast(
         tuple[torch.Tensor, torch.Tensor],
         torch.linalg.eigh(m),  # pyright: ignore[reportUnknownMemberType]
     )
     return eigvals, eigvecs
+
+
+def _eigh_retry(m: torch.Tensor, err: RuntimeError) -> tuple[torch.Tensor, torch.Tensor]:
+    """Retry a decomposition LAPACK gave up on: in float64, then with a diagonal shift.
+
+    The shift is :data:`_EIGH_SHIFT_REL` times the largest diagonal magnitude of
+    the batch, which moves the eigenvalues by that amount and leaves the
+    eigenvectors unchanged. The factors come back in the input dtype. If both
+    retries fail, the original error is raised with the last retry as its cause.
+    """
+    m64 = m.to(torch.float64)
+    shift = _EIGH_SHIFT_REL * m64.diagonal(dim1=-2, dim2=-1).abs().amax()
+    eye = torch.eye(m64.shape[-1], dtype=m64.dtype, device=m64.device)
+    candidates = ([] if m.dtype == torch.float64 else [m64]) + [m64 + shift * eye]
+    last: RuntimeError | None = None
+    for candidate in candidates:
+        try:
+            eigvals, eigvecs = _eigh_once(candidate)
+        except _LINALG_ERROR as retry_err:
+            last = retry_err
+            continue
+        return eigvals.to(m.dtype), eigvecs.to(m.dtype)
+    raise err from last
+
+
+def _eigh(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``torch.linalg.eigh`` with proper static typing and a convergence fallback.
+
+    MPS has no eigensolver, so on that device the decomposition runs on the
+    CPU and the factors move back (one round trip per call; gradients flow
+    through the copies). The iterative method (:data:`MatrixMethod`) avoids
+    the round trip entirely. LAPACK occasionally fails to converge on an
+    ill-conditioned batch element (``torch.linalg.LinAlgError``, a
+    ``RuntimeError`` subclass; error code
+    65 on EEG covariances with repeated eigenvalues); the decomposition is
+    then retried by :func:`_eigh_retry`.
+    """
+    if m.device.type == "mps":
+        eigvals, eigvecs = _eigh(m.cpu())
+        return eigvals.to(m.device), eigvecs.to(m.device)
+    try:
+        return _eigh_once(m)
+    except _LINALG_ERROR as err:
+        return _eigh_retry(m, err)
 
 
 def _triu_idx(d: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:

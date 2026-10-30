@@ -138,3 +138,48 @@ def test_iterative_exp_matches_fp64_on_wide_symmetric_spectra() -> None:
     s64 = q @ torch.diag_embed(lam) @ q.transpose(-1, -2)
     ref = matrix_exp_sym(s64)
     assert _rel(matrix_exp_sym(s64.float(), method="iterative"), ref) < 1e-5
+
+
+def test_eigh_retries_in_float64_when_lapack_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = torch.linalg.eigh
+    seen: list[torch.dtype] = []
+
+    def flaky(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        seen.append(m.dtype)
+        if m.dtype == torch.float32:
+            raise torch.linalg.LinAlgError("linalg.eigh: The algorithm failed to converge")
+        return real(m)
+
+    monkeypatch.setattr(torch.linalg, "eigh", flaky)
+    c = _random_spd(3, 4)
+    log_c = matrix_log_sym(c)
+    assert log_c.dtype == torch.float32
+    torch.testing.assert_close(matrix_exp_sym(log_c), c, rtol=1e-4, atol=1e-4)
+    assert seen[:2] == [torch.float32, torch.float64]
+
+
+def test_eigh_shifts_the_diagonal_when_float64_also_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = torch.linalg.eigh
+    calls: list[int] = []
+
+    def flaky(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        calls.append(1)
+        if len(calls) <= 2:  # the float32 and the float64 attempts fail, the shifted one passes
+            raise torch.linalg.LinAlgError("linalg.eigh: The algorithm failed to converge")
+        return real(m)
+
+    monkeypatch.setattr(torch.linalg, "eigh", flaky)
+    c = _random_spd(2, 3)
+    log_c = matrix_log_sym(c)
+    assert len(calls) == 3
+    assert log_c.dtype == torch.float32
+    torch.testing.assert_close(matrix_exp_sym(log_c), c, rtol=1e-3, atol=1e-3)
+
+
+def test_eigh_reraises_when_every_retry_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        raise torch.linalg.LinAlgError("linalg.eigh: The algorithm failed to converge")
+
+    monkeypatch.setattr(torch.linalg, "eigh", broken)
+    with pytest.raises(torch.linalg.LinAlgError):
+        matrix_log_sym(_random_spd(2, 3))

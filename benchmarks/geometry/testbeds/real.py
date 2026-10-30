@@ -223,7 +223,7 @@ def _wikitext_ids(split: str, *, max_tokens: int | None = None) -> np.ndarray:
     from transformers import AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained("gpt2")
-    ds = load_dataset("wikitext", "wikitext-103-raw-v1", split=split)
+    ds = load_dataset("Salesforce/wikitext", "wikitext-103-raw-v1", split=split)
     ids: list[np.ndarray] = []
     total = 0
     batch: list[str] = []

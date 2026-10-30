@@ -32,6 +32,13 @@ Two formulations compute the same numbers:
 Sign tracking is skipped on both paths for blocks whose operator is not
 oscillatory: the sign is then an exact ``+1`` and the product is unchanged.
 
+Both paths are evaluated in **row chunks** once ``N · R · d`` exceeds
+``chunk_elements`` (default ``2**26``, about 256 MB per fp32 block): rows are
+independent in every formulation, so the concatenated blocks are the same
+matrix, and a full-data call (the trainer's final refresh, validation,
+prediction) no longer materialises an ``[N, R, d]`` tensor for all ``N``. A
+training minibatch stays below the budget and is computed in one block.
+
 Two opt-in hooks serve readout ablations and leave the default path untouched:
 ``per_scale_columns=True`` keeps the ``K`` scales as separate design columns
 (``[N, R·K]``, anchor-major) instead of blending them into one column per
@@ -79,6 +86,8 @@ ReanchorSigmaLiteral = Literal["keep", "median"]
 type ReanchorMethodLike = ReanchorMethod | ReanchorMethodLiteral
 type ReanchorSigmaLike = ReanchorSigma | ReanchorSigmaLiteral
 
+_DEFAULT_CHUNK_ELEMENTS = 2**26
+"""Default element budget of one ``[n, R, d]`` distance block in :meth:`GreenKernel.compute_design_matrix`."""
 _MEDIAN_SUBSAMPLE = 2048
 """Rows of the latent batch used for the median pairwise distance in :meth:`GreenKernel.reanchor_`."""
 _MEDIAN_MIN_ROWS = 2
@@ -139,6 +148,9 @@ class GreenKernel(nn.Module):
             ``r·K + k``), so ``output_dim`` becomes ``R·K`` (plus any null-space
             columns). Summing the ``K`` columns of an anchor gives the blended
             column exactly.
+        chunk_elements: Element budget of one ``[n, R, d]`` distance block
+            (default ``2**26``). Inputs with ``N · R · d`` above it are evaluated
+            in row chunks of ``chunk_elements // (R · d)`` rows (at least one).
     """
 
     latent_dim: int
@@ -158,6 +170,7 @@ class GreenKernel(nn.Module):
         null_space: NullSpaceBasis | None = None,
         kernel_path: KernelPathLiteral = "auto",
         per_scale_columns: bool = False,
+        chunk_elements: int = _DEFAULT_CHUNK_ELEMENTS,
     ) -> None:
         super().__init__()
         if latent_dim < 1:
@@ -168,6 +181,8 @@ class GreenKernel(nn.Module):
             raise IGLConfigError(f"n_anchors must be >= 1, got {n_anchors}")
         if n_scales < 1:
             raise IGLConfigError(f"n_scales must be >= 1, got {n_scales}")
+        if chunk_elements < 1:
+            raise IGLConfigError(f"chunk_elements must be >= 1, got {chunk_elements}")
 
         op_names: list[str] = [operator] if isinstance(operator, str) else list(operator)
         if not op_names:
@@ -192,6 +207,7 @@ class GreenKernel(nn.Module):
         self._null_space = null_space
         self.kernel_path: KernelPathLiteral = kernel_path
         self.per_scale_columns: bool = per_scale_columns
+        self.chunk_elements: int = chunk_elements
         self._sigma_log_range: tuple[float, float] = sigma_log_range
         n_kernel_columns = n_anchors * total_k if per_scale_columns else n_anchors
         self.output_dim = n_kernel_columns + (null_space.n_columns if null_space is not None else 0)
@@ -295,6 +311,15 @@ class GreenKernel(nn.Module):
             Design matrix of shape ``[N, R]`` (``[N, R·K]`` with
             ``per_scale_columns``), plus any null-space columns.
         """
+        rows_per_chunk = max(1, self.chunk_elements // (self.n_anchors * self.latent_dim))
+        n_samples = z.shape[0]
+        if n_samples <= rows_per_chunk:
+            return self._design_block(z, gate_mask, path)
+        starts = range(0, n_samples, rows_per_chunk)
+        return torch.cat([self._design_block(z[s : s + rows_per_chunk], gate_mask, path) for s in starts], dim=0)
+
+    def _design_block(self, z: torch.Tensor, gate_mask: torch.Tensor | None, path: KernelPathLiteral | None) -> torch.Tensor:
+        """The design matrix of one row block, with the ``[n, R, d]`` distance tensor materialised."""
         n_samples = z.shape[0]
         device = z.device
         dtype = z.dtype

@@ -1,4 +1,4 @@
-"""Pullback-metric orthogonality penalty + Stiefel projection helpers.
+"""Pullback-metric penalties (orthogonality, conformality) + Stiefel projection helpers.
 
 The pullback metric of an encoder ``Ψ`` at input ``x`` is the symmetric
 positive-semidefinite matrix ``g(x) = J(x) J(x)^T`` where ``J = ∂Ψ/∂x``.
@@ -8,7 +8,13 @@ coordinate. The :class:`OrthogonalityPenalty` regularizer drives the
 off-diagonal mass toward zero so the encoder learns
 geometrically-disentangled coordinates.
 
-Two complementary tools:
+:class:`ConformalityPenalty` is the stricter, opt-in target: ``g(x)`` a
+multiple of the identity (right angles *and* equal stretching in every
+direction). It is computed on the axis-normalised metric because the Green
+kernel's per-axis widths absorb any constant per-axis rescaling of the
+chart; only spatially varying anisotropy costs anchors.
+
+Three complementary tools:
 
 - :func:`init_encoder_orthogonal_` initialises each ``nn.Linear`` weight in
   the encoder to a Stiefel matrix via PyTorch's QR-orthogonal init. Cheap
@@ -17,7 +23,13 @@ Two complementary tools:
   plugs into :meth:`igl.MatryoshkaTrainer.fit` via the ``extra_losses``
   parameter. Active during training; skipped on ``k < 2`` (the metric is
   trivially diagonal for a single dimension).
+- :class:`ConformalityPenalty` has the same shape and plumbing; ``beta``
+  interpolates between the two targets, ``all_prefixes`` penalises every
+  nested Matryoshka block, and ``metric_inv`` lets the metric be taken on the
+  data manifold (a tangent projector) or under another ambient metric.
 """
+
+from collections.abc import Callable
 
 import torch
 from torch import nn
@@ -104,6 +116,65 @@ def orthogonality_loss(g: torch.Tensor, *, eps: float = 1e-6) -> torch.Tensor:
     return (off_sq / (diag_sq + eps)).mean()
 
 
+def conformality_loss(
+    g: torch.Tensor,
+    *,
+    beta: float = 1.0,
+    axis_normalize: bool = True,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """Traceless part of the pullback metric, as a scale-free penalty.
+
+    For ``beta = 1`` the contribution per sample is
+    ``‖ĝ − tr(ĝ)/k · I‖²_F / (‖ĝ‖²_F + eps)``, zero exactly when the metric is
+    a multiple of the identity (a conformal chart). The numerator splits into
+    the off-diagonal mass and the spread of the diagonal; ``beta`` weights the
+    second term, so ``beta = 0`` keeps only the orthogonality target (with the
+    full metric as denominator).
+
+    With ``axis_normalize`` the metric is first rescaled per axis by the
+    batch-mean diagonal, ``ĝ = D^{-1/2} g D^{-1/2}`` (``D`` detached), which
+    makes the penalty blind to a constant per-axis rescaling of the latent:
+    the kernel's per-axis widths absorb that rescaling for free, so only
+    spatially varying anisotropy should be penalised.
+
+    Args:
+        g: Pullback metric ``[B, k, k]``.
+        beta: Weight of the diagonal-spread term; ``1`` is conformality,
+            ``0`` orthogonality.
+        axis_normalize: Rescale each axis by the batch-mean diagonal first.
+        eps: Numerical floor on the denominator and on the diagonal used for
+            the normalisation.
+
+    Returns:
+        Scalar penalty (mean across the batch).
+    """
+    if axis_normalize:
+        scale = torch.diagonal(g, dim1=-2, dim2=-1).mean(dim=0).clamp_min(eps).rsqrt().detach()
+        g = g * scale.unsqueeze(-1) * scale.unsqueeze(-2)
+    diag = torch.diagonal(g, dim1=-2, dim2=-1)
+    off = g - torch.diag_embed(diag)
+    off_sq = (off**2).sum(dim=(-2, -1))
+    spread = ((diag - diag.mean(dim=-1, keepdim=True)) ** 2).sum(dim=-1)
+    total = (g**2).sum(dim=(-2, -1))
+    return ((off_sq + beta * spread) / (total + eps)).mean()
+
+
+def conformal_factor(j: torch.Tensor, *, eps: float = 1e-12) -> torch.Tensor:
+    """Conformal factor ``λ = k / tr(J Jᵀ)`` per sample, shape ``[B]``.
+
+    Under the conformally flat hypothesis ``g = λ I`` in the chart, the inverse
+    metric is ``J Jᵀ = λ⁻¹ I`` and its trace is ``k / λ``; the trace needs no
+    matrix product, only the squared Frobenius norm of each sample's Jacobian.
+
+    Args:
+        j: Jacobian tensor ``[B, k, D]`` of the active latent dimensions.
+        eps: Numerical floor on the trace.
+    """
+    k = j.shape[1]
+    return k / (j**2).sum(dim=(-2, -1)).clamp_min(eps)
+
+
 @torch.no_grad()
 def init_encoder_orthogonal_(encoder: nn.Module) -> int:
     """Initialize every ``nn.Linear`` weight in ``encoder`` with QR-orthogonal init.
@@ -171,8 +242,99 @@ class OrthogonalityPenalty:
         return orthogonality_loss(g, eps=self.eps)
 
 
+class ConformalityPenalty:
+    """:class:`igl.types.ExtraLoss` driving the pullback metric toward a multiple of the identity.
+
+    Same plumbing as :class:`OrthogonalityPenalty` (``extra_losses`` of
+    :meth:`igl.MatryoshkaTrainer.fit`, skipped for ``k < 2``), with the
+    :func:`conformality_loss` target instead. Opt-in: nothing in the trainer
+    changes.
+
+    Args:
+        weight: Multiplier applied by the trainer.
+        every: Call frequency in *batches*; the index resets every epoch, so
+            at 16 batches per epoch ``every=20`` fires once per epoch.
+        beta: Weight of the diagonal-spread term, see :func:`conformality_loss`;
+            ``1`` is conformality, ``0`` orthogonality on the normalised metric.
+        axis_normalize: Rescale each axis by the batch-mean diagonal first.
+        all_prefixes: Average the loss over every nested leading block
+            ``k' = 2 … k`` instead of the sampled prefix alone. The Jacobian is
+            computed for all latent dimensions anyway, so this is free.
+        metric_inv: Optional map from the input batch ``[B, D]`` to a matrix
+            ``M(x)`` of shape ``[B, D, D]``; the metric becomes ``J M Jᵀ``. Use a
+            tangent projector to take the metric on the data manifold only, or
+            the inverse of another ambient metric (e.g. the affine-invariant
+            metric on SPD inputs), or their product. ``None`` keeps ``J Jᵀ``.
+        eps: Numerical floor passed to :func:`conformality_loss`.
+    """
+
+    weight: float
+    every: int
+    beta: float
+    axis_normalize: bool
+    all_prefixes: bool
+    metric_inv: Callable[[torch.Tensor], torch.Tensor] | None
+    eps: float
+
+    def __init__(
+        self,
+        *,
+        weight: float = 0.1,
+        every: int = 20,
+        beta: float = 1.0,
+        axis_normalize: bool = True,
+        all_prefixes: bool = False,
+        metric_inv: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        eps: float = 1e-6,
+    ) -> None:
+        if weight < 0:
+            raise IGLConfigError(f"weight must be non-negative, got {weight}")
+        if every < 1:
+            raise IGLConfigError(f"every must be >= 1, got {every}")
+        if beta < 0:
+            raise IGLConfigError(f"beta must be non-negative, got {beta}")
+        if eps <= 0:
+            raise IGLConfigError(f"eps must be positive, got {eps}")
+        self.weight = weight
+        self.every = every
+        self.beta = beta
+        self.axis_normalize = axis_normalize
+        self.all_prefixes = all_prefixes
+        self.metric_inv = metric_inv
+        self.eps = eps
+
+    def _loss(self, g: torch.Tensor) -> torch.Tensor:
+        return conformality_loss(g, beta=self.beta, axis_normalize=self.axis_normalize, eps=self.eps)
+
+    def __call__(
+        self,
+        *,
+        encoder: nn.Module,
+        x_batch: torch.Tensor,
+        gate_mask: torch.Tensor,
+        k: int,
+        epoch: int,  # noqa: ARG002
+        batch_idx: int,  # noqa: ARG002
+    ) -> torch.Tensor | None:
+        if k < _MIN_K_FOR_ORTH:
+            return None
+        j_full = jacobian(encoder, x_batch, output_dim=gate_mask.shape[0])
+        j_active = j_full[:, :k, :]
+        if self.metric_inv is None:
+            g = pullback_metric(j_active)
+        else:
+            g = torch.bmm(torch.bmm(j_active, self.metric_inv(x_batch)), j_active.transpose(1, 2))
+        if not self.all_prefixes:
+            return self._loss(g)
+        blocks = [self._loss(g[:, :kk, :kk]) for kk in range(_MIN_K_FOR_ORTH, k + 1)]
+        return torch.stack(blocks).mean()
+
+
 __all__ = [
+    "ConformalityPenalty",
     "OrthogonalityPenalty",
+    "conformal_factor",
+    "conformality_loss",
     "init_encoder_orthogonal_",
     "jacobian",
     "orthogonality_loss",

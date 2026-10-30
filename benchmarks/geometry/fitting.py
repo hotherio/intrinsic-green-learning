@@ -35,7 +35,8 @@ from benchmarks.geometry import charts, geometry_report
 from benchmarks.geometry.testbeds import manifolds, targets
 from benchmarks.geometry.testbeds.package_sets import to_inputs
 from igl.core.normalization import normalize_phi
-from igl.core.solver import solve_with_intercept
+from igl.core.solver import ridge_solve_hybrid, solve_with_intercept
+from igl.exceptions import IGLConvergenceError
 from igl.spd import ConformalityPenalty, OrthogonalityPenalty, conformality_loss, init_encoder_orthogonal_, jacobian
 from igl.types import ExtraLoss
 
@@ -360,6 +361,16 @@ def grad_ratio(
     return {"ratio": weight * n_pen / max(n_task, 1e-12), "grad_task": n_task, "grad_penalty": weight * n_pen}
 
 
+def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Tensor, torch.Tensor]:
+    """Ridge with a free intercept, the ``R × R`` system factored in float64 on the CPU (never on-device float32)."""
+    y2 = y if y.dim() > 1 else y.unsqueeze(-1)
+    phi_mean, y_mean = phi.mean(dim=0, keepdim=True), y2.float().mean(dim=0, keepdim=True)
+    w, bad = ridge_solve_hybrid(phi - phi_mean, y2.float() - y_mean, l2=l2)
+    if bool(bad):
+        raise IGLConvergenceError(epoch=0, last_loss=float("nan"), message="the float64 scoring solve failed")
+    return w, (y_mean - phi_mean @ w).reshape(-1)
+
+
 def score(
     module: igl.IGLModule,
     loss: Loss,
@@ -383,9 +394,10 @@ def score(
     with torch.no_grad():
         phi_tr = normalize_phi(module.design_matrix(x_tr, gate_mask=mask), module.normalize)
         phi_te = normalize_phi(module.design_matrix(x_te, gate_mask=mask), module.normalize)
-        # The scoring solve runs on the CPU (QR least squares): the on-device float32 Cholesky fails on the
-        # near-singular Gram of a wide Φ (MNIST at R = 512) and would return zero weights.
-        w, b = solve_with_intercept(phi_tr.cpu(), _solve_targets(loss, y_tr).cpu(), l2=l2)
+        # The scoring solve factors the Gram in float64 (``ridge_solve_hybrid``): the on-device float32 Cholesky
+        # fails on the near-singular Gram of a wide Φ (MNIST at R = 512, cond ≈ 1e6) and returns zero weights,
+        # and the CPU float32 augmented least squares is 0.2–0.8 pt worse than the float64 factor there.
+        w, b = _ridge_f64(phi_tr, _solve_targets(loss, y_tr), l2)
         pred = phi_te @ w.to(phi_te.device, phi_te.dtype) + b.to(phi_te.device, phi_te.dtype)
     if isinstance(loss, igl.CrossEntropyLoss):
         labels = pred.argmax(dim=-1)

@@ -107,10 +107,14 @@ def _paired_vs(rows: list[dict[str, Any]], base: list[dict[str, Any]]) -> dict[s
 def _delta_str(d: dict[str, Any]) -> str:
     if not d.get("n"):
         return "–"
-    s = f"{d['median']:+.4f} ({d['worse']}/{d['n']} worse)"
     if "ci_lo" in d:
-        s += f", CI [{d['ci_lo']:+.4f}, {d['ci_hi']:+.4f}], McNemar p {d['mcnemar_p']:.2g}"
-    return s
+        # The pooled paired difference over the shared test rows, its bootstrap interval and McNemar; then the
+        # per-seed view (median delta and how many seeds are worse).
+        return (
+            f"{d['delta']:+.4f} CI [{d['ci_lo']:+.4f}, {d['ci_hi']:+.4f}], McNemar p {d['mcnemar_p']:.2g}; "
+            f"seeds {d['worse']}/{d['n']} worse, median {d['median']:+.4f}"
+        )
+    return f"{d['median']:+.4f} ({d['worse']}/{d['n']} worse)"
 
 
 def _mean_sd(rows: list[dict[str, Any]]) -> tuple[float, float, int]:

@@ -606,6 +606,59 @@ file and is read with Holm correction within a block.
 
 ### W1. The week-1 gate (MNIST)
 
-_Pending: the noise floor, the frozen PCA chart against the learned chart at R ∈ {32, 512}, the inner-solve and
-ridge checks. The block is written; the run starts once the machine is free._
+Kind: real data (no metric; baselines and the geometry report only). MNIST, 55k train / 5k validation / 10k test,
+784 standardised pixels, `k = 32`, k-means anchors (`sigma = keep`) from the epoch-0 latents, 12 040 steps at
+batch 256 (56 epochs), `inner_batch_size = max(4096, 16R)`, `source_l2 = 1e-3`, best-validation restore. The
+learned chart is `none`; the frozen chart is the same kernel and readout on the PCA-32 chart of the pixels
+with an identity encoder. Paired tests on the shared 10k test rows (pooled bootstrap and exact McNemar).
+First pass 2026-10-30; three `R = 512` rows are being refitted so that every row is scored by the float64
+solver (see "solver" below): their numbers may move by up to 0.2 pt.
+
+| set | k | R | arm | n | error (mean ± sd) | thresholds | Δ vs none (paired) |
+|---|---|---|---|---|---|---|---|
+| mnist | 32 | 32 | none | 5 | 0.0282 ± 0.0013 | MDE₃ 0.0046, MDE₅ 0.0024 | – |
+| mnist | 32 | 32 | frozen-pca | 3 | 0.1779 ± 0.0028 | | +0.1489 CI [+0.1447, +0.1531], McNemar p ≈ 0; 3/3 seeds worse |
+| mnist | 32 | 32 | none-l2-1e-4 | 1 | 0.0237 | | −0.0046 CI [−0.0072, −0.0023], p 2e-4 |
+| mnist | 32 | 32 | none-l2-1e-2 | 1 | 0.0291 | | +0.0008 CI [−0.0017, +0.0033], p 0.57 |
+| mnist | 32 | 512 | none | 5 | 0.0233 ± 0.0014 | MDE₃ 0.0052, MDE₅ 0.0027 | – |
+| mnist | 32 | 512 | frozen-pca | 3 | 0.0775 ± 0.0011 | | +0.0535 CI [+0.0507, +0.0562], p ≈ 0; 3/3 seeds worse |
+| mnist | 32 | 512 | none-inner4096 | 3 | 0.0316 ± 0.0115 | | +0.0076 CI [+0.0061, +0.0092], p 2e-22; 3/3 worse (one seed at 0.0449) |
+| mnist | 32 | 512 | none-l2-1e-4 | 1 | failed | | the per-batch float32 solve failed in epoch 3 |
+| mnist | 32 | 512 | none-l2-1e-2 | 1 | 0.0245 | | +0.0021 CI [−0.0002, +0.0043], p 0.085 |
+
+Geometry and design matrix (every learned fit): axis-normalised `√L_conf` 0.45 at epoch 0 → 0.91–0.96 at the
+end; median `cond(JJᵀ)` 0.8–3 × 10³ at `R = 32` and 0.5–2.3 × 10⁴ at `R = 512`; 66–72 % of the Jacobian's
+energy lies outside the top-64 PCA subspace of the pixels. Every learned fit trips the stability flag (both
+criteria), so the flag does not discriminate at this scale; it is reported, not used. Effective rank of Φ
+(entropy of the column spectrum): 8.4–8.9 of 32 columns at `R = 32`, 16–23 of 512 at `R = 512`; the frozen
+chart's Φ has 20 and 140. A direct SVD of one `R = 512` chart's centred Φ: condition number 9 × 10⁵, entropy
+effective rank 8.1.
+
+Solver. The on-device float32 Cholesky that scored the first pass returned zero weights on 1 of 8 `R = 512`
+fits (the chart had reached 97.7 % validation accuracy), and the ridge 1e-4 arm raised inside training. The CPU
+float32 augmented least squares is not a substitute: on the same Φ it is 0.2–0.8 pt worse than the float64
+factor, more so at small ridge (issue #110). The suite now scores every row with the float64 Gram factorisation
+(`ridge_solve_hybrid`), and a cell whose fit raises is written as a failure row instead of ending the block.
+
+**What it says.**
+
+- **H0 passes decisively.** The learned chart beats the frozen PCA-32 chart through the identical kernel and
+  readout by 14.9 pt at `R = 32` and 5.4 pt at `R = 512`. The chart is what the readout runs on; the penalty
+  program is live on MNIST.
+- **H1 fails at `k = 32` by the pre-registered criterion.** From 32 to 512 anchors the learned chart gains
+  0.49 pt (2.82 → 2.33 %), twice the five-seed MDE but under the 1 pt "anchor-limited" bar; the frozen chart
+  gains 10 pt over the same range. The design matrix explains the difference: with the default bandwidth the
+  k-means anchors give Φ an effective rank of 8–23 whatever `R` is, so most anchors add nearly collinear
+  columns. **Bandwidth, not count, is the suspect**, and S1's `kmeans-median` arm (the bandwidth from the
+  latent spread) is the next decision-changing cell: if it raises the effective rank and the `R` curve steepens,
+  `R_bind` is read on that arm.
+- **The inner-solve confound is real** (`inner_batch_size = 4096` at `R = 512`: +0.76 pt pooled, one seed at
+  4.5 %); the `16R` rule stays.
+- **The ridge matters at the MDE scale.** 1e-4 beats 1e-3 by 0.46 pt at `R = 32` and is numerically unusable
+  at `R = 512` in float32; 1e-2 costs 0.1–0.2 pt. `1e-3` stays the protocol value (it is the one that runs
+  everywhere), and `R_eq` readings carry a ±0.3 pt ridge caveat.
+- **Thresholds.** Seed SD 0.13–0.14 pt at both `R`: MDE₃ ≈ 0.5 pt, MDE₅ ≈ 0.25 pt. S2's five-seed cells can
+  resolve a quarter point; S1/S3 three-seed cells half a point.
+- The hidden-state pilot (GPT-2 small, layer 6, next-token entropy, `R = 32`): NRMSE 0.511 ± 0.005 learned vs
+  0.705 ± 0.003 frozen PCA-32, the same picture; its `R = 512` cells and S0 follow.
 

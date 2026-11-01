@@ -35,7 +35,7 @@ from benchmarks.geometry import charts, geometry_report
 from benchmarks.geometry.testbeds import manifolds, targets
 from benchmarks.geometry.testbeds.package_sets import to_inputs
 from igl.core.normalization import normalize_phi
-from igl.core.solver import ridge_solve_hybrid, solve_with_intercept
+from igl.core.solver import solve_with_intercept
 from igl.exceptions import IGLConvergenceError
 from igl.spd import ConformalityPenalty, OrthogonalityPenalty, conformality_loss, init_encoder_orthogonal_, jacobian
 from igl.types import ExtraLoss
@@ -362,25 +362,45 @@ def grad_ratio(
     return {"ratio": weight * n_pen / max(n_task, 1e-12), "grad_task": n_task, "grad_penalty": weight * n_pen}
 
 
-def _ridge_lstsq_f64(phi_c: torch.Tensor, y_c: torch.Tensor, l2: float) -> torch.Tensor:
+_GRAM_CHUNK = 16384
+
+
+def _gram_f64(phi_c: torch.Tensor, y_c: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``ΦᵀΦ`` and ``Φᵀy`` accumulated in float64 on the CPU over row chunks (the device copy of Φ stays float32)."""
+    r, c = phi_c.shape[1], y_c.shape[1]
+    gram = torch.zeros(r, r, dtype=torch.float64)
+    rhs = torch.zeros(r, c, dtype=torch.float64)
+    for i in range(0, phi_c.shape[0], _GRAM_CHUNK):
+        p64 = phi_c[i : i + _GRAM_CHUNK].detach().cpu().double()
+        gram += p64.T @ p64
+        rhs += p64.T @ y_c[i : i + _GRAM_CHUNK].detach().cpu().double()
+    return gram, rhs
+
+
+def _ridge_lstsq_f64(phi_c: torch.Tensor, y_c: torch.Tensor, lam: float) -> torch.Tensor:
     """Ridge on centred data as a float64 least squares of the augmented system ``[Φ; √λ_eff I]`` on the CPU.
 
     The fallback of :func:`_ridge_f64`: ``gelsd`` handles any conditioning the float64 Cholesky refuses.
     """
     p64, y64 = phi_c.detach().cpu().double(), y_c.detach().cpu().double()
     r = p64.shape[1]
-    lam = math.sqrt(l2) * float(p64.norm(dim=0).mean().clamp_min(1e-6))
-    aug = torch.cat([p64, lam * torch.eye(r, dtype=torch.float64)])
+    aug = torch.cat([p64, math.sqrt(lam) * torch.eye(r, dtype=torch.float64)])
     rhs = torch.cat([y64, torch.zeros(r, y64.shape[1], dtype=torch.float64)])
-    return torch.linalg.lstsq(aug, rhs, driver="gelsd").solution.float().to(phi_c.device)
+    return torch.linalg.lstsq(aug, rhs, driver="gelsd").solution
 
 
 def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Tensor, torch.Tensor, str]:
-    """Ridge with a free intercept, the ``R × R`` system factored in float64 on the CPU (never on-device float32).
+    """Ridge with a free intercept, solved entirely in float64 on the CPU (Gram, factor and solve).
 
-    Returns ``(w, b, solver)`` where ``solver`` names the path taken: ``"cholesky-f64"`` (the Gram factored by
-    :func:`~igl.core.solver.ridge_solve_hybrid`) or ``"lstsq-f64"`` when that factor is refused (an extreme Gram,
-    e.g. float32 products overflowing on a chart that blew up) and the augmented least squares is used instead.
+    The training-time solvers form the Gram in float32 on the device. For scoring that is not good enough: on a
+    wide Φ whose effective rank is a few percent of its columns (MNIST at ``R = 512``: rank ≈ 19) the ridge
+    ``λ_eff = l2 · mean‖Φ_r‖²`` sits below the float32 rounding of the Gram, and a float64 factor of that Gram, or
+    a refinement step against float32 products, returns weights dominated by noise in the near-null directions.
+    One such fit scored 16.8 % test error with 97.7 % validation accuracy. Accumulating ``ΦᵀΦ`` in float64 puts the
+    rounding ten orders of magnitude below ``λ_eff``.
+
+    Returns ``(w, b, solver)`` where ``solver`` is ``"cholesky-f64"`` or ``"lstsq-f64"`` when the float64 Cholesky
+    is refused (an extreme Gram, e.g. a chart that blew up) and the augmented least squares is used instead.
     A non-finite Φ raises :class:`~igl.exceptions.IGLConvergenceError`: no solver can score it.
     """
     y2 = y if y.dim() > 1 else y.unsqueeze(-1)
@@ -392,23 +412,28 @@ def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Ten
         raise IGLConvergenceError(
             epoch=0, last_loss=float("nan"), message=f"the design matrix has {n_bad} non-finite entries of {phi.numel()}"
         )
-    w, bad = ridge_solve_hybrid(phi_c, y_c, l2=l2)
-    solver = "cholesky-f64"
-    if bool(bad):
-        norms = phi_c.norm(dim=0)
-        with torch.no_grad():  # which part refused: the device float32 Gram (non-finite) or the float64 factor itself
-            gram32 = phi_c.T @ phi_c
-            p64 = phi_c.detach().cpu().double()
-            l2_eff = l2 * float(p64.norm(dim=0).mean()) ** 2
-            gram64 = p64.T @ p64 + l2_eff * torch.eye(p64.shape[1], dtype=torch.float64)
-            info = int(torch.linalg.cholesky_ex(gram64).info)
-        print(
-            f"  scoring: the float64 Cholesky refused the Gram (max |Φ| {float(phi_c.abs().max()):.3g}, column norms "
-            f"{float(norms.min()):.3g}–{float(norms.max()):.3g}, device Gram finite {bool(torch.isfinite(gram32).all())}, "
-            f"CPU float64 Gram cholesky info {info}); falling back to the float64 least squares",
-            flush=True,
-        )
-        w, solver = _ridge_lstsq_f64(phi_c, y_c, l2), "lstsq-f64"
+    with torch.no_grad():
+        gram, rhs = _gram_f64(phi_c, y_c)
+        col_scale = float(gram.diagonal().sqrt().mean().clamp_min(1e-6))
+        lam = l2 * col_scale**2
+        gram += lam * torch.eye(gram.shape[0], dtype=torch.float64)
+        chol, info = torch.linalg.cholesky_ex(gram)
+        if int(info) == 0:
+            w64, solver = torch.cholesky_solve(rhs, chol), "cholesky-f64"
+        else:
+            norms = gram.diagonal().sqrt()
+            print(
+                f"  scoring: the float64 Cholesky refused the Gram (info {int(info)}, max |Φ| {float(phi_c.abs().max()):.3g}, "
+                f"column norms {float(norms.min()):.3g}–{float(norms.max()):.3g}, λ_eff {lam:.3g}); "
+                "falling back to the float64 least squares",
+                flush=True,
+            )
+            w64, solver = _ridge_lstsq_f64(phi_c, y_c, lam), "lstsq-f64"
+        if not bool(torch.isfinite(w64).all()):
+            raise IGLConvergenceError(
+                epoch=0, last_loss=float("nan"), message=f"the {solver} scoring solve returned non-finite weights"
+            )
+        w = w64.to(phi.device, phi.dtype)
     return w, (y_mean - phi_mean @ w).reshape(-1), solver
 
 
@@ -423,23 +448,32 @@ def score(
     k: int,
     l2: float,
     lr_readout: bool = False,
+    x_va: torch.Tensor | None = None,
+    y_va: torch.Tensor | None = None,
 ) -> dict[str, Any]:
     """Test score of the readout solved on the full training split at prefix ``k``.
 
     Regression: ``nrmse``. Classification: ``err`` (1 − accuracy), ``nll`` and ``wrong`` (the indices of the
     misclassified test rows, for paired bootstrap and McNemar tests against another arm). ``lr_readout`` adds
-    the error of a multinomial logistic regression on the same Φ (the readout-robustness check).
+    the error of a multinomial logistic regression on the same Φ (the readout-robustness check). When the
+    validation split is given, the same weights are scored on it too (``err_val`` / ``nrmse_val``): the trainer
+    restored the state with the best validation metric under its own float32 solve, so a scoring solve that
+    disagrees with that metric by more than noise is a broken solve, not a worse chart.
     """
     mask = torch.zeros(module.max_dim, device=x_tr.device)
     mask[:k] = 1.0
     with torch.no_grad():
         phi_tr = normalize_phi(module.design_matrix(x_tr, gate_mask=mask), module.normalize)
         phi_te = normalize_phi(module.design_matrix(x_te, gate_mask=mask), module.normalize)
-        # The scoring solve factors the Gram in float64 (``ridge_solve_hybrid``): the on-device float32 Cholesky
-        # fails on the near-singular Gram of a wide Φ (MNIST at R = 512, cond ≈ 1e6) and returns zero weights,
-        # and the CPU float32 augmented least squares is 0.2–0.8 pt worse than the float64 factor there.
+        # The scoring solve runs entirely in float64 on the CPU (see ``_ridge_f64``): the on-device float32 Cholesky
+        # fails on the near-singular Gram of a wide Φ (MNIST at R = 512, cond ≈ 1e6), and a float64 factor of a
+        # float32 Gram is silently wrong on the same matrices.
         w, b, solver = _ridge_f64(phi_tr, _solve_targets(loss, y_tr), l2)
-        pred = phi_te @ w.to(phi_te.device, phi_te.dtype) + b.to(phi_te.device, phi_te.dtype)
+        w_te, b_te = w.to(phi_te.device, phi_te.dtype), b.to(phi_te.device, phi_te.dtype)
+        pred = phi_te @ w_te + b_te
+        pred_va = None
+        if x_va is not None:
+            pred_va = normalize_phi(module.design_matrix(x_va, gate_mask=mask), module.normalize) @ w_te + b_te
     if isinstance(loss, igl.CrossEntropyLoss):
         labels = pred.argmax(dim=-1)
         wrong = (labels != y_te).nonzero(as_tuple=True)[0].cpu().tolist()
@@ -449,11 +483,16 @@ def score(
             "wrong": wrong,
             "scoring_solver": solver,
         }
+        if pred_va is not None and y_va is not None:
+            out["err_val"] = float((pred_va.argmax(dim=-1) != y_va).float().mean())
         if lr_readout:
             out["err_lr_readout"] = _lr_readout_error(phi_tr, y_tr, phi_te, y_te)
         return out
     y_pred = pred.squeeze(1)
-    return {"nrmse": float(((y_pred - y_te) ** 2).mean().sqrt() / y_te.std()), "scoring_solver": solver}
+    out = {"nrmse": float(((y_pred - y_te) ** 2).mean().sqrt() / y_te.std()), "scoring_solver": solver}
+    if pred_va is not None and y_va is not None:
+        out["nrmse_val"] = float(((pred_va.squeeze(1) - y_va) ** 2).mean().sqrt() / y_va.std())
+    return out
 
 
 def _lr_readout_error(phi_tr: torch.Tensor, y_tr: torch.Tensor, phi_te: torch.Tensor, y_te: torch.Tensor) -> float:
@@ -684,7 +723,19 @@ def fit_arm(  # noqa: PLR0912, PLR0915 (one protocol, read top to bottom)
     wall = time.perf_counter() - t0
     module.eval()
     scores = {
-        str(k): score(module, loss, x_tr, y_tr, x_te, y_te, k=k, l2=spec.source_l2, lr_readout=lr_readout and k == max_dim)
+        str(k): score(
+            module,
+            loss,
+            x_tr,
+            y_tr,
+            x_te,
+            y_te,
+            k=k,
+            l2=spec.source_l2,
+            lr_readout=lr_readout and k == max_dim,
+            x_va=x_va,
+            y_va=y_va,
+        )
         for k in sorted({d, max_dim})
     }
     rep_test = geometry_report.report(module.encoder, x_te[:_REPORT_POINTS], k=d, output_dim=max_dim, tangent_basis=tangent)
@@ -766,6 +817,19 @@ def fit_arm(  # noqa: PLR0912, PLR0915 (one protocol, read top to bottom)
     if classification:
         row["err_test"] = top["err"]
         row["err_test_lr_readout"] = top.get("err_lr_readout")
+        row["err_val_scoring"] = top.get("err_val")
+        # The trainer's best validation accuracy came from its float32 solve on the restored state; the scoring solve
+        # on the same state must agree to within noise, or it is the solve that is broken, not the chart.
+        best: float | None = row["val_metric_best"]
+        err_val: float | None = top.get("err_val")
+        mismatch = err_val is not None and best is not None and err_val > (1.0 - best) + 0.01
+        row["scoring_mismatch"] = mismatch
+        if mismatch and err_val is not None and best is not None:
+            print(
+                f"  scoring: WARNING the {top['scoring_solver']} scoring solve gives {err_val:.4f} validation error "
+                f"against {1.0 - best:.4f} at the trainer's best epoch",
+                flush=True,
+            )
     else:
         row["nrmse_test"] = {k: v["nrmse"] for k, v in scores.items()}
         row["nrmse_test_dmax"] = top["nrmse"]

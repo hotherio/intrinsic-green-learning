@@ -38,12 +38,22 @@ MIN_FREE_GB = 12.0
 
 
 def free_memory_gb() -> float:
-    """Free plus inactive memory in GB on macOS (``vm_stat``); on other systems ``/proc/meminfo``'s available memory."""
+    """Available memory in GB: macOS's ``memory_pressure`` figure (``vm_stat`` as the fallback), else ``/proc/meminfo``."""
     import re
     import subprocess
     import sys
 
     if sys.platform == "darwin":
+        # The kernel's own figure first: ``vm_stat``'s free + inactive + speculative sum misses the reclaimable
+        # file cache held in the active list and refused an idle 48 GB machine (10.9 GB "free" at 46 % free).
+        try:
+            text = subprocess.check_output(["memory_pressure"], text=True, timeout=10)
+            pct = re.search(r"System-wide memory free percentage:\s+(\d+)%", text)
+            if pct:
+                total = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True))
+                return int(pct.group(1)) / 100 * total / 2**30
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
         out = subprocess.check_output(["vm_stat"], text=True)
         page = int(re.search(r"page size of (\d+)", out).group(1))  # type: ignore[union-attr]
         pages = 0

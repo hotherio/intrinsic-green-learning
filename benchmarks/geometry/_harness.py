@@ -84,6 +84,16 @@ def result_path(block: str, bed: str, arm: str, seed: int, *, label: str | None 
     return base / f"seed{seed}.json"
 
 
+def _head_sha() -> str:
+    """The checkout's short SHA (``git_short_sha`` returns the results label when ``IGL_BENCH_LABEL`` is set)."""
+    import subprocess
+
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def write_block_result(
     block: str,
     bed: str,
@@ -102,7 +112,9 @@ def write_block_result(
         "bed": bed,
         "arm": arm,
         "seed": seed,
-        "git_commit": git_short_sha(),
+        "git_commit": _head_sha(),
+        "label": git_short_sha(),
+        "written_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "machine_state": state or machine_state(device, gate=False),
         "wall_clock_s": None if started_at is None else time.perf_counter() - started_at,
         **payload,

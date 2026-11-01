@@ -464,18 +464,47 @@ def score_readout(
     return float(score(module, igl.MSELoss(), x_tr, y_tr, x_te, y_te, k=k, l2=l2)["nrmse"])
 
 
-def phi_stats(module: igl.IGLModule, x: torch.Tensor, *, n: int = 4096) -> dict[str, float]:
-    """Column statistics of Φ on ``n`` rows: mean column CV and the effective rank (entropy of the spectrum)."""
+def phi_stats(module: igl.IGLModule, x: torch.Tensor, *, n: int = 4096) -> dict[str, Any]:
+    """Column statistics of Φ on ``n`` rows and the kernel's state against the latent cloud.
+
+    ``column_cv``, ``dead_columns`` and ``eff_rank`` (entropy of the normalised singular values) describe Φ;
+    ``active_columns`` counts the columns above 1 % of their maximum on at least 1 % of the rows (a column that
+    fires on one anchor's neighbourhood only is full-rank noise, not a usable feature). ``kernel`` records what
+    sets the bandwidth today: the per-scale bandwidth ``σ_k`` (geometric mean over the latent axes), the scale
+    weights ``γ_k``, the anchor importances, the per-axis spread of the latents (median pairwise distance over
+    ``√d``) and ``σ_k`` over that spread, the ratio that decides whether a scale resolves the cloud or blurs it.
+    """
     with torch.no_grad():
+        z = module.encoder(x[:n])
         phi = normalize_phi(module.design_matrix(x[:n]), module.normalize).cpu().double()  # MPS has no float64
+        green = module.green
+        active_dims = int(module.max_dim)
+        sigma = torch.exp(green.log_sigma[:, :active_dims]).double().cpu()  # [K, d]
+        gamma = torch.softmax(green.log_gamma.double().cpu(), dim=0)
+        importance = torch.sigmoid(green.rank_importance.double().cpu())
+        sub = z[: min(2048, z.shape[0])].double().cpu()
+        spread = float(torch.pdist(sub).median() / math.sqrt(max(1, sub.shape[1]))) if sub.shape[0] > 1 else float("nan")
     sd, mean = phi.std(0), phi.mean(0).abs().clamp_min(1e-12)
     centred = phi - phi.mean(0, keepdim=True)
     s = torch.linalg.svdvals(centred)
     p = (s / s.sum().clamp_min(1e-12)).clamp_min(1e-30)
+    peak = phi.abs().max(dim=0).values.clamp_min(1e-12)
+    active = ((phi.abs() > 0.01 * peak).double().mean(0) > 0.01).sum()
+    sigma_k = sigma.log().mean(dim=1).exp()
     return {
         "column_cv": float((sd / mean).mean()),
         "dead_columns": int((sd < 1e-6).sum()),
+        "active_columns": int(active),
         "eff_rank": float(torch.exp(-(p * p.log()).sum())),
+        "kernel": {
+            "sigma_k": sigma_k.tolist(),
+            "sigma_axis_logstd": float(sigma.log().std(dim=1).mean()),
+            "gamma": gamma.tolist(),
+            "importance_q": torch.quantile(importance, torch.tensor([0.0, 0.5, 1.0], dtype=torch.float64)).tolist(),
+            "latent_axis_std": float(sub.std(0).mean()),
+            "latent_spread": spread,
+            "sigma_over_spread": (sigma_k / spread).tolist() if math.isfinite(spread) else [],
+        },
     }
 
 

@@ -396,9 +396,16 @@ def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Ten
     solver = "cholesky-f64"
     if bool(bad):
         norms = phi_c.norm(dim=0)
+        with torch.no_grad():  # which part refused: the device float32 Gram (non-finite) or the float64 factor itself
+            gram32 = phi_c.T @ phi_c
+            p64 = phi_c.detach().cpu().double()
+            l2_eff = l2 * float(p64.norm(dim=0).mean()) ** 2
+            gram64 = p64.T @ p64 + l2_eff * torch.eye(p64.shape[1], dtype=torch.float64)
+            info = int(torch.linalg.cholesky_ex(gram64).info)
         print(
             f"  scoring: the float64 Cholesky refused the Gram (max |Φ| {float(phi_c.abs().max()):.3g}, column norms "
-            f"{float(norms.min()):.3g}–{float(norms.max()):.3g}); falling back to the float64 least squares",
+            f"{float(norms.min()):.3g}–{float(norms.max()):.3g}, device Gram finite {bool(torch.isfinite(gram32).all())}, "
+            f"CPU float64 Gram cholesky info {info}); falling back to the float64 least squares",
             flush=True,
         )
         w, solver = _ridge_lstsq_f64(phi_c, y_c, l2), "lstsq-f64"
@@ -480,10 +487,10 @@ def phi_stats(module: igl.IGLModule, x: torch.Tensor, *, n: int = 4096) -> dict[
         phi = normalize_phi(module.design_matrix(x[:n]), module.normalize).cpu().double()  # MPS has no float64
         green = module.green
         active_dims = int(module.max_dim)
-        sigma = torch.exp(green.log_sigma[:, :active_dims]).double().cpu()  # [K, d]
-        gamma = torch.softmax(green.log_gamma.double().cpu(), dim=0)
-        importance = torch.sigmoid(green.rank_importance.double().cpu())
-        sub = z[: min(2048, z.shape[0])].double().cpu()
+        sigma = torch.exp(green.log_sigma[:, :active_dims]).detach().cpu().double()  # [K, d] (MPS has no float64)
+        gamma = torch.softmax(green.log_gamma.detach().cpu().double(), dim=0)
+        importance = torch.sigmoid(green.rank_importance.detach().cpu().double())
+        sub = z[: min(2048, z.shape[0])].detach().cpu().double()
         spread = float(torch.pdist(sub).median() / math.sqrt(max(1, sub.shape[1]))) if sub.shape[0] > 1 else float("nan")
     sd, mean = phi.std(0), phi.mean(0).abs().clamp_min(1e-12)
     centred = phi - phi.mean(0, keepdim=True)

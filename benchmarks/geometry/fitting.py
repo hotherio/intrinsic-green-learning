@@ -361,14 +361,47 @@ def grad_ratio(
     return {"ratio": weight * n_pen / max(n_task, 1e-12), "grad_task": n_task, "grad_penalty": weight * n_pen}
 
 
-def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Tensor, torch.Tensor]:
-    """Ridge with a free intercept, the ``R × R`` system factored in float64 on the CPU (never on-device float32)."""
+def _ridge_lstsq_f64(phi_c: torch.Tensor, y_c: torch.Tensor, l2: float) -> torch.Tensor:
+    """Ridge on centred data as a float64 least squares of the augmented system ``[Φ; √λ_eff I]`` on the CPU.
+
+    The fallback of :func:`_ridge_f64`: ``gelsd`` handles any conditioning the float64 Cholesky refuses.
+    """
+    p64, y64 = phi_c.detach().cpu().double(), y_c.detach().cpu().double()
+    r = p64.shape[1]
+    lam = math.sqrt(l2) * float(p64.norm(dim=0).mean().clamp_min(1e-6))
+    aug = torch.cat([p64, lam * torch.eye(r, dtype=torch.float64)])
+    rhs = torch.cat([y64, torch.zeros(r, y64.shape[1], dtype=torch.float64)])
+    return torch.linalg.lstsq(aug, rhs, driver="gelsd").solution.float().to(phi_c.device)
+
+
+def _ridge_f64(phi: torch.Tensor, y: torch.Tensor, l2: float) -> tuple[torch.Tensor, torch.Tensor, str]:
+    """Ridge with a free intercept, the ``R × R`` system factored in float64 on the CPU (never on-device float32).
+
+    Returns ``(w, b, solver)`` where ``solver`` names the path taken: ``"cholesky-f64"`` (the Gram factored by
+    :func:`~igl.core.solver.ridge_solve_hybrid`) or ``"lstsq-f64"`` when that factor is refused (an extreme Gram,
+    e.g. float32 products overflowing on a chart that blew up) and the augmented least squares is used instead.
+    A non-finite Φ raises :class:`~igl.exceptions.IGLConvergenceError`: no solver can score it.
+    """
     y2 = y if y.dim() > 1 else y.unsqueeze(-1)
     phi_mean, y_mean = phi.mean(dim=0, keepdim=True), y2.float().mean(dim=0, keepdim=True)
-    w, bad = ridge_solve_hybrid(phi - phi_mean, y2.float() - y_mean, l2=l2)
+    phi_c, y_c = phi - phi_mean, y2.float() - y_mean
+    finite = torch.isfinite(phi)
+    if not bool(finite.all()):
+        n_bad = int((~finite).sum())
+        raise IGLConvergenceError(
+            epoch=0, last_loss=float("nan"), message=f"the design matrix has {n_bad} non-finite entries of {phi.numel()}"
+        )
+    w, bad = ridge_solve_hybrid(phi_c, y_c, l2=l2)
+    solver = "cholesky-f64"
     if bool(bad):
-        raise IGLConvergenceError(epoch=0, last_loss=float("nan"), message="the float64 scoring solve failed")
-    return w, (y_mean - phi_mean @ w).reshape(-1)
+        norms = phi_c.norm(dim=0)
+        print(
+            f"  scoring: the float64 Cholesky refused the Gram (max |Φ| {float(phi_c.abs().max()):.3g}, column norms "
+            f"{float(norms.min()):.3g}–{float(norms.max()):.3g}); falling back to the float64 least squares",
+            flush=True,
+        )
+        w, solver = _ridge_lstsq_f64(phi_c, y_c, l2), "lstsq-f64"
+    return w, (y_mean - phi_mean @ w).reshape(-1), solver
 
 
 def score(
@@ -397,7 +430,7 @@ def score(
         # The scoring solve factors the Gram in float64 (``ridge_solve_hybrid``): the on-device float32 Cholesky
         # fails on the near-singular Gram of a wide Φ (MNIST at R = 512, cond ≈ 1e6) and returns zero weights,
         # and the CPU float32 augmented least squares is 0.2–0.8 pt worse than the float64 factor there.
-        w, b = _ridge_f64(phi_tr, _solve_targets(loss, y_tr), l2)
+        w, b, solver = _ridge_f64(phi_tr, _solve_targets(loss, y_tr), l2)
         pred = phi_te @ w.to(phi_te.device, phi_te.dtype) + b.to(phi_te.device, phi_te.dtype)
     if isinstance(loss, igl.CrossEntropyLoss):
         labels = pred.argmax(dim=-1)
@@ -406,12 +439,13 @@ def score(
             "err": len(wrong) / y_te.shape[0],
             "nll": float(torch.nn.functional.cross_entropy(pred, y_te.long())),
             "wrong": wrong,
+            "scoring_solver": solver,
         }
         if lr_readout:
             out["err_lr_readout"] = _lr_readout_error(phi_tr, y_tr, phi_te, y_te)
         return out
     y_pred = pred.squeeze(1)
-    return {"nrmse": float(((y_pred - y_te) ** 2).mean().sqrt() / y_te.std())}
+    return {"nrmse": float(((y_pred - y_te) ** 2).mean().sqrt() / y_te.std()), "scoring_solver": solver}
 
 
 def _lr_readout_error(phi_tr: torch.Tensor, y_tr: torch.Tensor, phi_te: torch.Tensor, y_te: torch.Tensor) -> float:

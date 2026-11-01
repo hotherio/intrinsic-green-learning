@@ -414,7 +414,8 @@ class GreenKernel(nn.Module):
             if n < _MEDIAN_MIN_ROWS:
                 raise IGLConfigError("sigma='median' needs at least two rows")
             sub = z if n <= _MEDIAN_SUBSAMPLE else z[torch.randperm(n, generator=generator)[:_MEDIAN_SUBSAMPLE].to(z.device)]
-            scale = torch.pdist(sub).median().clamp_min(1e-12)
+            # ``pdist`` has no MPS kernel; the subsample is at most 2048 rows, so the median is taken on the CPU.
+            scale = torch.pdist(sub.detach().cpu()).median().to(z.device, z.dtype).clamp_min(1e-12)
             lo, hi = self._sigma_log_range
             ladder = torch.linspace(lo, hi, self.n_scales, device=z.device, dtype=z.dtype) - 0.5 * (lo + hi)
             self.log_sigma.copy_((ladder + torch.log(scale)).unsqueeze(1).expand(self.n_scales, self.latent_dim))

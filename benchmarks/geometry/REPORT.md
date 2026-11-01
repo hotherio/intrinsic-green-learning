@@ -604,61 +604,123 @@ file and is read with Holm correction within a block.
   Φ column CV and effective rank, and a stability flag (final `√L_conf` above its epoch-0 value, or a median
   condition number of `JJᵀ` above 1e4).
 
-### W1. The week-1 gate (MNIST)
+### W1. The week-1 gate (MNIST and the hidden-state pilot)
 
 Kind: real data (no metric; baselines and the geometry report only). MNIST, 55k train / 5k validation / 10k test,
 784 standardised pixels, `k = 32`, k-means anchors (`sigma = keep`) from the epoch-0 latents, 12 040 steps at
 batch 256 (56 epochs), `inner_batch_size = max(4096, 16R)`, `source_l2 = 1e-3`, best-validation restore. The
 learned chart is `none`; the frozen chart is the same kernel and readout on the PCA-32 chart of the pixels
 with an identity encoder. Paired tests on the shared 10k test rows (pooled bootstrap and exact McNemar).
-First pass 2026-10-30; three `R = 512` rows are being refitted so that every row is scored by the float64
-solver (see "solver" below): their numbers may move by up to 0.2 pt.
+Hidden-state pilot: GPT-2 small, layer 6, 50k WikiText-103 tokens (35k / 5k / 10k), `D = 768`, `k = 32`, two
+targets: next-token entropy (regression, NRMSE) and a 4-way coarse token class (error rate). First pass
+2026-10-30; the whole `R = 512` MNIST column refitted 2026-11-01/02 so that every row below is scored by the
+same float64 solver (one `none-inner4096` seed is still being refitted after the second solver finding below).
 
 | set | k | R | arm | n | error (mean ± sd) | thresholds | Δ vs none (paired) |
 |---|---|---|---|---|---|---|---|
 | mnist | 32 | 32 | none | 5 | 0.0282 ± 0.0013 | MDE₃ 0.0046, MDE₅ 0.0024 | – |
-| mnist | 32 | 32 | frozen-pca | 3 | 0.1779 ± 0.0028 | | +0.1489 CI [+0.1447, +0.1531], McNemar p ≈ 0; 3/3 seeds worse |
+| mnist | 32 | 32 | frozen-pca | 5 | 0.1761 ± 0.0038 | | +0.1479 CI [+0.1447, +0.1511], McNemar p ≈ 0; 5/5 seeds worse |
 | mnist | 32 | 32 | none-l2-1e-4 | 1 | 0.0237 | | −0.0046 CI [−0.0072, −0.0023], p 2e-4 |
 | mnist | 32 | 32 | none-l2-1e-2 | 1 | 0.0291 | | +0.0008 CI [−0.0017, +0.0033], p 0.57 |
-| mnist | 32 | 512 | none | 5 | 0.0233 ± 0.0014 | MDE₃ 0.0052, MDE₅ 0.0027 | – |
-| mnist | 32 | 512 | frozen-pca | 3 | 0.0775 ± 0.0011 | | +0.0535 CI [+0.0507, +0.0562], p ≈ 0; 3/3 seeds worse |
-| mnist | 32 | 512 | none-inner4096 | 3 | 0.0316 ± 0.0115 | | +0.0076 CI [+0.0061, +0.0092], p 2e-22; 3/3 worse (one seed at 0.0449) |
-| mnist | 32 | 512 | none-l2-1e-4 | 1 | failed | | the per-batch float32 solve failed in epoch 3 |
-| mnist | 32 | 512 | none-l2-1e-2 | 1 | 0.0245 | | +0.0021 CI [−0.0002, +0.0043], p 0.085 |
+| mnist | 32 | 512 | none | 5 | 0.0239 ± 0.0016 | MDE₃ 0.0056, MDE₅ 0.0030 | – |
+| mnist | 32 | 512 | frozen-pca | 5 | 0.0771 ± 0.0015 | | +0.0532 CI [+0.0510, +0.0554], p ≈ 0; 5/5 seeds worse |
+| mnist | 32 | 512 | none-inner4096 | 4 | 0.0230 ± 0.0006 | | −0.0003 CI [−0.0013, +0.0006], p 0.51; 1/4 worse |
+| mnist | 32 | 512 | none-l2-1e-4 | 1 | failed | | the per-batch float32 solve failed in epoch 5 |
+| mnist | 32 | 512 | none-l2-1e-2 | 1 | 0.0240 | | +0.0015 CI [−0.0008, +0.0037], p 0.21 |
+| gpt2-h6-entropy | 32 | 32 | none | 5 | NRMSE 0.5107 ± 0.0048 | MDE₃ 0.017, MDE₅ 0.009 | – |
+| gpt2-h6-entropy | 32 | 32 | frozen-pca | 5 | 0.7052 ± 0.0027 | | +0.1925, 5/5 worse |
+| gpt2-h6-entropy | 32 | 512 | none | 5 | 0.5097 ± 0.0030 | MDE₃ 0.011, MDE₅ 0.006 | – |
+| gpt2-h6-entropy | 32 | 512 | frozen-pca | 5 | 0.6368 ± 0.0015 | | +0.1264, 5/5 worse |
+| gpt2-h6-nextclass | 32 | 32 | none | 5 | 0.1433 ± 0.0058 | MDE₃ 0.021, MDE₅ 0.011 | – |
+| gpt2-h6-nextclass | 32 | 32 | frozen-pca | 5 | 0.2141 ± 0.0040 | | +0.0709 CI [+0.0675, +0.0742], p ≈ 0; 5/5 worse |
+| gpt2-h6-nextclass | 32 | 512 | none | 0 of 5 | failed | | the per-batch float32 solve failed in epochs 62–78 on every seed |
+| gpt2-h6-nextclass | 32 | 512 | frozen-pca | 5 | 0.1660 ± 0.0020 | | – |
 
-Geometry and design matrix (every learned fit): axis-normalised `√L_conf` 0.45 at epoch 0 → 0.91–0.96 at the
-end; median `cond(JJᵀ)` 0.8–3 × 10³ at `R = 32` and 0.5–2.3 × 10⁴ at `R = 512`; 66–72 % of the Jacobian's
+Geometry and design matrix (every learned MNIST fit): axis-normalised `√L_conf` 0.45 at epoch 0 → 0.95–0.96 at
+the end; median `cond(JJᵀ)` 0.8–3 × 10³ at `R = 32` and 1.4–2.3 × 10⁴ at `R = 512`; 66–72 % of the Jacobian's
 energy lies outside the top-64 PCA subspace of the pixels. Every learned fit trips the stability flag (both
 criteria), so the flag does not discriminate at this scale; it is reported, not used. Effective rank of Φ
-(entropy of the column spectrum): 8.4–8.9 of 32 columns at `R = 32`, 16–23 of 512 at `R = 512`; the frozen
-chart's Φ has 20 and 140. A direct SVD of one `R = 512` chart's centred Φ: condition number 9 × 10⁵, entropy
-effective rank 8.1.
+(entropy of the column spectrum): 8.4–8.9 of 32 columns at `R = 32`, 13–24 of 512 at `R = 512`; the frozen
+chart's Φ has 20 and 125–140. Kernel state at the end of training (`R = 512`, five seeds): the learned
+bandwidths, initialised at `σ_k ∈ {0.22, 0.61, 1.65, 4.48}`, end at 1.1–1.7 / 1.3–2.0 / 1.6–2.7 / 3.7–5.9
+(geometric mean over the axes) against a latent spread (RMS axis SD) of 0.30–0.38: every scale is 3–17× the
+spread, so every column is close to affine in `z` and the design matrix is rank-starved by bandwidth, not by
+count. The optimiser widened the two narrow scales rather than keeping them.
 
-Solver. The on-device float32 Cholesky that scored the first pass returned zero weights on 1 of 8 `R = 512`
-fits (the chart had reached 97.7 % validation accuracy), and the ridge 1e-4 arm raised inside training. The CPU
-float32 augmented least squares is not a substitute: on the same Φ it is 0.2–0.8 pt worse than the float64
-factor, more so at small ridge (issue #110). The suite now scores every row with the float64 Gram factorisation
-(`ridge_solve_hybrid`), and a cell whose fit raises is written as a failure row instead of ending the block.
+Solver, two findings. (1) The on-device float32 Cholesky that scored the first pass returned zero weights on
+1 of 8 `R = 512` fits, and the CPU float32 augmented least squares is 0.2–0.8 pt worse than a float64 factor
+on the same Φ (issue #110). (2) A float64 factor of a *float32-formed* Gram is not enough either: with an
+effective rank of 19 out of 512 columns the ridge `λ_eff = l2 · mean‖Φ_r‖²` sits below the float32 rounding of
+the Gram, and one refit (the `none-inner4096` seed 1 of 2026-11-02) scored 16.8 % test error with 97.7 %
+validation accuracy and no flag; a second refused the factor outright. The scoring solve now accumulates
+`ΦᵀΦ` in float64 on the CPU and factors it there (`gelsd` fallback kept), and every classification row records
+the scoring solve's error on the validation split next to the trainer's best validation accuracy, flagging a
+gap above one point (`scoring_mismatch`). The earlier reading of the inner-solve confound (+0.76 pt, one seed at
+4.5 %) was this solver artefact: refitted and scored in float64 the arm is indistinguishable from `none`. The
+training-time per-batch solve is still the package's float32 device Cholesky and has no float64 switch on MPS:
+it fails at `R = 512` with ridge 1e-4 on MNIST and at ridge 1e-3 on the pilot's class target (all five seeds,
+late in training), which is a package limit to be addressed before S1's `R ≥ 256` cells on such sets
+(`skip_failing_batches`, a larger ridge, or CUDA).
 
 **What it says.**
 
-- **H0 passes decisively.** The learned chart beats the frozen PCA-32 chart through the identical kernel and
-  readout by 14.9 pt at `R = 32` and 5.4 pt at `R = 512`. The chart is what the readout runs on; the penalty
-  program is live on MNIST.
-- **H1 fails at `k = 32` by the pre-registered criterion.** From 32 to 512 anchors the learned chart gains
-  0.49 pt (2.82 → 2.33 %), twice the five-seed MDE but under the 1 pt "anchor-limited" bar; the frozen chart
-  gains 10 pt over the same range. The design matrix explains the difference: with the default bandwidth the
-  k-means anchors give Φ an effective rank of 8–23 whatever `R` is, so most anchors add nearly collinear
-  columns. **Bandwidth, not count, is the suspect**, and S1's `kmeans-median` arm (the bandwidth from the
-  latent spread) is the next decision-changing cell: if it raises the effective rank and the `R` curve steepens,
-  `R_bind` is read on that arm.
-- **The inner-solve confound is real** (`inner_batch_size = 4096` at `R = 512`: +0.76 pt pooled, one seed at
-  4.5 %); the `16R` rule stays.
+- **H0 passes on both sets.** The learned chart beats the frozen PCA-32 chart through the identical kernel and
+  readout by 14.8 pt at `R = 32` and 5.3 pt at `R = 512` on MNIST, by 0.19 / 0.13 NRMSE on the entropy target
+  and by 7.1 pt on the class target at `R = 32`. The chart is what the readout runs on; the penalty program is
+  live on both sets.
+- **H1 fails at `k = 32` by the pre-registered criterion, on both sets.** From 32 to 512 anchors the learned
+  MNIST chart gains 0.43 pt (2.82 → 2.39 %), under the 1 pt "anchor-limited" bar, while the frozen chart gains
+  9.9 pt; on the entropy target the learned chart gains nothing (0.511 → 0.510) while the frozen chart gains
+  0.07. The design matrix explains it: with the default bandwidth the k-means anchors give Φ an effective rank of
+  8–24 whatever `R` is, so most anchors add nearly collinear columns. **Bandwidth, not count, is the suspect**;
+  S1 runs its bandwidth arms first (`kmeans-median`, and per-scale columns that stop summing the four scales
+  into one column) and reads `R_bind` on whichever arm raises the effective rank.
+- **The inner-solve confound is nil at `R = 512`** once scored correctly (−0.03 pt, CI includes 0, 4 seeds); the
+  `16 × columns` rule stays as the conservative default but is not a measured necessity on MNIST.
 - **The ridge matters at the MDE scale.** 1e-4 beats 1e-3 by 0.46 pt at `R = 32` and is numerically unusable
-  at `R = 512` in float32; 1e-2 costs 0.1–0.2 pt. `1e-3` stays the protocol value (it is the one that runs
-  everywhere), and `R_eq` readings carry a ±0.3 pt ridge caveat.
-- **Thresholds.** Seed SD 0.13–0.14 pt at both `R`: MDE₃ ≈ 0.5 pt, MDE₅ ≈ 0.25 pt. S2's five-seed cells can
-  resolve a quarter point; S1/S3 three-seed cells half a point.
-- The hidden-state pilot (GPT-2 small, layer 6, next-token entropy, `R = 32`): NRMSE 0.511 ± 0.005 learned vs
-  0.705 ± 0.003 frozen PCA-32, the same picture; its `R = 512` cells and S0 follow.
+  at `R = 512` in float32; 1e-2 costs 0.1–0.2 pt. `1e-3` stays the protocol value and `R_eq` readings carry a
+  ±0.3 pt ridge caveat.
+- **Thresholds.** Seed SD 0.13–0.16 pt at both `R` on MNIST: MDE₃ ≈ 0.5 pt, MDE₅ ≈ 0.3 pt. On the pilot's
+  class target the SD is 0.6 pt (MDE₃ 2.1 pt): 10k test tokens of one text are too few for S2-grade comparisons; the pilot
+  stays a gate, not a result set.
 
+### S0. Baselines and headroom (MNIST complete; pilot in progress)
+
+Kind: real data. Same splits and seeds as W1. Linear probe = multinomial logistic regression (ridge for the
+entropy target) on the standardised inputs; kNN (`k = 10`); the capacity-matched MLP head = IGL's own encoder
+(`256 × 2`, LayerNorm, SiLU, Stiefel init, bottleneck `k`) followed by `Linear(k, R) → SiLU → Linear(R, C)`,
+trained end to end with cross-entropy (MSE for entropy) on the identical step budget and seeds; frozen-pca =
+the frozen PCA-`k` chart through IGL's kernel and readout (identity encoder, k-means anchors); Nyström =
+RBF Nyström ridge with `R` landmarks and the median bandwidth, one isotropic scale, as a reference line only.
+
+| MNIST, error | R = 32 | R = 128 | R = 512 |
+|---|---|---|---|
+| MLP head, `k = 16` (3 seeds) | 0.0201 ± 0.0010 | 0.0202 ± 0.0008 | 0.0206 ± 0.0016 |
+| MLP head, `k = 64` | 0.0201 ± 0.0006 | 0.0201 ± 0.0007 | 0.0213 ± 0.0016 |
+| IGL learned chart, `k = 32` (W1, 5 seeds) | 0.0282 ± 0.0013 | – | 0.0239 ± 0.0016 |
+| frozen-pca through IGL, `k = 16` / `64` | 0.1825 / 0.1847 | 0.1174 / 0.1264 | 0.0842 / 0.0835 |
+| Nyström RBF, `k = 16` / `64` (1 seed) | 0.1881 / 0.2529 | 0.1102 / 0.1271 | 0.0696 / 0.0710 |
+| linear probe / kNN | 0.080 / 0.059 (headroom 6.0 pt) | | |
+
+| GPT-2 layer-6 entropy, NRMSE | R = 32 | R = 128 | R = 512 |
+|---|---|---|---|
+| MLP head, `k = 16` (3 seeds) | 0.5043 ± 0.0036 | 0.5082 ± 0.0022 | running |
+| IGL learned chart, `k = 32` (W1, 5 seeds) | 0.5107 ± 0.0048 | – | 0.5097 ± 0.0030 |
+| frozen-pca through IGL, `k = 16` | 0.7594 ± 0.0074 | running | running |
+| Nyström RBF, `k = 16` | 0.8334 | running | running |
+| linear probe / kNN | 0.608 / 0.722 (headroom 0.107) | | |
+
+**What it says.**
+
+- **Both sets have headroom** (6 pt on MNIST, 0.11 NRMSE on the entropy target between the linear probe and
+  the best non-linear baseline), so a chart effect can show.
+- **The capacity-matched MLP head matches or beats the Green readout on both sets, and does not care about
+  `R`.** On MNIST it sits at 2.0–2.1 % at every `(k, R)`; IGL loses 0.8 pt to it at `R = 32` and 0.3 pt at
+  `R = 512` (MDE₅ 0.3 pt). On the entropy target the gap is 0.006 NRMSE at `R = 32` (at the MDE). After the
+  same encoder and bottleneck, the Gaussian-anchor ridge readout is the weaker of the two heads at this
+  bandwidth. H7's sign is therefore negative on MNIST at the default kernel; the S1 bandwidth arms decide whether
+  that is a property of the readout or of its rank-starved default.
+- **The frozen chart through the kernel is far behind every learned head** (8–18 % on MNIST), and Nyström with
+  one tuned isotropic scale tracks it closely: with a fixed chart, 512 Gaussian atoms in 16–64 dimensions buy
+  7 %, and the learned chart buys the rest. The chart is where the accuracy comes from; the readout is not yet
+  pulling its weight.

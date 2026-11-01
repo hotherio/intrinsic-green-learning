@@ -88,6 +88,7 @@ class FitSpec:
     frozen_chart_inputs: bool = True  # chart inputs (param, conformal): identity encoder, kernel and readout trained
     inner_batch_size: int | None = None  # None: max(4096, 16 * n_anchors)
     anchor_init: str = "random"  # "random" | "kmeans-keep" | "kmeans-median" (data anchors from the epoch-0 latents)
+    per_scale_columns: bool = False  # one column per (anchor, scale): R·K columns, the solve weights scales per anchor
     anchor_sample: int = 16_384  # rows of the training split the data anchors are fitted on
     task: str = "regression"  # "regression" | "classification"
     n_classes: int = 0
@@ -594,10 +595,12 @@ def fit_arm(  # noqa: PLR0912, PLR0915 (one protocol, read top to bottom)
     max_dim = spec.max_dim or d
     n_train = int(x_tr.shape[0])
     epochs = epochs_for(spec, n_train)
-    inner = spec.inner_batch_size or max(4096, 16 * spec.n_anchors)
+    n_columns = spec.n_anchors * (spec.n_scales if spec.per_scale_columns else 1)
+    inner = spec.inner_batch_size or max(4096, 16 * n_columns)  # the v2 rule, on the design-matrix width
     output_dim = dataset.n_classes if classification else 1
     torch.manual_seed(seed)
-    module = igl.IGLModule(x_tr.shape[1], max_dim, output_dim, n_anchors=spec.n_anchors, n_scales=spec.n_scales)
+    kernel = igl.KernelConfig(n_anchors=spec.n_anchors, n_scales=spec.n_scales, per_scale_columns=spec.per_scale_columns)
+    module = igl.IGLModule(x_tr.shape[1], max_dim, output_dim, config=igl.IGLConfig(max_dim=max_dim, kernel=kernel))
     frozen = inputs != "ambient" and spec.frozen_chart_inputs and x_tr.shape[1] == max_dim
     if frozen:
         # the chart is given: an encoder trained on top of it only distorts it (pilots on the hills),
@@ -720,6 +723,8 @@ def fit_arm(  # noqa: PLR0912, PLR0915 (one protocol, read top to bottom)
         "n_val": int(x_va.shape[0]),
         "n_test": int(x_te.shape[0]),
         "R": spec.n_anchors,
+        "columns": n_columns,
+        "per_scale_columns": spec.per_scale_columns,
         "inputs": inputs,
         "arm": arm,
         "seed": seed,

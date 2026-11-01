@@ -6,6 +6,8 @@ and blocks still execute after library changes. Each test stays well under a few
 
 from __future__ import annotations
 
+import json
+
 import pytest
 import torch
 from torch import nn
@@ -149,3 +151,32 @@ def test_scale_block_runs_on_the_smoke_set(tmp_path, monkeypatch) -> None:  # no
     w1_gate.main()
     files = sorted((tmp_path / "results" / "benchmarks" / "geometry" / "t" / "w1_gate").glob("*/*/seed*.json"))
     assert [f.parent.name for f in files] == ["frozen-pca", "none"]
+
+    from benchmarks.geometry.blocks import s1_anchor_budget
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "s1",
+            "--smoke",
+            "--no-gate",
+            "--device",
+            "cpu",
+            "--label",
+            "t",
+            "--seeds",
+            "0",
+            "--anchors",
+            "8",
+            "--arms",
+            "kmeans-median+per-scale",
+        ],
+    )
+    s1_anchor_budget.main()
+    rows = [
+        json.loads(f.read_text())
+        for f in (tmp_path / "results" / "benchmarks" / "geometry" / "t" / "s1_anchor_budget").glob("*/*/seed*.json")
+    ]
+    assert len(rows) == 1 and rows[0]["arm"] == "kmeans-median+per-scale"
+    assert rows[0]["per_scale_columns"] and rows[0]["columns"] == 8 * 4 and rows[0]["phi"]["active_columns"] <= 32

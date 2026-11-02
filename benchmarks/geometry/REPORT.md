@@ -684,7 +684,7 @@ late in training), which is a package limit to be addressed before S1's `R ≥ 2
   class target the SD is 0.6 pt (MDE₃ 2.1 pt): 10k test tokens of one text are too few for S2-grade comparisons; the pilot
   stays a gate, not a result set.
 
-### S0. Baselines and headroom (MNIST complete; pilot in progress)
+### S0. Baselines and headroom (MNIST and the hidden-state pilot)
 
 Kind: real data. Same splits and seeds as W1. Linear probe = multinomial logistic regression (ridge for the
 entropy target) on the standardised inputs; kNN (`k = 10`); the capacity-matched MLP head = IGL's own encoder
@@ -704,19 +704,30 @@ RBF Nyström ridge with `R` landmarks and the median bandwidth, one isotropic sc
 
 | GPT-2 layer-6 entropy, NRMSE | R = 32 | R = 128 | R = 512 |
 |---|---|---|---|
-| MLP head, `k = 16` (3 seeds) | 0.5043 ± 0.0036 | 0.5082 ± 0.0022 | running |
-| IGL learned chart, `k = 32` (W1, 5 seeds) | 0.5107 ± 0.0048 | – | 0.5097 ± 0.0030 |
-| frozen-pca through IGL, `k = 16` | 0.7594 ± 0.0074 | running | running |
-| Nyström RBF, `k = 16` | 0.8334 | running | running |
+| MLP head, `k = 16` / `64` (3 seeds) | 0.504 / 0.507 | 0.508 / 0.504 | 0.507 / 0.508 |
+| IGL learned chart, `k = 32` (W1, 5 seeds) | 0.511 ± 0.005 | – | 0.510 ± 0.003 |
+| frozen-pca through IGL, `k = 16` / `64` | 0.759 / 0.666 | 0.722 / 0.635 | 0.685 / 0.604 |
+| Nyström RBF, `k = 16` / `64` | 0.833 / 0.834 | 0.784 / 0.708 | 0.724 / 0.667 |
 | linear probe / kNN | 0.608 / 0.722 (headroom 0.107) | | |
+
+| GPT-2 layer-6 next-token class, error | R = 32 | R = 128 | R = 512 |
+|---|---|---|---|
+| MLP head, `k = 16` / `64` (3 seeds) | 0.141 / 0.142 | 0.142 / 0.144 | 0.146 / 0.147 |
+| IGL learned chart, `k = 32` (W1, 5 seeds) | 0.143 ± 0.006 | – | failed (training solve) |
+| frozen-pca through IGL, `k = 16` / `64` | 0.216 / 0.226 | 0.183 / 0.184 | 0.172 (1 seed) / 0.167 |
+| Nyström RBF, `k = 16` / `64` | 0.209 / 0.265 | 0.187 / 0.180 | 0.172 / 0.162 |
+| linear probe / kNN | 0.149 / 0.177 (headroom 1.2 pt) | | |
 
 **What it says.**
 
-- **Both sets have headroom** (6 pt on MNIST, 0.11 NRMSE on the entropy target between the linear probe and
-  the best non-linear baseline), so a chart effect can show.
+- **MNIST and the entropy target have headroom** (6 pt and 0.11 NRMSE between the linear probe and the best
+  non-linear baseline), so a chart effect can show. **The pilot's class target has 1.2 pt and fails the 2 pt
+  gate** (the MLP head at 14.1 % against the linear probe at 14.9 %): it is dropped as a result set and kept
+  only as the numerical stress case it turned out to be (its `R = 512` learned fits and two of three frozen-chart
+  fits die in the float32 training solve).
 - **The capacity-matched MLP head matches or beats the Green readout on both sets, and does not care about
   `R`.** On MNIST it sits at 2.0–2.1 % at every `(k, R)`; IGL loses 0.8 pt to it at `R = 32` and 0.3 pt at
-  `R = 512` (MDE₅ 0.3 pt). On the entropy target the gap is 0.006 NRMSE at `R = 32` (at the MDE). After the
+  `R = 512` (MDE₅ 0.3 pt). On the entropy target the gap is 0.003–0.007 NRMSE (at the MDE). After the
   same encoder and bottleneck, the Gaussian-anchor ridge readout is the weaker of the two heads at this
   bandwidth. H7's sign is therefore negative on MNIST at the default kernel; the S1 bandwidth arms decide whether
   that is a property of the readout or of its rank-starved default.
@@ -724,3 +735,78 @@ RBF Nyström ridge with `R` landmarks and the median bandwidth, one isotropic sc
   one tuned isotropic scale tracks it closely: with a fixed chart, 512 Gaussian atoms in 16–64 dimensions buy
   7 %, and the learned chart buys the rest. The chart is where the accuracy comes from; the readout is not yet
   pulling its weight.
+
+### S1. The anchor budget on MNIST (placement, bandwidth, per-scale columns)
+
+Kind: real data. MNIST, `k ∈ {16, 64}`, `R ∈ {16, 32, 64, 128}`, three seeds, 12 040 steps, `source_l2 = 1e-3`,
+`inner_batch_size = max(4096, 16 × columns)`, everything else as W1. Five arms: `random` anchors; `kmeans-keep`
+(k-means anchors from the epoch-0 latents, the default bandwidth ladder); `kmeans-median` (the ladder rescaled
+to the median pairwise latent distance per axis at anchor time); and the two k-means arms with **per-scale
+columns**, where the four scales of an anchor are four columns of Φ (`4R` columns) instead of one summed
+column. Scored by the float64 solve with the validation-consistency check: 120 fits, no mismatch (the scoring
+solve's validation error is within 0.2 pt of the trainer's best on every row). The per-scale cells at `R = 128`
+(512 columns) all died in the float32 per-batch training solve (12 of 12, "the readout solve failed" or a
+non-finite factorisation between epochs 27 and 53): see the package limit below.
+
+| `k` | arm | R = 16 | R = 32 | R = 64 | R = 128 | err(32) − err(128), paired | `R_eq` |
+|---|---|---|---|---|---|---|---|
+| 16 | random | 3.32 | 3.24 | 2.62 | 2.52 | +0.72 [+0.57, +0.86] | 128 |
+| 16 | kmeans-keep | 3.43 | 3.19 | 2.80 | 2.55 | +0.64 [+0.49, +0.80] | 128 |
+| 16 | kmeans-median | 3.26 | 3.41 | 3.02 | 2.57 | +0.84 [+0.69, +1.00] | – |
+| 16 | kmeans-keep + per-scale | 2.65 | 2.54 | 2.55 | failed | – | 32 |
+| 16 | kmeans-median + per-scale | 2.56 | 2.64 | 2.54 | failed | – | 64 |
+| 64 | random | 2.59 | 2.64 | 2.56 | 2.33 | +0.31 [+0.17, +0.44] | 128 |
+| 64 | kmeans-keep | 2.82 | 2.53 | 2.53 | 2.52 | +0.01 [−0.13, +0.14] | – |
+| 64 | kmeans-median | 2.83 | 2.68 | 2.41 | 2.44 | +0.23 [+0.09, +0.37] | 64 |
+| 64 | kmeans-keep + per-scale | 2.60 | 2.62 | 2.41 | failed | – | 64 |
+| 64 | kmeans-median + per-scale | 2.44 | 2.51 | 2.32 | failed | – | 64 |
+
+Error in %, mean of three seeds (seed SD 0.1–0.3 pt; MDE₃ ≈ 0.5 pt); `R_eq` = the smallest `R` within the paired
+CI of the arm's `R = 128` error (the `R_max` of this pass; W1's `R = 512` at `k = 32` is 2.39 %). References:
+MLP head 2.01–2.13 % at every `(k, R)`; frozen PCA chart 8–18 %.
+
+Kernel state at the end of training (mean of three seeds, `σ_k` is the geometric mean over axes, spread = RMS
+axis SD of the latents):
+
+| arm (`k = 16`) | R | columns | eff. rank of Φ | active columns | spread | `σ_k` | `σ_k` / spread | `γ` |
+|---|---|---|---|---|---|---|---|---|
+| kmeans-keep | 64 | 64 | 9.1 | 64 | 0.48 | 0.64 / 0.87 / 1.26 / 2.15 | 1.3 / 1.8 / 2.6 / 4.5 | 0.19 / 0.41 / 0.30 / 0.10 |
+| kmeans-median | 64 | 64 | 9.2 | 64 | 0.44 | 0.61 / 0.85 / 1.25 / 1.96 | 1.4 / 1.9 / 2.9 / 4.5 | 0.13 / 0.36 / 0.34 / 0.17 |
+| random | 64 | 64 | 9.6 | 64 | 0.58 | 0.80 / 1.11 / 1.63 / 2.31 | 1.4 / 1.9 / 2.8 / 4.0 | 0.15 / 0.39 / 0.35 / 0.11 |
+| kmeans-keep + per-scale | 64 | 256 | 15.6 | 183 | 0.65 | 0.14 / 0.82 / 1.73 / 2.71 | 0.2 / 1.3 / 2.6 / 4.2 | 0.02 / 0.17 / 0.40 / 0.41 |
+| kmeans-median + per-scale | 64 | 256 | 14.5 | 136 | 0.59 | 0.11 / 0.27 / 2.00 / 2.09 | 0.2 / 0.4 / 3.4 / 3.5 | 0.01 / 0.01 / 0.56 / 0.42 |
+| kmeans-keep | 128 | 128 | 12.0 | 128 | 0.43 | 0.72 / 1.01 / 1.24 / 2.93 | 1.7 / 2.5 / 2.9 / 7.0 | 0.11 / 0.45 / 0.24 / 0.20 |
+
+The same pattern holds at `k = 64` (spread 0.25–0.49, summed-column `σ_k` / spread 2–9, effective rank 8.5–12.4
+with 16–128 columns, 9.4–14.4 with per-scale columns).
+
+**What it says.**
+
+- **H1 fails; the readout saturates at 64–128 columns.** Every arm converges to 2.3–2.6 % by `R = 64–128`
+  and W1's `R = 512` adds nothing (2.39 %). The `R` curve is 0.7–0.8 pt deep at `k = 16` and 0–0.3 pt at
+  `k = 64`, under the 1 pt bar everywhere. **`R_bind` = 64** for S2 (the smallest count within the CI of the
+  plateau on the `k = 64` arms; 128 on the `k = 16` summed arms).
+- **H2 fails: anchor placement does not matter.** k-means against random is within ±0.2 pt in both directions
+  at every `(k, R)` (five of eight paired CIs include 0; the other three split both ways). E18's dead-column
+  finding does not reproduce here: there are no dead columns with summed scales on MNIST at any `R`.
+- **The initial bandwidth does not matter either, because the optimiser overrides it.** `kmeans-median` starts
+  the ladder at the latent spread and ends in the same place as `kmeans-keep`: with summed columns every final
+  `σ_k` is 1.3–9 times the latent spread, at every `R` and `k`, from every start. After 12k steps the kernel has
+  no memory of its initial bandwidth. The task gradient itself drives the atoms wide (near-affine in `z`), and
+  the summed-column Φ has an effective rank of 8–12 whatever its width.
+- **Per-scale columns are the one arm with an effect, and it is a small-`R` effect.** At `k = 16` they take
+  `R = 16` from 3.3–3.4 % to 2.6 % and `R = 32` from 3.2 % to 2.5 % (−0.7 pt, CI [−0.85, −0.55], p 1e-18), i.e.
+  16 anchors × 4 scales do what 128 summed anchors do: **columns, not anchors, are the resource**, as the rank
+  reading predicted. The effect is gone by `R = 64` (−0.07 pt, CI includes 0) and is 0.1–0.25 pt at `k = 64`.
+  With separate columns the optimiser does keep one narrow scale (`σ₁` ≈ 0.1–0.17, a fifth of the spread) but
+  gives it `γ` ≈ 0.01–0.03 and most of its columns die (136–193 of 256 columns active): the effective rank
+  rises to 11–16, not to the column count.
+- **Against the MLP head.** The plateau of the Green readout, 2.3–2.4 %, is 0.3 pt above the capacity-matched
+  MLP head at every `R`, `k`, placement and bandwidth tried (H7 negative on MNIST). Nothing in the anchor
+  budget closes it: the lever left in the plan is the chart (S2), and the package-side question of why the
+  learned chart's Φ cannot carry more than ≈ 16 independent features whatever its width.
+- **Package limit.** The float32 per-batch device solve fails on 512 per-scale columns (12 of 12 cells) and on
+  the pilot's class target at `R = 512`; with summed columns it survives 512 columns on MNIST at ridge 1e-3 and
+  fails at 1e-4. Per-scale columns are worse conditioned (the narrow scale's columns are near zero). Any
+  `R ≥ 128` per-scale cell, and S4, needs `skip_failing_batches`, a per-column ridge, or the float64 CUDA path
+  before it is run.

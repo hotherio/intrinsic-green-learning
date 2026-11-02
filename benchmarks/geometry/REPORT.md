@@ -614,7 +614,7 @@ with an identity encoder. Paired tests on the shared 10k test rows (pooled boots
 Hidden-state pilot: GPT-2 small, layer 6, 50k WikiText-103 tokens (35k / 5k / 10k), `D = 768`, `k = 32`, two
 targets: next-token entropy (regression, NRMSE) and a 4-way coarse token class (error rate). First pass
 2026-10-30; the whole `R = 512` MNIST column refitted 2026-11-01/02 so that every row below is scored by the
-same float64 solver (one `none-inner4096` seed is still being refitted after the second solver finding below).
+same float64 solver (the last row, `none-inner4096` seed 1, refitted 2026-11-02 after the second solver finding below).
 
 | set | k | R | arm | n | error (mean ± sd) | thresholds | Δ vs none (paired) |
 |---|---|---|---|---|---|---|---|
@@ -624,7 +624,7 @@ same float64 solver (one `none-inner4096` seed is still being refitted after the
 | mnist | 32 | 32 | none-l2-1e-2 | 1 | 0.0291 | | +0.0008 CI [−0.0017, +0.0033], p 0.57 |
 | mnist | 32 | 512 | none | 5 | 0.0239 ± 0.0016 | MDE₃ 0.0056, MDE₅ 0.0030 | – |
 | mnist | 32 | 512 | frozen-pca | 5 | 0.0771 ± 0.0015 | | +0.0532 CI [+0.0510, +0.0554], p ≈ 0; 5/5 seeds worse |
-| mnist | 32 | 512 | none-inner4096 | 4 | 0.0230 ± 0.0006 | | −0.0003 CI [−0.0013, +0.0006], p 0.51; 1/4 worse |
+| mnist | 32 | 512 | none-inner4096 | 5 | 0.0234 ± 0.0011 | | −0.0005 CI [−0.0014, +0.0005], p 0.32; 1/5 worse |
 | mnist | 32 | 512 | none-l2-1e-4 | 1 | failed | | the per-batch float32 solve failed in epoch 5 |
 | mnist | 32 | 512 | none-l2-1e-2 | 1 | 0.0240 | | +0.0015 CI [−0.0008, +0.0037], p 0.21 |
 | gpt2-h6-entropy | 32 | 32 | none | 5 | NRMSE 0.5107 ± 0.0048 | MDE₃ 0.017, MDE₅ 0.009 | – |
@@ -675,7 +675,7 @@ late in training), which is a package limit to be addressed before S1's `R ≥ 2
   8–24 whatever `R` is, so most anchors add nearly collinear columns. **Bandwidth, not count, is the suspect**;
   S1 runs its bandwidth arms first (`kmeans-median`, and per-scale columns that stop summing the four scales
   into one column) and reads `R_bind` on whichever arm raises the effective rank.
-- **The inner-solve confound is nil at `R = 512`** once scored correctly (−0.03 pt, CI includes 0, 4 seeds); the
+- **The inner-solve confound is nil at `R = 512`** once scored correctly (−0.05 pt, CI includes 0, 5 seeds); the
   `16 × columns` rule stays as the conservative default but is not a measured necessity on MNIST.
 - **The ridge matters at the MDE scale.** 1e-4 beats 1e-3 by 0.46 pt at `R = 32` and is numerically unusable
   at `R = 512` in float32; 1e-2 costs 0.1–0.2 pt. `1e-3` stays the protocol value and `R_eq` readings carry a

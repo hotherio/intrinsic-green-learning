@@ -1934,15 +1934,15 @@ the module's device (see <a class="autorefs autorefs-internal" href="../referenc
 </tr>
 <tr>
 <td>MPS</td>
-<td>Cholesky of the normal equations + one refinement step, on device</td>
-<td>contracted fast path</td>
+<td>Cholesky of the normal equations: on device with one refinement step below 128 design columns, factored in float64 on the CPU from 128 up</td>
+<td>expanded path (matrix products, no <code>[N, R, d]</code> tensor) from <code>R · d = 4096</code> up, contracted fast path below</td>
 <td><code>vmap(jacrev)</code></td>
 <td>one stacked read per epoch</td>
 </tr>
 <tr>
 <td>CUDA</td>
 <td>same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph</td>
-<td>contracted fast path</td>
+<td>expanded path in float64 from <code>R · d = 4096</code> up, contracted fast path below</td>
 <td><code>vmap(jacrev)</code></td>
 <td>one stacked read per epoch</td>
 </tr>
@@ -1969,7 +1969,12 @@ batch size is 1024 on CUDA and 256 elsewhere (<code>MatryoshkaConfig.batch_size<
 left at <code>None</code>; the per-batch cost on a GPU does not grow with the batch), and
 <code>MatryoshkaConfig.cpu_threads</code> caps torch's intra-op threads for the fit on
 the CPU branch (off by default because a different thread count changes the
-order of BLAS reductions and therefore the bits). The one documented exception is the AIRM loss's eigensolver,
+order of BLAS reductions and therefore the bits). Two more CPU settings trade
+the same bit-identity for speed and matter from a few hundred anchors up:
+<code>KernelConfig.kernel_path="expanded"</code> evaluates the Gaussian kernel as matrix
+products instead of on the <code>[N, R, d]</code> distance tensor, and
+<code>MatryoshkaConfig.cpu_solver="cholesky"</code> replaces the QR least squares of the
+readout by the normal equations with a float64 factor. The one documented exception is the AIRM loss's eigensolver,
 which synchronises on CUDA and, because MPS has no eigensolver, runs on the
 CPU for MPS tensors, unless <code>AIRMLoss(matrix_method="iterative")</code> is chosen
 (matrix functions from products, solves and inverses only, on any device).</p>

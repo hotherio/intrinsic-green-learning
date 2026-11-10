@@ -2565,14 +2565,17 @@ doesn't otherwise carry.</p>
                 <code>kernel_path</code>
             </td>
             <td>
-                  <code><span title="igl.core.kernel.KernelPathLiteral">KernelPathLiteral</span></code>
+                  <code><span title="igl.types.KernelPathLiteral">KernelPathLiteral</span></code>
             </td>
             <td>
               <div class="doc-md-description">
                 <p><code>"auto"</code> (default) takes the reference formulation on
-CPU and the fast one on MPS and CUDA; <code>"reference"</code> or <code>"fast"</code>
-force one (the fast path applies only to separable operators;
-the others always use the reference formulation).</p>
+CPU and, on MPS and CUDA, the expanded one from <code>R · d = 4096</code> up
+and the fast one below; <code>"reference"</code>,
+<code>"fast"</code> or <code>"expanded"</code> force one. The expanded path applies
+to quadratic operators (the Gaussian) and the fast path to
+separable ones; an operator a path does not cover falls back to
+the next formulation (expanded → fast → reference).</p>
               </div>
             </td>
             <td>
@@ -2611,7 +2614,9 @@ column exactly.</p>
               <div class="doc-md-description">
                 <p>Element budget of one <code>[n, R, d]</code> distance block
 (default <code>2**26</code>). Inputs with <code>N · R · d</code> above it are evaluated
-in row chunks of <code>chunk_elements // (R · d)</code> rows (at least one).</p>
+in row chunks of <code>chunk_elements // (R · d)</code> rows (at least one);
+on the expanded path the block is <code>[n, R, K]</code> and the rule uses
+<code>K</code> in place of <code>d</code>.</p>
               </div>
             </td>
             <td>
@@ -2724,7 +2729,7 @@ Used by Matryoshka random truncation during training. Passing
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="igl.core.kernel.KernelPathLiteral">KernelPathLiteral</span> | None</code>
+                  <code><span title="igl.types.KernelPathLiteral">KernelPathLiteral</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">

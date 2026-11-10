@@ -1777,6 +1777,21 @@ matrix product instead of materialising an <code>[N, R, K, d]</code> tensor.</p>
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="igl.kernels._registry.Operator.quadratic">quadratic</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>True</code> when the separable <code>f</code> is exactly <code>d²</code> (the
+Gaussian). The log-kernel then expands as
+<code>-(Σ z²g + Σ μ²g - 2 Σ z g μ)</code>, three matrix products on
+<code>[N, d]</code> and <code>[R, d]</code> operands, and the kernel layer can skip
+the <code>[N, R, d]</code> distance tensor altogether.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -1810,7 +1825,7 @@ matrix product instead of materialising an <code>[N, R, K, d]</code> tensor.</p>
 
 
 <h2 id="igl.kernels._registry.register_operator" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">register_operator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_oscillatory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">separable</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">_registry</span><span class="o">.</span><span class="n">register_operator</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_oscillatory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">separable</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">quadratic</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h2>
 
@@ -1894,6 +1909,23 @@ enabling the kernel layer's contracted fast path.</p>
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>quadratic</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Declare that <code>f(d) = d²</code> exactly, enabling the expanded
+(matrix-product) path; requires <code>separable</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>

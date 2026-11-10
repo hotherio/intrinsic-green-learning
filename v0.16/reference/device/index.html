@@ -1772,7 +1772,7 @@ matmul precision context, and the single host transfer per epoch. See
 
 
 <h2 id="igl.device.select_backend" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_backend</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cpu_threads</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+            <code class="highlight language-python"><span class="n">igl</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_backend</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cpu_threads</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cpu_cholesky</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 </h2>
 
@@ -1840,6 +1840,23 @@ matmul precision context, and the single host transfer per epoch. See
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cpu_cholesky</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#bool">bool</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Solve the readout on the CPU backend by a float64 Cholesky
+of the normal equations instead of the reference least squares.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>
@@ -1973,6 +1990,9 @@ problems (an M4 Max runs the medium benchmark batch 13% faster with 6
 threads than with its default 12), but the thread count changes the order
 of BLAS reductions, so results are then no longer bit-identical to the
 default's.</p>
+<p><code>cholesky</code> (off by default, for the same reason) replaces the float32 QR
+least squares of the readout by the normal equations with a float64 factor
+(:func:<code>igl.core.solver.ridge_solve_hybrid</code>): 3-5x faster from <code>R = 64</code> up.</p>
 
 
 
@@ -2016,12 +2036,48 @@ default's.</p>
               Bases: <code><span title="igl.core._backend._DeviceBackend">_DeviceBackend</span></code></p>
 
 
-        <p>Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).</p>
-<p>The readout stays on the device on purpose: factoring the <code>R × R</code> system
-in float64 on the CPU is 3× faster in isolation, but the copy drains the
-asynchronous Metal queue every batch and the fit gets 10–20% slower
-(measured, <code>benchmarks/device/REPORT.md</code>); the hybrid is kept for the
-one-off public solve only.</p>
+        <p>Apple MPS: Cholesky solve on the device for narrow Φ, on the CPU in float64 for wide Φ.</p>
+<p>Below <code>hybrid_min_columns</code> the readout stays on the device on purpose:
+factoring the <code>R × R</code> system in float64 on the CPU is faster in
+isolation, but the copy drains the asynchronous Metal queue every batch
+and a small fit gets 10–20% slower (measured,
+<code>benchmarks/device/REPORT.md</code>). From <code>hybrid_min_columns</code> up the
+balance reverses: the device's triangular solves grow much faster than
+the round trip (51 ms per <code>cholesky_solve</code> at <code>R = 512</code> against 1.4 ms
+for the whole CPU factor and solve), and the float64 factor does not fail
+on the near-singular Gram of a wide design matrix.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>hybrid_min_columns</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Design-matrix width from which the factorisation
+runs on the CPU in float64 (:func:<code>igl.core.solver.ridge_solve_hybrid</code>).</p>
+              </div>
+            </td>
+            <td>
+                  <code>128</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
 

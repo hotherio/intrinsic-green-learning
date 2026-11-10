@@ -70,6 +70,13 @@ def test_auto_path_is_the_reference_on_cpu_and_chunking_follows_the_path() -> No
         assert torch.allclose(small(z, path="expanded"), kernel(z, path="expanded"), atol=1e-6)
         assert torch.equal(small(z, path="reference"), kernel(z, path="reference"))
     assert kernel._all_expanded("expanded") and not kernel._all_expanded("fast")  # pyright: ignore[reportPrivateUsage]
+
+    # Off CPU, "auto" takes the expanded path only from R·d = 4096 up (launch-bound below).
+    class _OnDevice:
+        device = torch.device("cuda")
+
+    assert kernel._resolve_path(_OnDevice(), None) == "fast"  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+    assert GreenKernel(32, n_anchors=128)._resolve_path(_OnDevice(), None) == "expanded"  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage, reportArgumentType]
     mixed = GreenKernel(6, n_anchors=9, operator=("gaussian", "laplacian"))
     assert not mixed._all_expanded("expanded")  # pyright: ignore[reportPrivateUsage]
 

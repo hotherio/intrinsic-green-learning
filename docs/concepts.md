@@ -134,8 +134,8 @@ the module's device (see [`igl.device.select_backend`][igl.device.select_backend
 | branch | readout solve | Green kernel | Jacobian (orthogonality) | host transfers |
 |---|---|---|---|---|
 | CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
-| MPS | Cholesky of the normal equations: on device with one refinement step below 128 design columns, factored in float64 on the CPU from 128 up | expanded path (matrix products, no `[N, R, d]` tensor) | `vmap(jacrev)` | one stacked read per epoch |
-| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | expanded path | `vmap(jacrev)` | one stacked read per epoch |
+| MPS | Cholesky of the normal equations: on device with one refinement step below 128 design columns, factored in float64 on the CPU from 128 up | expanded path (matrix products, no `[N, R, d]` tensor) from `R · d = 4096` up, contracted fast path below | `vmap(jacrev)` | one stacked read per epoch |
+| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | expanded path in float64 from `R · d = 4096` up, contracted fast path below | `vmap(jacrev)` | one stacked read per epoch |
 
 The CPU branch keeps every number bit-identical release to release, which is
 what the SPD reproducibility tests pin. The device branches keep every tensor

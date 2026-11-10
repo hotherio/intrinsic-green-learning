@@ -706,7 +706,7 @@ solve on the CPU, copies included, 1.4 ms.
 
 What changed.
 
-- **Expanded Gaussian kernel** (`kernel_path="expanded"`, the MPS and CUDA default): `Σ(z − μ)² g` as three matrix
+- **Expanded Gaussian kernel** (`kernel_path="expanded"`, the MPS and CUDA default from `R · d = 4096` up): `Σ(z − μ)² g` as three matrix
   products, no `[N, R, d]` tensor, custom backward. Equal to the reference to 1e-16 in float64 (values and all
   gradients); in float32 the cancellation costs about 2e-5 absolute on Φ against 1e-7, three orders below the ridge.
 - **Hybrid solve on MPS from 128 columns** (`MpsBackend.hybrid_min_columns`): one device read per solve. Up to
@@ -745,9 +745,47 @@ Caveats, all of which understate the ratios or leave them unverified.
   compared there.
 - **The penalised fit moved 55 → 49 ms per step** in that state at `k = 32`; in isolation the loop over blocks is
   74 of the 116 ms of a penalised step and the closed form a few ms.
-- **CUDA is not measured.** The expanded path is now the CUDA default too (its products run in full precision in both
-  directions, like the fast path's contraction); it has been exercised on CPU and MPS only. The H100 run is pending
-  authorisation and should precede a release.
+
+### H100 (Vast, idle GPU and host, 2026-11-10, torch 2.11 + cu128)
+
+Fit level at application scale: 55k rows of 784 inputs, 10 classes, `inner_batch_size = max(4096, 16R)`, graph
+replay on (the default), median epoch after the third of eight, best of two seeds; main (`v0.16.1`) and the branch
+in alternating processes. Two instances were used, the second after the fix below; the main column reproduced to
+1 % between them.
+
+| ms per step | R = 64 | R = 128 | R = 256 | R = 512 | R = 512, k = 64 | R = 512, batch 256 |
+|---|---|---|---|---|---|---|
+| main | 0.89 | 1.14 | 1.75 | 4.41 | 6.32 | 3.65 |
+| branch | 0.90 | 1.04 | 1.36 | 2.74 | 2.83 | 2.57 |
+| ratio | 0.99 | 1.10 | 1.29 | 1.61 | 2.23 | 1.42 |
+
+| with `torch_compile=True` | R = 256 | R = 512 |
+|---|---|---|
+| main | 1.05 | 2.28 |
+| branch | 0.85 | 1.51 |
+
+Validation accuracy and final training loss agree with main to the third decimal in every cell at the default batch;
+at batch 256, `R = 512`, eight seeds give 0.4967 ± 0.017 (main) and 0.4955 ± 0.011 (branch). A fit with the
+all-prefix conformality penalty (`k = 32`, every 2 batches, 16k rows, eager because extra losses step aside from the
+graph) goes from 8.0 to 5.0 ms per step. Peak device memory at `R = 512` rises from 1.2 to 2.1 GB (the `[N, R, K]`
+block is float64). The synchronisation census is unchanged: one host read per epoch.
+
+**What the first H100 run caught.** The first version of the expanded path ran in float32 under a
+`full_precision_matmul` context, like the fast path's contraction. It was faster still (4.41 → 2.29 ms at `R = 512`,
+6.32 → 2.37 at `k = 64`) and correct in eager and graph mode, but with `torch_compile=True` the suite's three
+problems ended at a training loss of ln 2: nothing was learned. The compiled step does not honour the context that
+switches TF32 off, and the expansion subtracts terms hundreds of times larger than their difference, which a 10-bit
+mantissa turns into noise (the fast path loses only 1e-3 relative under the same condition, which is why this never
+showed before). The expanded path now runs its products in float64 on CUDA: outside TF32 by construction, and exact
+(1e-13 against the reference instead of 2e-5). That costs a third of the gain at `R = 512` and is the version in
+the tables above.
+
+**Small problems keep the fast path.** Under graph replay the step is launch-bound below a few thousand `R · d`,
+and the expanded form launches more kernels: the suite's problems measured 0.88 (`R · d = 128`), 0.97 (512) and
+0.93 (2048, with the float64 products) of main's speed. `kernel_path="auto"` therefore takes the expanded path
+only from `R · d = 4096` up; below it the code path is main's and the suite's graph and graph+compile epochs are
+equal to main's within 1 % (4.29 / 4.26 ms small, 10.23 / 10.20 medium). The six end-to-end examples are within
+2 % of main with identical headlines.
 
 ## Status
 

@@ -38,8 +38,11 @@ Three formulations compute the same numbers:
   ``eps`` times that, about ``2e-5`` absolute on Φ at the narrowest default
   scale against ``1e-7`` for the other two paths (latents and anchors are
   centred on the anchor mean first, so a global offset costs nothing). The
-  readout's ridge sits three orders of magnitude above that noise. It is the
-  MPS and CUDA branch; other separable operators keep the fast path.
+  readout's ridge sits three orders of magnitude above that noise. On CUDA the
+  products run in float64, which removes the cancellation and keeps TF32 out.
+  It is the MPS and CUDA branch from ``R · d = 4096`` up (smaller kernels are
+  launch-bound and keep the fast path); other separable operators keep the
+  fast path.
 
 Sign tracking is skipped on both paths for blocks whose operator is not
 oscillatory: the sign is then an exact ``+1`` and the product is unchanged.
@@ -101,6 +104,8 @@ type ReanchorSigmaLike = ReanchorSigma | ReanchorSigmaLiteral
 
 _DEFAULT_CHUNK_ELEMENTS = 2**26
 """Default element budget of one ``[n, R, d]`` distance block in :meth:`GreenKernel.compute_design_matrix`."""
+_EXPANDED_MIN_ANCHOR_DIMS = 4096
+"""``R · d`` from which ``kernel_path="auto"`` takes the expanded path on MPS and CUDA."""
 _MEDIAN_SUBSAMPLE = 2048
 """Rows of the latent batch used for the median pairwise distance in :meth:`GreenKernel.reanchor_`."""
 _MEDIAN_MIN_ROWS = 2
@@ -137,43 +142,63 @@ class _QuadraticLogKernel(torch.autograd.Function):
     on the anchor mean (the kernel is shift invariant, so the centre is a
     constant of the function and carries no gradient). The result is clamped
     at 0: the true value is non-positive and rounding of the three terms can
-    leave ``+1e-5`` where a latent sits on an anchor. Forward and backward are
-    matrix products in full precision (the backward runs outside any
-    forward-time precision context, as in :class:`_SeparableLogKernel`).
+    leave ``+1e-5`` where a latent sits on an anchor.
+
+    On CUDA the products and their combination run in **float64** and the
+    result is cast back. The expansion subtracts terms hundreds of times larger
+    than their difference, so it cannot tolerate TF32 (a 10-bit mantissa turns
+    Φ into noise), and a precision context is not a guarantee there: a step
+    compiled with ``torch.compile`` was measured to ignore it. Float64 matmuls
+    are outside TF32 altogether, and they also remove the float32 cancellation
+    (``2e-5`` → ``1e-13`` on Φ). MPS has no float64 and no TF32; the CPU keeps
+    the operands' dtype.
     """
 
     @staticmethod
+    def _work_dtype(z: torch.Tensor) -> torch.dtype:
+        return torch.float64 if z.device.type == "cuda" else z.dtype
+
+    @staticmethod
     def forward(ctx: Any, z: torch.Tensor, a: torch.Tensor, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]  # pyright: ignore[reportIncompatibleMethodOverride]  # noqa: ANN401
-        centre = a.mean(dim=0, keepdim=True)
-        zc = z - centre
-        ac = a - centre
+        work = _QuadraticLogKernel._work_dtype(z)
+        a_w = a.to(work)
+        g_w = g.to(work)
+        centre = a_w.mean(dim=0, keepdim=True)
+        zc = z.to(work) - centre
+        ac = a_w - centre
         n, r, k = z.shape[0], a.shape[0], g.shape[0]
-        with full_precision_matmul(z.device):
-            w = (ac.unsqueeze(1) * g.unsqueeze(0)).reshape(r * k, -1)  # [R·K, d]: anchor-major, like the columns
-            cross = (zc @ w.T).view(n, r, k)
-            z_term = (zc * zc) @ g.T  # [N, K]
-            a_term = (ac * ac) @ g.T  # [R, K]
-        ctx.save_for_backward(zc, ac, g, w)
-        return (2.0 * cross - z_term.unsqueeze(1) - a_term.unsqueeze(0)).clamp_(max=0.0)
+        w = (ac.unsqueeze(1) * g_w.unsqueeze(0)).reshape(r * k, -1)  # [R·K, d]: anchor-major, like the columns
+        cross = (zc @ w.T).view(n, r, k)
+        z_term = (zc * zc) @ g_w.T  # [N, K]
+        a_term = (ac * ac) @ g_w.T  # [R, K]
+        ctx.save_for_backward(z, a, g)
+        return (2.0 * cross - z_term.unsqueeze(1) - a_term.unsqueeze(0)).clamp(max=0.0).to(z.dtype)
 
     @staticmethod
     def backward(ctx: Any, grad: torch.Tensor) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:  # type: ignore[override]  # pyright: ignore[reportIncompatibleMethodOverride]  # noqa: ANN401
-        zc, ac, g, w = cast("tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]", ctx.saved_tensors)
+        z, a, g_in = cast("tuple[torch.Tensor, torch.Tensor, torch.Tensor]", ctx.saved_tensors)
         need_z, need_a, need_g = cast("tuple[bool, bool, bool]", ctx.needs_input_grad)
+        work = _QuadraticLogKernel._work_dtype(z)
+        a_w = a.to(work)
+        g = g_in.to(work)
+        centre = a_w.mean(dim=0, keepdim=True)
+        zc = z.to(work) - centre
+        ac = a_w - centre
+        grad = grad.to(work)
         n, r, k = grad.shape
         grad2 = grad.reshape(n, r * k)
         grad_z = grad_a = grad_g = None
-        with full_precision_matmul(zc.device):
-            sum_r = grad.sum(dim=1)  # [N, K]
-            sum_n = grad.sum(dim=0)  # [R, K]
-            if need_z:
-                grad_z = -2.0 * (zc * (sum_r @ g) - grad2 @ w)
-            if need_a or need_g:
-                m = (grad2.T @ zc).view(r, k, -1)  # [R, K, d]: Σ_n grad[n, r, k] · z[n, j]
-                if need_a:
-                    grad_a = -2.0 * (ac * (sum_n @ g) - (m * g.unsqueeze(0)).sum(dim=1))
-                if need_g:
-                    grad_g = -(sum_r.T @ (zc * zc) + sum_n.T @ (ac * ac) - 2.0 * (m * ac.unsqueeze(1)).sum(dim=0))
+        sum_r = grad.sum(dim=1)  # [N, K]
+        sum_n = grad.sum(dim=0)  # [R, K]
+        if need_z:
+            w = (ac.unsqueeze(1) * g.unsqueeze(0)).reshape(r * k, -1)
+            grad_z = (-2.0 * (zc * (sum_r @ g) - grad2 @ w)).to(z.dtype)
+        if need_a or need_g:
+            m = (grad2.T @ zc).view(r, k, -1)  # [R, K, d]: Σ_n grad[n, r, k] · z[n, j]
+            if need_a:
+                grad_a = (-2.0 * (ac * (sum_n @ g) - (m * g.unsqueeze(0)).sum(dim=1))).to(a.dtype)
+            if need_g:
+                grad_g = (-(sum_r.T @ (zc * zc) + sum_n.T @ (ac * ac) - 2.0 * (m * ac.unsqueeze(1)).sum(dim=0))).to(g_in.dtype)
         return grad_z, grad_a, grad_g
 
 
@@ -199,7 +224,8 @@ class GreenKernel(nn.Module):
             shrinkage — useful to give the local kernel a DC mode it
             doesn't otherwise carry.
         kernel_path: ``"auto"`` (default) takes the reference formulation on
-            CPU and the expanded one on MPS and CUDA; ``"reference"``,
+            CPU and, on MPS and CUDA, the expanded one from ``R · d = 4096`` up
+            and the fast one below; ``"reference"``,
             ``"fast"`` or ``"expanded"`` force one. The expanded path applies
             to quadratic operators (the Gaussian) and the fast path to
             separable ones; an operator a path does not cover falls back to
@@ -291,7 +317,11 @@ class GreenKernel(nn.Module):
     def _resolve_path(self, z: torch.Tensor, path: KernelPathLiteral | None) -> _ResolvedPath:
         chosen = path if path is not None else self.kernel_path
         if chosen == "auto":
-            return "reference" if z.device.type == "cpu" else "expanded"
+            if z.device.type == "cpu":
+                return "reference"
+            # Below this size the step is launch-bound and the expanded form's extra kernels cost
+            # 3-12 % under graph replay (H100, R·d = 128 to 2048); from it up the products win.
+            return "expanded" if self.n_anchors * self.latent_dim >= _EXPANDED_MIN_ANCHOR_DIMS else "fast"
         return chosen
 
     def _all_expanded(self, resolved: _ResolvedPath) -> bool:

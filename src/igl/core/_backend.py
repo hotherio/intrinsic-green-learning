@@ -12,7 +12,11 @@ kernel never test ``device.type`` themselves:
 - ``MpsBackend`` keeps every tensor on the device: the readout is solved by a
   Cholesky factorisation with one step of iterative refinement (MPS has no
   ``lstsq``, no ``eigh`` and no float64), failure is signalled by a device
-  flag, snapshots stay on the device.
+  flag, snapshots stay on the device. From ``hybrid_min_columns`` design
+  columns up, the ``R × R`` system alone crosses to the CPU and is factored in
+  float64: MPS triangular solves cost 45 ms at ``R = 512`` against 1.4 ms for
+  the round trip, and the float64 factor survives the wide, rank-starved
+  Grams the float32 one refuses.
 - ``CudaBackend`` is the MPS branch plus TF32 matmuls (the Gram matrix and the
   refinement stay in full precision), a fused AdamW, and factorisations that
   never check their ``info`` on the host. It performs no host-device
@@ -33,11 +37,11 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
-from igl.core.solver import direct_solve_weights, ridge_solve_device
+from igl.core.solver import direct_solve_weights, ridge_solve_device, ridge_solve_hybrid
 from igl.types import PrefixForward
 
 BackendName = Literal["cpu", "mps", "cuda"]
-KernelPath = Literal["reference", "fast"]
+KernelPath = Literal["reference", "fast", "expanded"]
 
 
 class Backend(Protocol):
@@ -103,7 +107,7 @@ class _DeviceBackend:
     """Shared implementation of the on-device (MPS, CUDA) branches."""
 
     name: BackendName
-    kernel_path: KernelPath = "fast"
+    kernel_path: KernelPath = "expanded"
     _accumulator_dtype: torch.dtype = torch.float64
     _check_errors: bool = False
 
@@ -173,12 +177,19 @@ class CpuBackend:
     threads than with its default 12), but the thread count changes the order
     of BLAS reductions, so results are then no longer bit-identical to the
     default's.
+
+    ``cholesky`` (off by default, for the same reason) replaces the float32 QR
+    least squares of the readout by the normal equations with a float64 factor
+    (:func:`igl.core.solver.ridge_solve_hybrid`): 3-5x faster from ``R = 64`` up.
     """
 
     name: BackendName = "cpu"
     kernel_path: KernelPath = "reference"
 
     def ridge_solve(self, phi: torch.Tensor, y: torch.Tensor, *, l2: float) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.cholesky:
+            # Opt-in: normal equations, float64 factor, failure through the flag (no warning, no host guard needed).
+            return ridge_solve_hybrid(phi, y, l2=l2)
         # direct_solve_weights keeps the reference semantics: it warns per call and
         # returns zeros on failure; the trainer's non-finite-loss check is the
         # divergence signal on this branch, so the flag is always clear.
@@ -188,6 +199,9 @@ class CpuBackend:
         # Verbatim reference guard: a diverged encoder means non-finite phi, and the
         # lstsq backend would crash inside LAPACK; keep the last good readout and
         # let the next epoch's non-finite-loss check raise cleanly.
+        if self.cholesky:
+            weights, bad = ridge_solve_hybrid(phi, target, l2=l2)
+            return current if bool(bad) else weights
         if torch.isfinite(phi).all() and torch.isfinite(target).all():
             return direct_solve_weights(phi, target, l2=l2)
         return current
@@ -217,8 +231,9 @@ class CpuBackend:
     ) -> AdamW:
         return AdamW(params, lr=lr, weight_decay=weight_decay) if weight_decay is not None else AdamW(params, lr=lr)
 
-    def __init__(self, *, threads: int | None = None) -> None:
+    def __init__(self, *, threads: int | None = None, cholesky: bool = False) -> None:
         self.threads = threads
+        self.cholesky = cholesky
 
     def precision(self) -> contextlib.AbstractContextManager[None]:
         if self.threads is None:
@@ -238,17 +253,33 @@ def _thread_cap(threads: int) -> Generator[None]:
 
 
 class MpsBackend(_DeviceBackend):
-    """Apple MPS: on-device Cholesky solve, float32 accumulation (MPS has no float64).
+    """Apple MPS: Cholesky solve on the device for narrow Φ, on the CPU in float64 for wide Φ.
 
-    The readout stays on the device on purpose: factoring the ``R × R`` system
-    in float64 on the CPU is 3× faster in isolation, but the copy drains the
-    asynchronous Metal queue every batch and the fit gets 10–20% slower
-    (measured, ``benchmarks/device/REPORT.md``); the hybrid is kept for the
-    one-off public solve only.
+    Below ``hybrid_min_columns`` the readout stays on the device on purpose:
+    factoring the ``R × R`` system in float64 on the CPU is faster in
+    isolation, but the copy drains the asynchronous Metal queue every batch
+    and a small fit gets 10–20% slower (measured,
+    ``benchmarks/device/REPORT.md``). From ``hybrid_min_columns`` up the
+    balance reverses: the device's triangular solves grow much faster than
+    the round trip (51 ms per ``cholesky_solve`` at ``R = 512`` against 1.4 ms
+    for the whole CPU factor and solve), and the float64 factor does not fail
+    on the near-singular Gram of a wide design matrix.
+
+    Args:
+        hybrid_min_columns: Design-matrix width from which the factorisation
+            runs on the CPU in float64 (:func:`igl.core.solver.ridge_solve_hybrid`).
     """
 
     name: BackendName = "mps"
     _accumulator_dtype = torch.float32
+
+    def __init__(self, *, hybrid_min_columns: int = 128) -> None:
+        self.hybrid_min_columns = hybrid_min_columns
+
+    def ridge_solve(self, phi: torch.Tensor, y: torch.Tensor, *, l2: float) -> tuple[torch.Tensor, torch.Tensor]:
+        if phi.shape[1] >= self.hybrid_min_columns:
+            return ridge_solve_hybrid(phi, y, l2=l2)
+        return ridge_solve_device(phi, y, l2=l2, check_errors=self._check_errors)
 
 
 class CudaBackend(_DeviceBackend):
@@ -292,7 +323,9 @@ def _tf32(*, enabled: bool) -> Generator[None]:  # pragma: no cover  # CUDA only
         torch.backends.cudnn.allow_tf32 = cudnn_before
 
 
-def select_backend(device: torch.device | str, *, tf32: bool = True, cpu_threads: int | None = None) -> Backend:
+def select_backend(
+    device: torch.device | str, *, tf32: bool = True, cpu_threads: int | None = None, cpu_cholesky: bool = False
+) -> Backend:
     """The backend for ``device``: ``CpuBackend``, ``MpsBackend`` or ``CudaBackend``.
 
     Args:
@@ -300,6 +333,8 @@ def select_backend(device: torch.device | str, *, tf32: bool = True, cpu_threads
         tf32: Whether the CUDA backend enables TF32 matmuls during a fit.
         cpu_threads: Intra-op thread cap for the CPU backend during a fit
             (``None`` leaves torch's setting; results then stay bit-identical).
+        cpu_cholesky: Solve the readout on the CPU backend by a float64 Cholesky
+            of the normal equations instead of the reference least squares.
 
     Returns:
         A :class:`Backend`.
@@ -309,7 +344,7 @@ def select_backend(device: torch.device | str, *, tf32: bool = True, cpu_threads
         return CudaBackend(tf32=tf32)
     if kind == "mps":
         return MpsBackend()
-    return cast(Backend, CpuBackend(threads=cpu_threads))
+    return cast(Backend, CpuBackend(threads=cpu_threads, cholesky=cpu_cholesky))
 
 
 __all__ = ["Backend", "BackendName", "CpuBackend", "CudaBackend", "KernelPath", "MpsBackend", "select_backend"]

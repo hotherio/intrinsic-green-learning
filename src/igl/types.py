@@ -271,6 +271,34 @@ MatmulPrecisionLiteral = Literal["tf32", "fp32"]
 MatmulPrecisionLike = MatmulPrecision | MatmulPrecisionLiteral
 
 
+KernelPathLiteral = Literal["auto", "reference", "fast", "expanded"]
+"""Formulation of :class:`igl.GreenKernel`: ``auto`` is ``reference`` on CPU and ``expanded`` on MPS and CUDA."""
+
+
+class CpuSolver(StrEnum):
+    """How the CPU branch solves the readout during a fit.
+
+    - ``LSTSQ`` (default): the reference, a float32 QR least squares on the
+      stacked system ``[Φ; √λ I]``. Bit-identical release to release.
+    - ``CHOLESKY``: the normal equations with the ``R × R`` system factored in
+      float64 (:func:`igl.core.solver.ridge_solve_hybrid`). 3-5x faster from
+      ``R = 64`` up (40 → 7 ms at ``R = 512`` on an M4 Max) and equal to the
+      reference to about ``1e-6`` on a well-conditioned Φ, but not the same
+      bits.
+
+    Ignored on MPS and CUDA.
+    """
+
+    LSTSQ = "lstsq"
+    CHOLESKY = "cholesky"
+
+
+CpuSolverLiteral = Literal["lstsq", "cholesky"]
+"""Literal companion of :class:`CpuSolver`."""
+
+CpuSolverLike = CpuSolver | CpuSolverLiteral
+
+
 class DomainMap(StrEnum):
     """How :class:`igl.spectral.SpectralKernel` maps the unbounded latent onto a basis's domain.
 
@@ -511,6 +539,10 @@ __all__ = [
     "GraphLaplacianNormLike",
     "GraphLaplacianNormLiteral",
     "LossStrategy",
+    "KernelPathLiteral",
+    "CpuSolver",
+    "CpuSolverLike",
+    "CpuSolverLiteral",
     "MatmulPrecision",
     "MatmulPrecisionLike",
     "MatmulPrecisionLiteral",

@@ -15,7 +15,7 @@ kernels (helmholtz, gabor, mexican_hat) can be combined safely.
 The kernel exposes :func:`forward` (the standard ``nn.Module`` entry point) and
 the more explicitly-named :func:`compute_design_matrix`, which are aliases.
 
-Two formulations compute the same numbers:
+Three formulations compute the same numbers:
 
 - the **reference** path materialises ``log G`` on an ``[N, R, K, d]`` tensor,
   sums over ``d`` and tracks signs for oscillatory operators; it is the CPU
@@ -27,12 +27,28 @@ Two formulations compute the same numbers:
   without sign tracking. Measured 1.6-2x faster forward and 2-4x faster
   forward+backward at 1e-7 relative error; it is the GPU branch. Its
   contraction runs in full precision in both directions so TF32 (the CUDA
-  branch's matmul policy) cannot perturb the design matrix.
+  branch's matmul policy) cannot perturb the design matrix;
+- the **expanded** path, for operators registered as *quadratic*
+  (``f(d) = d²``: the Gaussian), never forms the ``[N, R, d]`` distance tensor:
+  ``Σ_j (z_j - μ_j)² g_j = Σ z²g + Σ μ²g - 2 Σ z g μ`` is three matrix products
+  on ``[N, d]`` and ``[R, d]`` operands, so the largest tensor is ``[N, R, K]``
+  and the work is BLAS-3 in both directions. Measured 6-14x faster than the
+  fast path at ``R = 512`` (MPS and CPU). The price is cancellation: the three
+  terms are ``O(|z|² g d)`` and their difference is rounded at float32
+  ``eps`` times that, about ``2e-5`` absolute on Φ at the narrowest default
+  scale against ``1e-7`` for the other two paths (latents and anchors are
+  centred on the anchor mean first, so a global offset costs nothing). The
+  readout's ridge sits three orders of magnitude above that noise. On CUDA the
+  products run in float64, which removes the cancellation and keeps TF32 out.
+  It is the MPS and CUDA branch from ``R · d = 4096`` up (smaller kernels are
+  launch-bound and keep the fast path); other separable operators keep the
+  fast path.
 
 Sign tracking is skipped on both paths for blocks whose operator is not
 oscillatory: the sign is then an exact ``+1`` and the product is unchanged.
 
-Both paths are evaluated in **row chunks** once ``N · R · d`` exceeds
+All paths are evaluated in **row chunks** once ``N · R · d`` (``N · R · K`` on
+the expanded path, whose largest tensor is ``[N, R, K]``) exceeds
 ``chunk_elements`` (default ``2**26``, about 256 MB per fp32 block): rows are
 independent in every formulation, so the concatenated blocks are the same
 matrix, and a full-data call (the trainer's final refresh, validation,
@@ -58,9 +74,9 @@ from torch import nn
 from igl.core.solver import full_precision_matmul
 from igl.exceptions import IGLConfigError
 from igl.kernels._registry import Operator, get_operator
-from igl.types import NullSpaceBasis
+from igl.types import KernelPathLiteral, NullSpaceBasis
 
-KernelPathLiteral = Literal["auto", "reference", "fast"]
+_ResolvedPath = Literal["reference", "fast", "expanded"]
 
 
 class ReanchorMethod(StrEnum):
@@ -88,6 +104,8 @@ type ReanchorSigmaLike = ReanchorSigma | ReanchorSigmaLiteral
 
 _DEFAULT_CHUNK_ELEMENTS = 2**26
 """Default element budget of one ``[n, R, d]`` distance block in :meth:`GreenKernel.compute_design_matrix`."""
+_EXPANDED_MIN_ANCHOR_DIMS = 4096
+"""``R · d`` from which ``kernel_path="auto"`` takes the expanded path on MPS and CUDA."""
 _MEDIAN_SUBSAMPLE = 2048
 """Rows of the latent batch used for the median pairwise distance in :meth:`GreenKernel.reanchor_`."""
 _MEDIAN_MIN_ROWS = 2
@@ -117,6 +135,73 @@ class _SeparableLogKernel(torch.autograd.Function):
         return grad_f, grad_g
 
 
+class _QuadraticLogKernel(torch.autograd.Function):
+    """``logk[n, r, k] = -Σ_j (z[n, j] - a[r, j])² · g[k, j]`` without the ``[N, R, d]`` distance tensor.
+
+    Expanded as ``2·(z ⊙ g) aᵀ - z² gᵀ - a² gᵀ`` after centring ``z`` and ``a``
+    on the anchor mean (the kernel is shift invariant, so the centre is a
+    constant of the function and carries no gradient). The result is clamped
+    at 0: the true value is non-positive and rounding of the three terms can
+    leave ``+1e-5`` where a latent sits on an anchor.
+
+    On CUDA the products and their combination run in **float64** and the
+    result is cast back. The expansion subtracts terms hundreds of times larger
+    than their difference, so it cannot tolerate TF32 (a 10-bit mantissa turns
+    Φ into noise), and a precision context is not a guarantee there: a step
+    compiled with ``torch.compile`` was measured to ignore it. Float64 matmuls
+    are outside TF32 altogether, and they also remove the float32 cancellation
+    (``2e-5`` → ``1e-13`` on Φ). MPS has no float64 and no TF32; the CPU keeps
+    the operands' dtype.
+    """
+
+    @staticmethod
+    def _work_dtype(z: torch.Tensor) -> torch.dtype:
+        return torch.float64 if z.device.type == "cuda" else z.dtype
+
+    @staticmethod
+    def forward(ctx: Any, z: torch.Tensor, a: torch.Tensor, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]  # pyright: ignore[reportIncompatibleMethodOverride]  # noqa: ANN401
+        work = _QuadraticLogKernel._work_dtype(z)
+        a_w = a.to(work)
+        g_w = g.to(work)
+        centre = a_w.mean(dim=0, keepdim=True)
+        zc = z.to(work) - centre
+        ac = a_w - centre
+        n, r, k = z.shape[0], a.shape[0], g.shape[0]
+        w = (ac.unsqueeze(1) * g_w.unsqueeze(0)).reshape(r * k, -1)  # [R·K, d]: anchor-major, like the columns
+        cross = (zc @ w.T).view(n, r, k)
+        z_term = (zc * zc) @ g_w.T  # [N, K]
+        a_term = (ac * ac) @ g_w.T  # [R, K]
+        ctx.save_for_backward(z, a, g)
+        return (2.0 * cross - z_term.unsqueeze(1) - a_term.unsqueeze(0)).clamp(max=0.0).to(z.dtype)
+
+    @staticmethod
+    def backward(ctx: Any, grad: torch.Tensor) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:  # type: ignore[override]  # pyright: ignore[reportIncompatibleMethodOverride]  # noqa: ANN401
+        z, a, g_in = cast("tuple[torch.Tensor, torch.Tensor, torch.Tensor]", ctx.saved_tensors)
+        need_z, need_a, need_g = cast("tuple[bool, bool, bool]", ctx.needs_input_grad)
+        work = _QuadraticLogKernel._work_dtype(z)
+        a_w = a.to(work)
+        g = g_in.to(work)
+        centre = a_w.mean(dim=0, keepdim=True)
+        zc = z.to(work) - centre
+        ac = a_w - centre
+        grad = grad.to(work)
+        n, r, k = grad.shape
+        grad2 = grad.reshape(n, r * k)
+        grad_z = grad_a = grad_g = None
+        sum_r = grad.sum(dim=1)  # [N, K]
+        sum_n = grad.sum(dim=0)  # [R, K]
+        if need_z:
+            w = (ac.unsqueeze(1) * g.unsqueeze(0)).reshape(r * k, -1)
+            grad_z = (-2.0 * (zc * (sum_r @ g) - grad2 @ w)).to(z.dtype)
+        if need_a or need_g:
+            m = (grad2.T @ zc).view(r, k, -1)  # [R, K, d]: Σ_n grad[n, r, k] · z[n, j]
+            if need_a:
+                grad_a = (-2.0 * (ac * (sum_n @ g) - (m * g.unsqueeze(0)).sum(dim=1))).to(a.dtype)
+            if need_g:
+                grad_g = (-(sum_r.T @ (zc * zc) + sum_n.T @ (ac * ac) - 2.0 * (m * ac.unsqueeze(1)).sum(dim=0))).to(g_in.dtype)
+        return grad_z, grad_a, grad_g
+
+
 class GreenKernel(nn.Module):
     """Multi-scale, multi-operator Green's-function kernel.
 
@@ -139,9 +224,12 @@ class GreenKernel(nn.Module):
             shrinkage — useful to give the local kernel a DC mode it
             doesn't otherwise carry.
         kernel_path: ``"auto"`` (default) takes the reference formulation on
-            CPU and the fast one on MPS and CUDA; ``"reference"`` or ``"fast"``
-            force one (the fast path applies only to separable operators;
-            the others always use the reference formulation).
+            CPU and, on MPS and CUDA, the expanded one from ``R · d = 4096`` up
+            and the fast one below; ``"reference"``,
+            ``"fast"`` or ``"expanded"`` force one. The expanded path applies
+            to quadratic operators (the Gaussian) and the fast path to
+            separable ones; an operator a path does not cover falls back to
+            the next formulation (expanded → fast → reference).
         per_scale_columns: ``False`` (default) blends the ``K`` scales of every
             anchor into one column with the softmax weights ``γ``; ``True``
             keeps them as ``K`` separate columns scaled by ``γ_k`` (column
@@ -150,7 +238,9 @@ class GreenKernel(nn.Module):
             column exactly.
         chunk_elements: Element budget of one ``[n, R, d]`` distance block
             (default ``2**26``). Inputs with ``N · R · d`` above it are evaluated
-            in row chunks of ``chunk_elements // (R · d)`` rows (at least one).
+            in row chunks of ``chunk_elements // (R · d)`` rows (at least one);
+            on the expanded path the block is ``[n, R, K]`` and the rule uses
+            ``K`` in place of ``d``.
     """
 
     latent_dim: int
@@ -175,8 +265,8 @@ class GreenKernel(nn.Module):
         super().__init__()
         if latent_dim < 1:
             raise IGLConfigError(f"latent_dim must be >= 1, got {latent_dim}")
-        if kernel_path not in ("auto", "reference", "fast"):
-            raise IGLConfigError(f"kernel_path must be 'auto', 'reference' or 'fast', got {kernel_path!r}")
+        if kernel_path not in ("auto", "reference", "fast", "expanded"):
+            raise IGLConfigError(f"kernel_path must be 'auto', 'reference', 'fast' or 'expanded', got {kernel_path!r}")
         if n_anchors < 1:
             raise IGLConfigError(f"n_anchors must be >= 1, got {n_anchors}")
         if n_scales < 1:
@@ -224,11 +314,19 @@ class GreenKernel(nn.Module):
         """Names of the operators in registration order."""
         return tuple(op.name for op in self._operators)
 
-    def _resolve_path(self, z: torch.Tensor, path: KernelPathLiteral | None) -> Literal["reference", "fast"]:
+    def _resolve_path(self, z: torch.Tensor, path: KernelPathLiteral | None) -> _ResolvedPath:
         chosen = path if path is not None else self.kernel_path
         if chosen == "auto":
-            return "reference" if z.device.type == "cpu" else "fast"
+            if z.device.type == "cpu":
+                return "reference"
+            # Below this size the step is launch-bound and the expanded form's extra kernels cost
+            # 3-12 % under graph replay (H100, R·d = 128 to 2048); from it up the products win.
+            return "expanded" if self.n_anchors * self.latent_dim >= _EXPANDED_MIN_ANCHOR_DIMS else "fast"
         return chosen
+
+    def _all_expanded(self, resolved: _ResolvedPath) -> bool:
+        """True when every operator block takes the expanded path (no ``[N, R, d]`` tensor is formed)."""
+        return resolved == "expanded" and all(op.quadratic for op in self._operators)
 
     @staticmethod
     def _block_reference(
@@ -271,23 +369,44 @@ class GreenKernel(nn.Module):
         logk = cast(torch.Tensor, _SeparableLogKernel.apply(f, g))  # pyright: ignore[reportUnknownMemberType]
         return torch.exp(logk)
 
+    def _block_expanded(
+        self,
+        operator: Operator,
+        z: torch.Tensor,
+        sigma_op: torch.Tensor,
+        gate_mask: torch.Tensor | None,
+    ) -> torch.Tensor:
+        """One quadratic block as matrix products on ``z`` and the anchors: no ``[N, R, d]`` tensor."""
+        assert operator.separable is not None  # noqa: S101  # quadratic operators are separable (registry invariant)
+        g = operator.separable[1](sigma_op)  # [K_op, d]
+        if gate_mask is not None:
+            g = g * gate_mask[None, :]  # a masked dimension contributes 0 to the log-sum: factor 1
+        logk = cast(torch.Tensor, _QuadraticLogKernel.apply(z, self.anchor_positions, g))  # pyright: ignore[reportUnknownMemberType]
+        return torch.exp(logk)
+
     def _operator_blocks(
         self,
-        dist: torch.Tensor,
+        z: torch.Tensor,
         sigma: torch.Tensor,
         gamma: torch.Tensor,
         gate_mask: torch.Tensor | None,
-        use_fast: bool,
+        resolved: _ResolvedPath,
     ) -> Iterator[torch.Tensor]:
         """Per-operator ``γ``-weighted blocks ``[N, R, K_op]``, in scale order."""
+        dist: torch.Tensor | None = None  # [N, R, d], formed only if a block needs it
         k_offset = 0
         for operator, k_count in zip(self._operators, self._op_counts, strict=True):
             sigma_op = sigma[k_offset : k_offset + k_count]  # [K_op, d]
             gamma_op = gamma[k_offset : k_offset + k_count]  # [K_op]
-            if use_fast and operator.separable is not None:
-                prod_k = self._block_fast(operator, dist, sigma_op, gate_mask)
+            if resolved == "expanded" and operator.quadratic:
+                prod_k = self._block_expanded(operator, z, sigma_op, gate_mask)
             else:
-                prod_k = self._block_reference(operator, dist, sigma_op, gate_mask)
+                if dist is None:
+                    dist = z.unsqueeze(1) - self.anchor_positions.unsqueeze(0)
+                if resolved != "reference" and operator.separable is not None:
+                    prod_k = self._block_fast(operator, dist, sigma_op, gate_mask)
+                else:
+                    prod_k = self._block_reference(operator, dist, sigma_op, gate_mask)
             yield prod_k * gamma_op[None, None, :]
             k_offset += k_count
 
@@ -311,7 +430,9 @@ class GreenKernel(nn.Module):
             Design matrix of shape ``[N, R]`` (``[N, R·K]`` with
             ``per_scale_columns``), plus any null-space columns.
         """
-        rows_per_chunk = max(1, self.chunk_elements // (self.n_anchors * self.latent_dim))
+        # The largest tensor of a row block is [n, R, K] on the expanded path and [n, R, d] otherwise.
+        width = self.n_scales if self._all_expanded(self._resolve_path(z, path)) else self.latent_dim
+        rows_per_chunk = max(1, self.chunk_elements // (self.n_anchors * width))
         n_samples = z.shape[0]
         if n_samples <= rows_per_chunk:
             return self._design_block(z, gate_mask, path)
@@ -319,20 +440,17 @@ class GreenKernel(nn.Module):
         return torch.cat([self._design_block(z[s : s + rows_per_chunk], gate_mask, path) for s in starts], dim=0)
 
     def _design_block(self, z: torch.Tensor, gate_mask: torch.Tensor | None, path: KernelPathLiteral | None) -> torch.Tensor:
-        """The design matrix of one row block, with the ``[n, R, d]`` distance tensor materialised."""
+        """The design matrix of one row block."""
         n_samples = z.shape[0]
         device = z.device
         dtype = z.dtype
-        use_fast = self._resolve_path(z, path) == "fast"
-
-        # Distances [N, R, d].
-        dist = z.unsqueeze(1) - self.anchor_positions.unsqueeze(0)
+        resolved = self._resolve_path(z, path)
 
         sigma = torch.exp(self.log_sigma)
         gamma = F.softmax(self.log_gamma, dim=0)
 
         importance = torch.sigmoid(self.rank_importance)
-        blocks = self._operator_blocks(dist, sigma, gamma, gate_mask, use_fast)
+        blocks = self._operator_blocks(z, sigma, gamma, gate_mask, resolved)
         if self.per_scale_columns:
             phi_rk = torch.cat(list(blocks), dim=-1) * importance[None, :, None]  # [N, R, K]
             phi = phi_rk.reshape(n_samples, self.n_anchors * self.n_scales)

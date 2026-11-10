@@ -134,8 +134,8 @@ the module's device (see [`igl.device.select_backend`][igl.device.select_backend
 | branch | readout solve | Green kernel | Jacobian (orthogonality) | host transfers |
 |---|---|---|---|---|
 | CPU | `lstsq` on the stacked system (the bit-exact reference) | log-space reference path | loop of backward passes | free |
-| MPS | Cholesky of the normal equations + one refinement step, on device | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
-| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | contracted fast path | `vmap(jacrev)` | one stacked read per epoch |
+| MPS | Cholesky of the normal equations: on device with one refinement step below 128 design columns, factored in float64 on the CPU from 128 up | expanded path (matrix products, no `[N, R, d]` tensor) from `R · d = 4096` up, contracted fast path below | `vmap(jacrev)` | one stacked read per epoch |
+| CUDA | same, with TF32 matmuls elsewhere and a fused AdamW; the whole batch step replayed from a CUDA graph | expanded path in float64 from `R · d = 4096` up, contracted fast path below | `vmap(jacrev)` | one stacked read per epoch |
 
 The CPU branch keeps every number bit-identical release to release, which is
 what the SPD reproducibility tests pin. The device branches keep every tensor
@@ -158,7 +158,12 @@ batch size is 1024 on CUDA and 256 elsewhere (`MatryoshkaConfig.batch_size`
 left at `None`; the per-batch cost on a GPU does not grow with the batch), and
 `MatryoshkaConfig.cpu_threads` caps torch's intra-op threads for the fit on
 the CPU branch (off by default because a different thread count changes the
-order of BLAS reductions and therefore the bits). The one documented exception is the AIRM loss's eigensolver,
+order of BLAS reductions and therefore the bits). Two more CPU settings trade
+the same bit-identity for speed and matter from a few hundred anchors up:
+`KernelConfig.kernel_path="expanded"` evaluates the Gaussian kernel as matrix
+products instead of on the `[N, R, d]` distance tensor, and
+`MatryoshkaConfig.cpu_solver="cholesky"` replaces the QR least squares of the
+readout by the normal equations with a float64 factor. The one documented exception is the AIRM loss's eigensolver,
 which synchronises on CUDA and, because MPS has no eigensolver, runs on the
 CPU for MPS tensors, unless `AIRMLoss(matrix_method="iterative")` is chosen
 (matrix functions from products, solves and inverses only, on any device).

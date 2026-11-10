@@ -33,6 +33,7 @@ from igl.exceptions import IGLConfigError, IGLConvergenceError
 from igl.matryoshka.sampler import PowerLawSampler, UniformSampler
 from igl.nn.module import IGLModule
 from igl.types import (
+    CpuSolver,
     ExtraLoss,
     FinalRefresh,
     LossStrategy,
@@ -204,7 +205,12 @@ class MatryoshkaTrainer:
         backend = (
             self.backend
             if self.backend is not None
-            else select_backend(device, tf32=config.matmul_precision is MatmulPrecision.TF32, cpu_threads=config.cpu_threads)
+            else select_backend(
+                device,
+                tf32=config.matmul_precision is MatmulPrecision.TF32,
+                cpu_threads=config.cpu_threads,
+                cpu_cholesky=config.cpu_solver is CpuSolver.CHOLESKY,
+            )
         )
         x_train = x_train.to(device)
         y_train = y_train.to(device)

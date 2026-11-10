@@ -34,12 +34,18 @@ class Operator:
             (e.g. Gaussian: ``f = d²``, ``g = 1 / (2σ² + ε)``). When present the
             kernel layer can contract the product over latent dimensions as one
             matrix product instead of materialising an ``[N, R, K, d]`` tensor.
+        quadratic: ``True`` when the separable ``f`` is exactly ``d²`` (the
+            Gaussian). The log-kernel then expands as
+            ``-(Σ z²g + Σ μ²g - 2 Σ z g μ)``, three matrix products on
+            ``[N, d]`` and ``[R, d]`` operands, and the kernel layer can skip
+            the ``[N, R, d]`` distance tensor altogether.
     """
 
     name: str
     fn: OperatorFn
     is_oscillatory: bool
     separable: SeparableParts | None = None
+    quadratic: bool = False
 
 
 _OPERATORS: dict[str, Operator] = {}
@@ -51,6 +57,7 @@ def register_operator(
     *,
     is_oscillatory: bool = False,
     separable: SeparableParts | None = None,
+    quadratic: bool = False,
 ) -> None:
     """Register a kernel operator under ``name``.
 
@@ -60,13 +67,17 @@ def register_operator(
         is_oscillatory: Whether the kernel can take negative values.
         separable: Optional ``(f, g)`` pair with ``log|G(d, σ)| = -f(d) · g(σ)``
             enabling the kernel layer's contracted fast path.
+        quadratic: Declare that ``f(d) = d²`` exactly, enabling the expanded
+            (matrix-product) path; requires ``separable``.
 
     Raises:
         IGLConfigError: If ``name`` is already registered.
     """
     if name in _OPERATORS:
         raise IGLConfigError(f"operator {name!r} is already registered")
-    _OPERATORS[name] = Operator(name=name, fn=fn, is_oscillatory=is_oscillatory, separable=separable)
+    if quadratic and separable is None:
+        raise IGLConfigError(f"operator {name!r}: quadratic=True requires the separable (f, g) pair")
+    _OPERATORS[name] = Operator(name=name, fn=fn, is_oscillatory=is_oscillatory, separable=separable, quadratic=quadratic)
 
 
 def get_operator(name: str) -> Operator:

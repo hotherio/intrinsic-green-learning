@@ -28,6 +28,7 @@ register_operator(
     gaussian,
     is_oscillatory=gaussian.is_oscillatory,
     separable=(_squared_distance, _inverse_two_sigma_squared),
+    quadratic=True,
 )
 
 __all__ = ["gaussian"]

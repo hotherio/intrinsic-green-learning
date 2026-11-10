@@ -685,6 +685,70 @@ land on the same headlines. Below 1024 rows the whole epoch is one partial batch
 graph replay does not cover (it captures full batches only); a second graph for the tail
 shape would extend the replay to small datasets and is the next follow-up.
 
+## Second pass at application scale: expanded kernel, float64 hybrid solve, CPU opt-ins, all-prefix penalty
+
+The first rounds were measured on the suite's problems (`R ≤ 128`, `d ≤ 16`, 16k rows). At the size the scale
+benchmarks run (784 inputs, `k = 32`, `R` up to 512, `inner_batch_size = max(4096, 16R)`), a step is dominated by two
+things the small problems hide. M4 Max, 2026-11-10, throughput over 30 iterations with one synchronisation at the end
+(per-operation synchronisation inflates every MPS figure and is not used):
+
+| per step, MPS, ms | R = 64 | R = 128 | R = 256 | R = 512 |
+|---|---|---|---|---|
+| inner kernel, fast path (`[N, R, d]` tensor) | 7.3 | 10.9 | 18.6 | 68.2 |
+| inner kernel, expanded path | 2.1 | 2.8 | 4.8 | 16.7 |
+| readout solve on the device | 8.1 | 13.5 | 35.9 | 119.7 |
+| readout solve, float64 factor on the CPU | 5.4 | 6.0 | 6.8 | 11.5 |
+| outer step, fast / expanded | 3.6 / 3.5 | 3.9 / 3.7 | 5.0 / 3.8 | 7.7 / 4.5 |
+
+MPS triangular solves are the pathology: one `cholesky_solve` of a 512 × 512 system with 10 right-hand sides takes
+51 ms (two `solve_triangular` 45 ms; 924 ms at 2048), the factorisation itself 6 ms, and the whole float64 factor and
+solve on the CPU, copies included, 1.4 ms.
+
+What changed.
+
+- **Expanded Gaussian kernel** (`kernel_path="expanded"`, the MPS and CUDA default): `Σ(z − μ)² g` as three matrix
+  products, no `[N, R, d]` tensor, custom backward. Equal to the reference to 1e-16 in float64 (values and all
+  gradients); in float32 the cancellation costs about 2e-5 absolute on Φ against 1e-7, three orders below the ridge.
+- **Hybrid solve on MPS from 128 columns** (`MpsBackend.hybrid_min_columns`): one device read per solve. Up to
+  `N · R² = 2³¹` Φ crosses and the Gram is formed in float64 on the CPU; above it the float32 Gram crosses, with the
+  float64 Gram as the fallback when the factor is refused. Below 128 columns the device solve stays (September's
+  result on a quiet machine: a per-batch transfer costs a small fit 10–20 %).
+- **CPU opt-ins** (`KernelConfig.kernel_path="expanded"`, `MatryoshkaConfig.cpu_solver="cholesky"`); the default is
+  untouched.
+- **All-prefix conformality penalty** in closed form (cumulative sums) instead of a loop over leading blocks.
+
+Fit level, main (`v0.16.1`) against the branch, alternating processes, best of 2–4 two-epoch fits, 8192 rows, batch
+256, default configuration:
+
+| MPS, ms per step | R = 64 | R = 128 | R = 256 | R = 512 | R = 512, k = 64 |
+|---|---|---|---|---|---|
+| main | 52.6 | 66.6 | 105.1 | 275.2 | 324.9 |
+| branch | 49.1 | 42.8 | 42.1 | 71.0 | 72.5 |
+| ratio | 1.07 | 1.56 | 2.50 | 3.88 | 4.48 |
+
+| CPU, ms per step (4096 rows) | R = 64 | R = 256 | R = 512 |
+|---|---|---|---|
+| main, default | 36.2 | 142.7 | 279.5 |
+| branch, default | same bits as main | 142.2 | – |
+| branch, `expanded` + `cholesky` | 12.2 | 16.5 | 39.5 |
+
+Caveats, all of which understate the ratios or leave them unverified.
+
+- **The MPS absolute times are not quiet-machine numbers.** During this session the identical fit (main, `R = 64`)
+  ran at 7, 20 and 46–53 ms per step from one launch to the next, with no thermal warning and a low CPU load; most of
+  the table was taken in the slowest state, which adds a size-independent 30–40 ms per step to both columns. The
+  cause was not identified (candidates: contention with the desktop compositor, background scheduling of the
+  benchmark process, GPU clock scaling). The component table above puts a branch step at about 20 ms at `R = 256`
+  and 37 ms at `R = 512`. Re-measure on a quiet machine before quoting absolutes.
+- **CPU bit-identity**: the default path gives the same state hash as main at `R = 64` and `R = 128`. At `R = 256`
+  main is not run-to-run deterministic itself (four runs, four hashes: the threaded least squares), so nothing can be
+  compared there.
+- **The penalised fit moved 55 → 49 ms per step** in that state at `k = 32`; in isolation the loop over blocks is
+  74 of the 116 ms of a penalised step and the closed form a few ms.
+- **CUDA is not measured.** The expanded path is now the CUDA default too (its products run in full precision in both
+  directions, like the fast path's contraction); it has been exercised on CPU and MPS only. The H100 run is pending
+  authorisation and should precede a release.
+
 ## Status
 
 Complete. CUDA on the H100 (idle GPU, 2026-09-08): full suite for the baseline and HEAD,

@@ -219,6 +219,7 @@ class IGLModule(nn.Module):
                     degree=kernel_cfg.polynomial_degree,
                 ),
                 per_scale_columns=kernel_cfg.per_scale_columns,
+                kernel_path=kernel_cfg.kernel_path,
             )
         else:
             # Pre-built kernel (e.g. SpectralKernel). It must expose

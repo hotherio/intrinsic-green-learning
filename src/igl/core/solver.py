@@ -275,17 +275,30 @@ def ridge_solve_device(
     return weights, bad
 
 
+@torch.no_grad()
 def ridge_solve_hybrid(phi: torch.Tensor, y: torch.Tensor, *, l2: float = 1e-3) -> tuple[torch.Tensor, torch.Tensor]:
-    """Ridge solve with the Gram products on the device and the ``R × R`` system solved in float64 on the CPU.
+    """Ridge solve of the normal equations with the ``R × R`` system factored in float64 on the CPU.
 
-    Used by :func:`direct_solve_weights` on MPS (the one-off public solve),
-    where the device has no ``lstsq`` and no float64. Forming ``ΦᵀΦ`` and
-    ``Φᵀy`` on the device keeps the ``O(N R²)`` work there; the tiny ``R × R``
-    system crosses to the CPU where LAPACK factors it in double. In isolation
-    this is 3× faster than the on-device Cholesky at ``R = 256`` on an M4 Max,
-    but the training loop does not use it: the device-to-host copy drains the
-    asynchronous Metal queue every batch and fits get 10–20% slower (measured),
-    so :class:`igl.device.MpsBackend` keeps :func:`ridge_solve_device`.
+    The MPS branch from :attr:`igl.core._backend.MpsBackend.hybrid_min_columns`
+    columns up, the opt-in Cholesky solver of the CPU branch, and
+    :func:`direct_solve_weights` on MPS. LAPACK factors and solves in double
+    in 1.4 ms at ``R = 512`` where the MPS device's two triangular solves take
+    45 ms. Whatever the route, the device is read **once**: each transfer
+    drains the asynchronous Metal queue, which is what makes a round trip
+    expensive inside a fit.
+
+    Two routes, by the cost ``N · R²`` of the Gram product:
+
+    - up to ``2**31`` (``N = 8192`` at ``R = 512``), Φ and the targets cross to
+      the CPU and the Gram is formed there in float64. Nothing is rounded at
+      float32, so the solve equals a float64 least squares and survives the
+      wide, rank-starved design matrices whose ridge sits below the float32
+      rounding of the Gram;
+    - above it, ``ΦᵀΦ`` and ``Φᵀy`` are formed on the device in float32 and
+      cross as one ``[R, R + C]`` block. The float32 Gram is then the accuracy
+      floor (``cond · 1e-7``); when the float64 Cholesky refuses it, the first
+      route is taken as a fallback, and only if that factor fails too is the
+      solve flagged.
 
     Args:
         phi: ``[N, R]`` design matrix on any device.
@@ -301,37 +314,44 @@ def ridge_solve_hybrid(phi: torch.Tensor, y: torch.Tensor, *, l2: float = 1e-3) 
     y32 = y.detach().float()
     if y32.dim() == 1:
         y32 = y32.unsqueeze(-1)
-    with full_precision_matmul(phi32.device):
-        ok = torch.isfinite(phi32).all() & torch.isfinite(y32).all()
-        phi_c = torch.nan_to_num(phi32)
-        y_c = torch.nan_to_num(y32)
-        col_scale = cast(torch.Tensor, phi_c.norm(dim=0).mean().clamp_min(1e-6))  # pyright: ignore[reportUnknownMemberType]
-        gram = phi_c.T @ phi_c
-        rhs = phi_c.T @ y_c
-    gram64 = gram.cpu().double()
-    rhs64 = rhs.cpu().double()
-    l2_eff = l2 * (col_scale.cpu().double() ** 2)
-    gram64 = gram64 + l2_eff * torch.eye(gram64.shape[0], dtype=torch.float64)
+    n_rows, n_cols = phi32.shape
+    ok = False
+    weights64 = torch.zeros(n_cols, y32.shape[1], dtype=torch.float64)
+    finite = True
+    if n_rows * n_cols * n_cols > _F64_GRAM_MAX_FLOPS:
+        with full_precision_matmul(phi32.device):
+            packed = torch.cat([phi32.T @ phi32, phi32.T @ y32], dim=1)
+        packed64 = packed.cpu().double()  # the one transfer: [R, R + C]
+        finite = bool(torch.isfinite(packed64).all())
+        if finite:
+            weights64, ok = _factor_solve_f64(packed64[:, :n_cols], packed64[:, n_cols:], l2)
+    if not ok and finite:
+        both = torch.cat([phi32, y32], dim=1).cpu().double()  # the one transfer: [N, R + C]
+        if bool(torch.isfinite(both).all()):
+            phi64 = both[:, :n_cols]
+            weights64, ok = _factor_solve_f64(phi64.T @ phi64, phi64.T @ both[:, n_cols:], l2)
+    bad = torch.tensor(not ok, device=phi32.device)
+    return weights64.float().to(phi32.device), bad
+
+
+_F64_GRAM_MAX_FLOPS = 2**31
+"""``N · R²`` up to which :func:`ridge_solve_hybrid` forms the Gram on the CPU in float64 (about 10 ms of ``dsyrk``)."""
+
+
+def _factor_solve_f64(gram: torch.Tensor, rhs: torch.Tensor, l2: float) -> tuple[torch.Tensor, bool]:
+    """Float64 CPU Cholesky solve of ``(G + λ_eff I) w = rhs``; ``(zeros, False)`` when it cannot be trusted."""
+    col_scale = float(gram.diagonal().clamp_min(0.0).sqrt().mean().clamp_min(1e-6))
+    regularised = gram + (l2 * col_scale * col_scale) * torch.eye(gram.shape[0], dtype=torch.float64)
     chol, info = cast(
         "tuple[torch.Tensor, torch.Tensor]",
-        torch.linalg.cholesky_ex(gram64),  # pyright: ignore[reportUnknownMemberType]
+        torch.linalg.cholesky_ex(torch.nan_to_num(regularised)),  # pyright: ignore[reportUnknownMemberType]
     )
-    chol = torch.nan_to_num(chol)
-    weights64 = torch.cholesky_solve(rhs64, chol)
-    weights = torch.nan_to_num(weights64).float().to(phi32.device)
-    # One refinement step against the float32 products on the device: the
-    # float32 Gram is the accuracy floor of the plain solve (cond × 1e-7), and
-    # the residual, solved with the same double factor, recovers it (the same
-    # step the on-device solve takes).
-    with full_precision_matmul(phi32.device):
-        l2_eff32 = l2_eff.float().to(phi32.device)
-        residual = rhs - (phi_c.T @ (phi_c @ weights) + l2_eff32 * weights)
-    correction = torch.cholesky_solve(residual.cpu().double(), chol)
-    weights = weights + torch.nan_to_num(correction).float().to(phi32.device)
-    bad_host = (info > 0) | ~torch.isfinite(weights64).all() | ~torch.isfinite(correction).all()
-    bad = (~ok) | bad_host.to(phi32.device)
-    weights = torch.where(bad, torch.zeros_like(weights), torch.nan_to_num(weights))
-    return weights, bad
+    if int(info) > 0 or not bool(torch.isfinite(regularised).all()):
+        return torch.zeros_like(rhs), False
+    weights = torch.cholesky_solve(rhs, chol)
+    if not bool(torch.isfinite(weights).all()):
+        return torch.zeros_like(rhs), False
+    return weights, True
 
 
 __all__ = ["direct_solve_weights", "ridge_solve_device", "ridge_solve_hybrid", "solve_with_intercept"]

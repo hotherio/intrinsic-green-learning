@@ -20,12 +20,15 @@ from igl.exceptions import IGLConfigError
 from igl.types import (
     ActivationType,
     ActivationTypeLike,
+    CpuSolver,
+    CpuSolverLike,
     DomainMap,
     DomainMapLike,
     EncoderKind,
     EncoderKindLike,
     FinalRefresh,
     FinalRefreshLike,
+    KernelPathLiteral,
     MatmulPrecision,
     MatmulPrecisionLike,
     NormalizeMode,
@@ -114,8 +117,13 @@ class KernelConfig:
     null_space: NullSpaceKindLike = NullSpaceKind.NONE
     polynomial_degree: int = 1
     per_scale_columns: bool = False
+    # "auto": the reference formulation on CPU (bit-identical), the expanded one on MPS
+    # and CUDA. "expanded" on CPU is 5-14x faster at R = 512 at about 2e-5 absolute on Φ.
+    kernel_path: KernelPathLiteral = "auto"
 
     def __post_init__(self) -> None:
+        if self.kernel_path not in ("auto", "reference", "fast", "expanded"):
+            raise IGLConfigError(f"kernel_path must be 'auto', 'reference', 'fast' or 'expanded', got {self.kernel_path!r}")
         object.__setattr__(self, "operator", _coerce_operator(self.operator))
         object.__setattr__(self, "normalize", NormalizeMode(self.normalize))
         object.__setattr__(self, "null_space", NullSpaceKind(self.null_space))
@@ -191,6 +199,9 @@ class MatryoshkaConfig:
     # CPU branch only: intra-op thread cap for the fit (None = torch's default,
     # bit-identical results; a cap is faster on small problems).
     cpu_threads: int | None = None
+    # CPU branch only: "lstsq" is the bit-identical reference; "cholesky" factors
+    # the normal equations in float64 (3-5x faster from R = 64 up, different bits).
+    cpu_solver: CpuSolverLike = CpuSolver.LSTSQ
 
     def batch_size_for(self, device: torch.device | str) -> int:
         """The outer batch size on ``device``: the explicit value, else 1024 on CUDA and 256 elsewhere."""
@@ -203,6 +214,7 @@ class MatryoshkaConfig:
         object.__setattr__(self, "scheduler", SchedulerType(self.scheduler))
         object.__setattr__(self, "final_refresh", FinalRefresh(self.final_refresh))
         object.__setattr__(self, "matmul_precision", MatmulPrecision(self.matmul_precision))
+        object.__setattr__(self, "cpu_solver", CpuSolver(self.cpu_solver))
 
 
 def _operator_to_serial(value: OperatorName | tuple[OperatorName, ...]) -> str | list[str]:
@@ -266,6 +278,8 @@ class IGLConfig:
                 "normalize": str(kernel_normalize),
                 "null_space": str(kernel_null),
                 "polynomial_degree": self.kernel.polynomial_degree,
+                "per_scale_columns": self.kernel.per_scale_columns,
+                "kernel_path": self.kernel.kernel_path,
             },
             "spectral": _spectral_to_dict(self.spectral),
             "matryoshka": {
@@ -291,6 +305,7 @@ class IGLConfig:
                 "cuda_graphs": self.matryoshka.cuda_graphs,
                 "torch_compile": self.matryoshka.torch_compile,
                 "cpu_threads": self.matryoshka.cpu_threads,
+                "cpu_solver": str(CpuSolver(self.matryoshka.cpu_solver)),
             },
         }
 
@@ -411,6 +426,8 @@ def _make_kernel_config(data: Mapping[str, object]) -> KernelConfig:
         normalize=cast(NormalizeModeLike, data.get("normalize", _KERNEL_DEFAULTS.normalize)),
         null_space=cast(NullSpaceKindLike, data.get("null_space", _KERNEL_DEFAULTS.null_space)),
         polynomial_degree=_typed_get(data, "polynomial_degree", _KERNEL_DEFAULTS.polynomial_degree),
+        per_scale_columns=_typed_get(data, "per_scale_columns", _KERNEL_DEFAULTS.per_scale_columns),
+        kernel_path=cast(KernelPathLiteral, data.get("kernel_path", _KERNEL_DEFAULTS.kernel_path)),
     )
 
 
@@ -465,6 +482,7 @@ def _make_matryoshka_config(data: Mapping[str, object]) -> MatryoshkaConfig:
         cuda_graphs=_typed_get(data, "cuda_graphs", d.cuda_graphs),
         torch_compile=_typed_get(data, "torch_compile", d.torch_compile),
         cpu_threads=cast(int | None, data.get("cpu_threads", d.cpu_threads)),
+        cpu_solver=cast(CpuSolverLike, data.get("cpu_solver", d.cpu_solver)),
     )
 
 

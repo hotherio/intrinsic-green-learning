@@ -50,3 +50,8 @@ This template runs on **GitHub** and **Forgejo** with the same workflow files. W
 ## Don't invent conventions
 
 If something isn't covered by the guidelines, look at how the sibling repos (`cancelable`, `streamblocks`) handle it before inventing a new pattern. Both repos are linked from the Hother org page. When in doubt, open a discussion before changing the guidelines themselves — they're a contract.
+
+## Notes and tasks
+This repository's notes, decisions and tasks live in the owner's engram vault, not here: `engram here` names its project and its open tasks.
+Write to the vault only with `engram agent start` and `engram agent submit` (the rules: `engram help-agent`), never in the vault's own folder.
+Ledgers that belong to the code stay in this repository; the project's log in the vault gets one line per milestone.
